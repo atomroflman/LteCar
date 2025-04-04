@@ -1,0 +1,28 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LteCar.Onboard", "LteCar.Onboard\LteCar.Onboard.csproj", "{E7AEB4DD-801F-4D12-98D2-BB8A55AEAD31}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LteCar.Server", "LteCar.Server\LteCar.Server.csproj", "{2EC5A5E7-52C7-45D7-B4C1-1F26FE262877}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "LteCar.Shared", "LteCar.Shared\LteCar.Shared.csproj", "{B7DE295C-94C6-4B1D-ADA4-B54BA8FF9991}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{E7AEB4DD-801F-4D12-98D2-BB8A55AEAD31}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E7AEB4DD-801F-4D12-98D2-BB8A55AEAD31}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E7AEB4DD-801F-4D12-98D2-BB8A55AEAD31}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E7AEB4DD-801F-4D12-98D2-BB8A55AEAD31}.Release|Any CPU.Build.0 = Release|Any CPU
+		{2EC5A5E7-52C7-45D7-B4C1-1F26FE262877}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{2EC5A5E7-52C7-45D7-B4C1-1F26FE262877}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{2EC5A5E7-52C7-45D7-B4C1-1F26FE262877}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{2EC5A5E7-52C7-45D7-B4C1-1F26FE262877}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B7DE295C-94C6-4B1D-ADA4-B54BA8FF9991}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B7DE295C-94C6-4B1D-ADA4-B54BA8FF9991}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B7DE295C-94C6-4B1D-ADA4-B54BA8FF9991}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B7DE295C-94C6-4B1D-ADA4-B54BA8FF9991}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
