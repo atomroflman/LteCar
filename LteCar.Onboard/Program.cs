@@ -19,6 +19,10 @@ Console.WriteLine($"Car ID: {carId}");
 
 var serviceCollection = new ServiceCollection();
 serviceCollection.AddSingleton<ServerConnectionService>();
+serviceCollection.AddLogging(configure => {
+    configure.AddConsole();
+    configure.AddFile("logs/log.txt", append: true);
+});
 
 var serviceProvider = serviceCollection.BuildServiceProvider();
 
