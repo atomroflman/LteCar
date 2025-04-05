@@ -2,6 +2,8 @@
 
 using LteCar.Onboard;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Console;
 
 var carId = Guid.NewGuid().ToString();
 
@@ -19,10 +21,7 @@ Console.WriteLine($"Car ID: {carId}");
 
 var serviceCollection = new ServiceCollection();
 serviceCollection.AddSingleton<ServerConnectionService>();
-serviceCollection.AddLogging(configure => {
-    configure.AddConsole();
-    configure.AddFile("logs/log.txt", append: true);
-});
+serviceCollection.AddLogging(c => c.AddConsole());
 
 var serviceProvider = serviceCollection.BuildServiceProvider();
 
