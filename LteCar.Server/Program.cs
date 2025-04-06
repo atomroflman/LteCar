@@ -25,7 +25,7 @@ app.UseRouting();
 app.UseEndpoints(endpoints =>
 {
     endpoints.MapControllers();
-    endpoints.MapHub<CarConnectionHub>("/videostreamhub");
+    endpoints.MapHub<CarConnectionHub>("/carconnectionhub");
 });
 
 app.Run();
