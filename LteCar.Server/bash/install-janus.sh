@@ -13,7 +13,7 @@ sudo apt install -y \
   libssl-dev libsrtp2-dev libsofia-sip-ua-dev \
   libglib2.0-dev libopus-dev libogg-dev \
   libini-config-dev libcollection-dev \
-  cmake libusrsctp-dev
+  cmake libusrsctp-dev gstreamer1.0-libcamera
 
 # 2. Quellcode klonen
 git clone https://github.com/meetecho/janus-gateway.git
