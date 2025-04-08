@@ -1,6 +1,6 @@
 namespace LteCar.Shared;
 
-public class CarConfiguration
+public class CarConfiguration : IConfigurationModel
 {
     public JanusConfiguration JanusConfiguration { get; set; }
 }

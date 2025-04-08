@@ -1,6 +1,4 @@
-﻿
-
-using LteCar.Onboard;
+﻿using LteCar.Onboard;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Console;
@@ -24,6 +22,7 @@ serviceCollection.AddSingleton<ServerConnectionService>();
 serviceCollection.AddLogging(c => c.AddConsole());
 
 var serviceProvider = serviceCollection.BuildServiceProvider();
+var logger = serviceProvider.GetRequiredService<ILogger<Program>>();
 
 var connectionService = serviceProvider.GetRequiredService<ServerConnectionService>();
 connectionService.ConnectToServer(carId);

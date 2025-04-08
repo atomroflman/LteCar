@@ -8,10 +8,12 @@ public class ServerConnectionService
 {
     private readonly IConfiguration _configuration;
     private HubConnection _connection;
+    private CarConfigurationService _configService;
 
-    public ServerConnectionService(IConfiguration configuration)
+    public ServerConnectionService(IConfiguration configuration, CarConfigurationService configService)
     {
         _configuration = configuration;
+        _configService = configService;
     }
     
     public async Task ConnectToServer(string carId)
@@ -30,9 +32,9 @@ public class ServerConnectionService
             Console.WriteLine($"Reconnecting to server with connection ID: {connectionId}");
             return Task.CompletedTask;
         };
-        _connection.On("UpdateCarConfiguration", (JanusConfiguration address) =>
+        _connection.On("UpdateCarConfiguration", (CarConfiguration address) =>
         {
-            // Handle the new car address here
+            
         });
         await _connection.StartAsync();
     }

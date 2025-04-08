@@ -11,7 +11,7 @@ public class VideoSettings
     {
         Width = 640,
         Height = 480,
-        Framerate = 30
+        Framerate = 22
     };
 
     public int? Width { get; set; }
@@ -99,11 +99,14 @@ public class VideoStreamService
         }
 
         var process = new Process();
+        var parameters = $"libcamera-vid -t 0 --inline --framerate {_videoSettings.Framerate} --width {_videoSettings.Width} --height {_videoSettings.Height}"
+        + $" --codec yuv420 --nopreview -o - | gst-launch-1.0 fdsrc ! videoparse format=i420 width={_videoSettings.Width} height={_videoSettings.Height} framerate={_videoSettings.Framerate}/1" 
+        + $" ! vp8enc deadline=1 ! rtpvp8pay pt=100 ! udpsink host=192.168.3.149 port=10000";
 
-        var parameters = $@"libcamera-vid -t 0 --inline --width {_videoSettings.Width} --height {_videoSettings.Height} --framerate {_videoSettings.Framerate} \
-  --codec h264 --profile high \
-  -o - | gst-launch-1.0 -v fdsrc ! h264parse ! rtph264pay config-interval=1 pt=96 ! \
-  udpsink host={_janusConfiguration.JanusServerHost} port={_janusConfiguration.JanusUdpPort}";
+//         var parameters = $@"libcamera-vid -t 0 --inline --width {_videoSettings.Width} --height {_videoSettings.Height} --framerate {_videoSettings.Framerate} \
+//   --codec h264 --profile high \
+//   -o - | gst-launch-1.0 -v fdsrc ! h264parse ! rtph264pay config-interval=1 pt=96 ! \
+//   udpsink host={_janusConfiguration.JanusServerHost} port={_janusConfiguration.JanusUdpPort}";
         process.StartInfo.FileName = "bash";
         process.StartInfo.Arguments = $"-c \"{parameters}\"";
         process.StartInfo.UseShellExecute = false;
@@ -128,7 +131,7 @@ public class VideoStreamService
             while (!process.StandardError.EndOfStream)
             {
                 string line = process.StandardError.ReadLine();
-                Console.WriteLine(line);
+                Console.WriteLine($"ERROR: {line}");
             }
         });
     }
