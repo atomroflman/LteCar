@@ -1,101 +1,67 @@
 using System.Diagnostics;
 using System.Text.Json;
 using LteCar.Shared;
-using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 namespace LteCar.Onboard;
 
-public class VideoSettings
-{
-    public static VideoSettings Default => new VideoSettings
-    {
-        Width = 640,
-        Height = 480,
-        Framerate = 22
-    };
-
-    public int? Width { get; set; }
-    public int? Height { get; set; }
-    public int? Framerate { get; set; }
-}
-
 public class VideoStreamService
 {
-    private const string CACHE_FILE_NAME = "videoSettings.cache.json";
     private VideoSettings _videoSettings;
     private Process _libcameraProcess;
+    private CancellationTokenSource _libcameraToken;
     private JanusConfiguration _janusConfiguration;
-    public ServerConnectionService ServerConnectionService { get; }
+    public ILogger<VideoStreamService> Logger { get; }
+    public CarConfigurationService ConfigService { get; }
 
-    public VideoStreamService(ServerConnectionService serverConnectionService)
+    public VideoStreamService(ILogger<VideoStreamService> logger, CarConfigurationService configService)
     {
-        ServerConnectionService = serverConnectionService;
-    }
-    
-    public void UpdateCameraSettings(VideoSettings newSettings)
-    {
-        var hasChanges = false;
-        foreach (var prop in typeof(VideoSettings).GetProperties())
+        Logger = logger;
+        ConfigService = configService;
+        ConfigService.OnConfigurationChanged += () =>
         {
-            var newValue = prop.GetValue(newSettings);
-            var oldValue = prop.GetValue(_videoSettings);
-
-            if (newValue == null)
-                continue;
-            
-            if (!newValue.Equals(oldValue))
+            var config = ConfigService.Configuration;
+            var hasSignificantChanges = false;
+            if (ConfigService.CheckForChanges(config, _janusConfiguration) && config.JanusConfiguration != null)
             {
-                Console.WriteLine($"Updating {prop.Name} from {oldValue} to {newValue}");
-                prop.SetValue(_videoSettings, newValue);
-                hasChanges = true;
+                _janusConfiguration = config.JanusConfiguration;
+                Logger.LogInformation($"Janus configuration updated: {JsonSerializer.Serialize(_janusConfiguration)}");
+                hasSignificantChanges = true;
             }
-        }
-        if (!hasChanges)
-        {
-            Console.WriteLine("No changes detected in camera settings.");
-            return;
-        }
-        // Update the camera settings
-        _videoSettings = newSettings;
-        File.WriteAllText(CACHE_FILE_NAME, JsonSerializer.Serialize(_videoSettings));
-        StartLibcameraProcess();
+            if (ConfigService.CheckForChanges(config.VideoSettings, _videoSettings))
+            {
+                _videoSettings = config.VideoSettings;
+                Logger.LogInformation($"Video settings updated: {JsonSerializer.Serialize(_videoSettings)}");
+                hasSignificantChanges = true;
+            }
+            if (hasSignificantChanges)
+            {
+                StartLibcameraProcess();
+            }
+        };
     }
-    
-    public void Initialize()
+    public void StartLibcameraProcess()
     {
-        // _janusConfiguration = ServerConnectionService.RequestJanusConfigAsync();
-        // Load the video settings from the cache file
-        if (File.Exists(CACHE_FILE_NAME))
+        if (_videoSettings == null)
         {
-            var json = File.ReadAllText(CACHE_FILE_NAME);
-            _videoSettings = JsonSerializer.Deserialize<VideoSettings>(json);
-        }
-        else
-        {
+            Logger.LogWarning("Video settings not defined using default.");
             _videoSettings = VideoSettings.Default;
         }
 
-        StartLibcameraProcess();
-    }
-    
-    public void ResetCameraSettings()
-    {
-        // Reset the camera settings to default
-        _videoSettings = VideoSettings.Default;
-        if (File.Exists(CACHE_FILE_NAME))
-            File.Delete(CACHE_FILE_NAME);
-        StartLibcameraProcess();
-    }
-
-    public void StartLibcameraProcess()
-    {
+        if (_janusConfiguration == null)
+        {
+            Logger.LogWarning("Janus configuration not defined get server information first. Exit video stream.");
+            return;
+        }
+        
         // Kill the existing process if it's running
         if (_libcameraProcess != null && !_libcameraProcess.HasExited)
         {
+            _libcameraToken.Cancel();
             _libcameraProcess.Kill();
             _libcameraProcess.Dispose();
             _libcameraProcess = null;
-            Console.WriteLine("Libcamera process killed.");
+            Logger.LogInformation("Libcamera process killed.");
         }
 
         var process = new Process();
@@ -114,16 +80,18 @@ public class VideoStreamService
         process.StartInfo.RedirectStandardError = true;
         process.Start();
         _libcameraProcess = process;
-        Console.WriteLine("Libcamera process started with PID: " + process.Id);
+        Logger.LogInformation($"Libcamera process started with PID: {process.Id}");
+        _libcameraToken = new CancellationTokenSource();
+        
         // Read the output stream
         Task.Run(() =>
         {
             while (!process.StandardOutput.EndOfStream)
             {
                 string line = process.StandardOutput.ReadLine();
-                Console.WriteLine(line);
+                Logger.LogInformation(line);
             }
-        });
+        }, _libcameraToken.Token);
 
         // Read the error stream
         Task.Run(() =>
@@ -131,8 +99,8 @@ public class VideoStreamService
             while (!process.StandardError.EndOfStream)
             {
                 string line = process.StandardError.ReadLine();
-                Console.WriteLine($"ERROR: {line}");
+                Logger.LogError(line);
             }
-        });
+        }, _libcameraToken.Token);
     }
 }
