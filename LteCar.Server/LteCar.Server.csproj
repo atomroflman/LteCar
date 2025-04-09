@@ -8,7 +8,9 @@
     </PropertyGroup>
 
     <ItemGroup>
+      <PackageReference Include="Iot.Device.Bindings" Version="3.2.0" />
       <PackageReference Include="Microsoft.AspNetCore.SignalR.Common" Version="9.0.3" />
+      <PackageReference Include="System.Device.Gpio" Version="3.2.0" />
     </ItemGroup>
 
     <ItemGroup>
