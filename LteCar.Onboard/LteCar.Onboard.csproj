@@ -8,6 +8,7 @@
     </PropertyGroup>
 
     <ItemGroup>
+      <PackageReference Include="CSharpVitamins.ShortGuid" Version="2.0.0" />
       <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="9.0.3" />
       <PackageReference Include="Microsoft.AspNetCore.SignalR.Client.Core" Version="9.0.3" />
       <PackageReference Include="Microsoft.Extensions.Configuration" Version="9.0.3" />
@@ -26,6 +27,12 @@
 
     <ItemGroup>
       <ProjectReference Include="..\LteCar.Shared\LteCar.Shared.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <None Update="channelMap.json">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </None>
     </ItemGroup>
 
 </Project>
