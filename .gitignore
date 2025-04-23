@@ -5,3 +5,6 @@
 .vscode/**
 *.suo
 *.user
+
+# Server
+LteCar.Server/wwwroot/**/*
