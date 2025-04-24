@@ -1,6 +1,8 @@
 ﻿using System.Text.Json;
 using LteCar.Onboard;
 using LteCar.Onboard.Control;
+using LteCar.Onboard.Control.ControlTypes;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Console;
@@ -18,11 +20,20 @@ else
 }
 
 Console.WriteLine($"Car ID: {carId}");
-
+var configuration = new ConfigurationBuilder()
+    .AddInMemoryCollection(new Dictionary<string, string?>() {
+        { "carId", carId }
+    })
+    .AddJsonFile("appSettings.json")
+    .Build();
 var serviceCollection = new ServiceCollection();
+serviceCollection.AddSingleton<IConfiguration>(configuration);
 serviceCollection.AddSingleton<ServerConnectionService>();
 serviceCollection.AddSingleton<VideoStreamService>();
-serviceCollection.AddAllTransient(typeof(ControlService));
+serviceCollection.AddSingleton<CarConfigurationService>();
+serviceCollection.AddSingleton<ControlService>();
+serviceCollection.AddSingleton<ControlExecutionService>();
+serviceCollection.AddAllTransient(typeof(ControlTypeBase));
 serviceCollection.AddLogging(c => c.AddConsole());
 
 var serviceProvider = serviceCollection.BuildServiceProvider();
@@ -37,6 +48,7 @@ configService.OnConfigurationChanged += () =>
 var videoStreamService = serviceProvider.GetRequiredService<VideoStreamService>();
 var connectionService = serviceProvider.GetRequiredService<ServerConnectionService>();
 await connectionService.ConnectToServer(carId);
+
 
 
 

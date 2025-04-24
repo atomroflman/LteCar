@@ -1,4 +1,6 @@
+using System.ComponentModel.DataAnnotations;
 using LteCar.Shared;
+using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -13,23 +15,33 @@ public class ServerConnectionService
     public ILogger<ServerConnectionService> Logger { get; }
     private readonly IConfiguration _configuration;
     private HubConnection _connection;
-    // private CarConfigurationService _configService;
     
     public ServerConnectionService(IConfiguration configuration, IServiceProvider serviceProvider, ILogger<ServerConnectionService> logger)
     {
         ServiceProvider = serviceProvider;
         Logger = logger;
         _configuration = configuration;
-        // _configService = configService;
+    }
+
+    public UriBuilder GetServerUriBuilder() 
+    {
+        var serverAddressBuilder = new UriBuilder();
+        serverAddressBuilder.Host = _configuration.GetValue<string>("ServerName");
+        serverAddressBuilder.Scheme = (_configuration.GetValue<bool?>("UseHttps") ?? true) ? "https" : "http";
+        serverAddressBuilder.Port = _configuration.GetValue<int?>("ServerPort") ?? 5000;
+        return serverAddressBuilder;
     }
     
     public async Task ConnectToServer(string carId)
     {
+        var serverUriBuilder = GetServerUriBuilder();
+        serverUriBuilder.Path = "carconnectionhub";
+        var connectionHubEndpoint = serverUriBuilder.Uri;
+        Logger.LogInformation($"Connecting to server: {connectionHubEndpoint}");
         _connection = new HubConnectionBuilder()
-            .WithUrl(_configuration.GetSection("ServerAddress").GetValue<string>("Url") + "/carconnectionhub")
+            .WithUrl(connectionHubEndpoint)
             .WithAutomaticReconnect()
             .Build();
-        var connectionServer = _connection.CreateHubProxy<ICarConnectionServer>();
         _connection.Reconnected += async (connectionId) =>
         {
             Logger.LogInformation($"Connection {connectionId} reestablished.");
@@ -45,7 +57,10 @@ public class ServerConnectionService
             return Task.CompletedTask;
         };
         await _connection.StartAsync();
-        Logger.LogInformation("Connected to server.");
+        
+        Logger.LogInformation($"Connected to server: {_connection.State}");
+
+        var connectionServer = _connection.CreateHubProxy<ICarConnectionServer>();
         var config = await connectionServer.OpenCarConnection(carId);
         if (config == null)
         {
