@@ -13,6 +13,10 @@ if (app.Environment.IsDevelopment())
 {
     app.UseDeveloperExceptionPage();
 }
+app.Use(async(ctx, next) => {
+    Console.WriteLine($"{ctx.Request.Method} {ctx.Request.Path}");
+    await next();
+});
 
 app.UseStaticFiles(new StaticFileOptions()
 {
