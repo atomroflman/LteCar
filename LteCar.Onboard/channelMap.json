@@ -1,10 +1,10 @@
 {
   "steer": {
-    "physicalGpio": 12,
-    "type": "Steering"
+    "physicalGpio": 32,
+    "controlType": "Steering"
   },
   "throttle": {
-    "physicalGpio": 35,
-    "type": "Throttle"
+    "physicalGpio": 12,
+    "controlType": "Throttle"
   }
 }
