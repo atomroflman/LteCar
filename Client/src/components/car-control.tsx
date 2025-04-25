@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import * as signalR from "@microsoft/signalr";
 
 type GamepadState = {
@@ -16,12 +16,34 @@ interface CarState{
 var uiHubConnection: signalR.HubConnection;
 var controlHubConnection: signalR.HubConnection;
 
+// TODO: Make it configurable
+const axisMap = [
+    "steer",
+    "throttle"
+];
+
 export default function GamepadViewer() {
   const [gamepad, setGamepad] = useState<GamepadState | null>(null);
   const [cars, setCars] = useState<CarState[] | null>(null);
   const [carKey, setCarKey] = useState<string>("");
   const [carId, setCarId] = useState<string>("");
   const [carSession, setCarSession] = useState<string>("");
+  
+  const carIdRef = useRef(carId);
+  const carSessionRef = useRef(carSession);
+  const gamepadRef = useRef(gamepad);
+
+  useEffect(() => {
+    carIdRef.current = carId;
+  }, [carId]);
+  
+  useEffect(() => {
+    carSessionRef.current = carSession;
+  }, [carSession]);
+
+  useEffect(() => {
+    gamepadRef.current = gamepad;
+  }, [gamepad]);
 
   useEffect(() => {
     let animationFrame: number;
@@ -57,9 +79,19 @@ export default function GamepadViewer() {
         controlHubConnection.start();
     }
 
+    // Not under react management, so values need to go here by ref.
     const updateGamepad = () => {
-      const gp = navigator.getGamepads()[0]; // Nimm den ersten Gamepad
+      const gp = navigator.getGamepads()[0]; 
       if (gp) {
+        if (carSessionRef.current) {
+            let gpOldValues = gamepadRef.current;
+            let axisUpdate = gp.axes.map((ax, i) => ({ax,i})).filter((ax) => ax.ax != gpOldValues?.axes[ax.i]);
+            let buttonUpdate = gp.buttons.filter((bt, i) => bt.value != gpOldValues?.buttons[i]);
+            // TODO: Send buttons as well
+            axisUpdate.forEach(ax => {
+                controlHubConnection.invoke("UpdateChannel", carIdRef.current, carSessionRef.current, axisMap[ax.i], ax.ax)
+            });
+        }
         setGamepad({
           id: gp.id,
           axes: gp.axes.slice(),
@@ -97,6 +129,9 @@ export default function GamepadViewer() {
 
   return (
     <div className="p-4 space-y-4">
+        {carSession ? <>
+            <label className="font-green-400">Control Session aquired: {carSession} - {carId}</label>
+        </> : <>
         <select onSelect={(e) => setCarId(e.currentTarget.value)}>
             {cars?.map(c => <option key={c.id} selected={c.id == carId}>{c.id}</option>)}
         </select>
@@ -111,6 +146,7 @@ export default function GamepadViewer() {
         className="p-2 border rounded w-full"
       />
       <button onClick={aquireCarControl}>Aquire Control</button>
+      </>}
       <h2 className="text-xl font-bold">🎮 {gamepad.id}</h2>
       <div>
         <h3 className="font-semibold">🕹️ Achsen:</h3>
