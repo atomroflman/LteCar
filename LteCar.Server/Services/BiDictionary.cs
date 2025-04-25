@@ -7,13 +7,19 @@ public class BiDictionary<TKey, TValue>
     private readonly Dictionary<TKey, TValue> _forward = new();
     private readonly Dictionary<TValue, TKey> _reverse = new();
 
+    public Dictionary<TKey, TValue> Forward => _forward;
+    public Dictionary<TValue, TKey> Reverse => _reverse;
+
     public void Add(TKey key, TValue value)
     {
-        if (_forward.ContainsKey(key) || _reverse.ContainsKey(value))
-            throw new ArgumentException("Duplicate key or value.");
-
-        _forward.Add(key, value);
-        _reverse.Add(value, key);
+        if (_forward.ContainsKey(key))
+            _forward[key] = value;
+        else 
+            _forward.Add(key, value);
+        if (_reverse.ContainsKey(value)) 
+            _reverse[value] = key;
+        else
+            _reverse.Add(value, key);
     }
 
     public bool TryGetByKey(TKey key, out TValue value) =>
@@ -46,4 +52,6 @@ public class BiDictionary<TKey, TValue>
         }
         return false;
     }
+
+    public Dictionary<TKey, TValue> ToDictionary() => _forward.ToDictionary();
 }
