@@ -42,7 +42,7 @@ public class ServerConnectionService
         Logger.LogInformation($"Connecting to server: {connectionHubEndpoint}");
         return new HubConnectionBuilder()
             .WithUrl(connectionHubEndpoint)
-            .WithAutomaticReconnect()
+            .WithAutomaticReconnect(Enumerable.Range(0, 50).Select(e => TimeSpan.FromMilliseconds(Math.Pow(1.25d, e) * 1000)).ToArray())
             .AddMessagePackProtocol()
             .Build();
     }
