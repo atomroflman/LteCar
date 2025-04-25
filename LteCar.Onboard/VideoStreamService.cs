@@ -5,7 +5,7 @@ using Microsoft.Extensions.Logging;
 
 namespace LteCar.Onboard;
 
-public class VideoStreamService
+public class VideoStreamService : IDisposable
 {
     private VideoSettings _videoSettings;
     private Process _libcameraProcess;
@@ -40,6 +40,7 @@ public class VideoStreamService
             }
         };
     }
+    
     public void StartLibcameraProcess()
     {
         if (_videoSettings == null)
@@ -61,13 +62,13 @@ public class VideoStreamService
             _libcameraProcess.Kill();
             _libcameraProcess.Dispose();
             _libcameraProcess = null;
-            Logger.LogInformation("Libcamera process killed.");
+            Logger.LogInformation("Libcamera process killed for restart with new parameters.");
         }
 
         var process = new Process();
         var parameters = $"libcamera-vid -t 0 --inline --framerate {_videoSettings.Framerate} --width {_videoSettings.Width} --height {_videoSettings.Height}"
         + $" --codec yuv420 --nopreview -o - | gst-launch-1.0 fdsrc ! videoparse format=i420 width={_videoSettings.Width} height={_videoSettings.Height} framerate={_videoSettings.Framerate}/1" 
-        + $" ! vp8enc deadline=1 ! rtpvp8pay pt=100 ! udpsink host=192.168.3.149 port=10000";
+        + $" ! vp8enc deadline=1 ! rtpvp8pay pt=100 ! udpsink host={_janusConfiguration.JanusServerHost} port={_janusConfiguration.JanusUdpPort}";
 
 //         var parameters = $@"libcamera-vid -t 0 --inline --width {_videoSettings.Width} --height {_videoSettings.Height} --framerate {_videoSettings.Framerate} \
 //   --codec h264 --profile high \
@@ -78,6 +79,7 @@ public class VideoStreamService
         process.StartInfo.UseShellExecute = false;
         process.StartInfo.RedirectStandardOutput = true;
         process.StartInfo.RedirectStandardError = true;
+        process.Exited += OnVideoProcessEnded;
         process.Start();
         _libcameraProcess = process;
         Logger.LogInformation($"Libcamera process started with PID: {process.Id}");
@@ -102,5 +104,20 @@ public class VideoStreamService
                 Logger.LogError(line);
             }
         }, _libcameraToken.Token);
+    }
+
+    private void OnVideoProcessEnded(object? sender, EventArgs e)
+    {
+        Logger.LogWarning("LibCamera Process ended.");
+    }
+
+    public void Dispose()
+    {
+        Logger.LogInformation("Disposing VideoStreamService...");
+        if (_libcameraProcess != null && !_libcameraProcess.HasExited)
+        {
+            Logger.LogInformation("Kill LibCamera Process...");
+            _libcameraProcess.Kill();
+        }
     }
 }
