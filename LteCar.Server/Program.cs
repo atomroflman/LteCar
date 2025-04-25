@@ -5,14 +5,18 @@ using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.FileProviders;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.Configuration.AddJsonFile("appSettings.json");
 
-builder.Logging.AddConsole();
+builder.Logging.AddConsole()
+    .AddConfiguration(builder.Configuration.GetSection("Logging"));
 
 builder.Services.AddSingleton<VideoStreamRecieverService>();
 builder.Services.AddSingleton<CarConnectionStore>();
 
 builder.Services.AddControllers();
-builder.Services.AddSignalR();
+builder.Services.AddSignalR()
+    .AddMessagePackProtocol()
+    .AddJsonProtocol();
 
 var app = builder.Build();
 var logger = app.Services.GetRequiredService<ILogger<Program>>();
@@ -39,12 +43,14 @@ app.UseStaticFiles(new StaticFileOptions()
 });
 app.UseRouting();
 
+app.MapControllers();
+
 app.UseEndpoints(endpoints =>
 {
-    endpoints.MapControllers();
-    endpoints.MapHub<CarConnectionHub>("/carconnectionhub");
+    endpoints.MapHub<CarConnectionHub>("/connection");
     endpoints.MapHub<CarControlHub>("/control");
     endpoints.MapHub<TelemetryHub>("/telemetry");
+    endpoints.MapHub<CarUiHub>("/carui");
 });
 
 app.Run();
