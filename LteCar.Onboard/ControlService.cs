@@ -31,16 +31,24 @@ public class ControlService : ICarControlClient, IHubConnectionObserver
         ServerConnectionService = serverConnectionService;
     }
 
+    public void Initialize() 
+    {
+        Control.Initialize();
+    }
+
     public async Task ConnectToServer()
     {
         // TODO: Send the setup to the server
-        Control.Initialize();
         _connection = ServerConnectionService.ConnectToHub("control");
         _connection.Register<ICarControlClient>(this);
         await _connection.StartAsync();
         _server = _connection.CreateHubProxy<ICarControlServer>();
         await _server.RegisterForControl(Configuration.GetValue<string>("carId"));
         Logger.LogInformation("Connected to server.");
+    }
+
+    public async Task TestControlsAsync() {
+        await Control.RunControlTestsAsync();
     }
     
     public async Task<string?> AquireCarControl(string carSecret)
