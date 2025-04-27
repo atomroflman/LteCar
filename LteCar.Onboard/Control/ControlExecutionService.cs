@@ -1,7 +1,7 @@
 using System.Text.Json;
 using LteCar.Onboard.Control.ControlTypes;
+using LteCar.Onboard.Hardware;
 using Microsoft.Extensions.Logging;
-using Unosquare.WiringPi.Native;
 
 namespace LteCar.Onboard.Control;
 
@@ -25,16 +25,26 @@ public class ControlExecutionService
         var channelMap = JsonSerializer.Deserialize<ChannelMap>(channelMapFile.OpenRead());
         if (channelMap == null)
             throw new Exception("channelMap.json could not be deserialized");
-        WiringPi.WiringPiSetupGpio();
+        WiringPi.wiringPiSetupGpio();
         foreach (var channel in channelMap)
         {
             var controlType = GetControlType(channel.Value.ControlType);
             Logger.LogDebug($"Got type {controlType.Name} for channel {channel.Key}.");
             var control = ServiceProvider.GetService(controlType) as ControlTypeBase;
-            Logger.LogInformation($"Initialized Channel: {channel.Key} - {channel.Value.ControlType}@{channel.Value.PhysicalGpio}");
             if (control == null)
                 throw new Exception($"ControlType '{channel.Value.ControlType}' can not be instantiated");
+            control.Initialize();
+            control.TestDisabled = channel.Value.IgnoreTest;
             _controls.Add(channel.Key, control);
+            Logger.LogInformation($"Initialized Channel: {channel.Key} - {channel.Value.ControlType}@{channel.Value.PhysicalGpio}");
+        }
+    }
+
+    public async Task RunControlTestsAsync() 
+    {
+        foreach (var c in _controls) {
+            Logger.LogInformation($"Testing: {c.Key}");
+            await c.Value.RunTestAsync();
         }
     }
     

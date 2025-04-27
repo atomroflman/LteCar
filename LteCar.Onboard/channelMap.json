@@ -5,6 +5,7 @@
   },
   "throttle": {
     "physicalGpio": 12,
-    "controlType": "Throttle"
+    "controlType": "Throttle",
+    "ignoreTest": true
   }
 }
