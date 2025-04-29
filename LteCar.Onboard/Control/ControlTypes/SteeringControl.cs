@@ -9,4 +9,6 @@ public class SteeringControl : ServoControlBase
     public SteeringControl(ILogger<SteeringControl> logger, PinManager pinManager) : base(logger, pinManager)
     {        
     }
+
+    public override string ToString() => $"Steering@{Pin}";
 }
