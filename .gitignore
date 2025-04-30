@@ -7,4 +7,5 @@
 *.user
 
 # Server
+LteCar.Server/CarConfigStore/**/*
 LteCar.Server/wwwroot/**/*
