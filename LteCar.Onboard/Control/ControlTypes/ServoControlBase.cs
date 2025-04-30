@@ -31,11 +31,14 @@ public abstract class ServoControlBase : ControlTypeBase
 
     protected override async Task RunTestInternalAsync()
     {
+        const int DELAY = 1000;
         for (int i = 0; i<3;i++) {
             OnControlRecived(-1);
-            await Task.Delay(500);
+            await Task.Delay(DELAY);
             OnControlRecived(1);
-            await Task.Delay(500);
+            await Task.Delay(DELAY);
+            OnControlRecived(0);
+            await Task.Delay(DELAY);
         }
         OnControlReleased();
     }
@@ -52,7 +55,7 @@ public abstract class ServoControlBase : ControlTypeBase
     /// <param name="minPwm">The minimum PWM value (e.g., 1000).</param>
     /// <param name="maxPwm">The maximum PWM value (e.g., 2000).</param>
     /// <returns>The corresponding PWM value.</returns>
-    public int ScaleRangeToPwm(decimal scaledValue, decimal minPwm = 1000, decimal maxPwm = 2000)
+    public int ScaleRangeToPwm(decimal scaledValue, decimal minPwm = 50, decimal maxPwm = 250)
     {
         decimal midPwm = (minPwm + maxPwm) / 2;
         decimal range = (maxPwm - minPwm) / 2;
