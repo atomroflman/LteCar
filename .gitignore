@@ -5,7 +5,10 @@
 .vscode/**
 *.suo
 *.user
+**/*.crt
 
-# Server
-LteCar.Server/CarConfigStore/**/*
-LteCar.Server/wwwroot/**/*
+# Onboard excludes
+
+# Server excludes
+LteCar.Server/bash/dotnet-install.sh
+LteCar.Server/janus/janus-gateway/**/*
