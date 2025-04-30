@@ -19,7 +19,7 @@ export default function VideoStream() {
       dependencies: window.Janus.useDefaultDependencies(),
       callback: () => {
         const janus = new window.Janus({
-          server: ['http://ubuntu:8088/janus', 'ws://yourserver:8188/'],
+          server: ['http://192.168.3.149:8088/janus', 'ws://192.168.3.149:8188/'],
           success: () => {
             let pluginHandle: any;
     
@@ -28,16 +28,34 @@ export default function VideoStream() {
               success: (handle: any) => {
                 console.log("handle recieved:", handle);
                 pluginHandle = handle;
-                pluginHandle.send({ message: { request: 'list' } });
+                pluginHandle.onremotetrack = (track: MediaStreamTrack) => {
+                  console.log("onremotetrack:", track);
+                  if (track.kind == "video") {
+                    const stream = new MediaStream([track]);
+                    // Weise den Stream dem Video-Element zu
+                    if (videoRef.current) {
+                      videoRef.current.srcObject = stream;
+                    }
+                  }
+                };
+                pluginHandle.onremotestream = (stream: MediaStream) => {
+                  console.log("OnMediStream", stream);
+                  if (videoRef.current) {
+                    window.Janus.attachMediaStream(videoRef.current, stream);
+                  }
+                };
+                pluginHandle.send({ message: { request: 'list' }, success: (msg: any) => {
+                  console.log("List message:", msg);
+                  if (msg.streaming === 'list' && msg.list.length > 0) {
+                    const streamId = msg.list[0].id; // nimm ersten verfügbaren Stream
+                    console.log("Stream ID: ", streamId);
+                    pluginHandle.send({ message: { request: 'watch', id: streamId }});
+                  }
+                }
+                });
               },
               onmessage: (msg: any, jsep: any) => {
-                console.log("Onmessge", msg, jsep);
-                if (msg.streaming === 'list' && msg.list.length > 0) {
-                  const streamId = msg.list[0].id; // nimm ersten verfügbaren Stream
-                  console.log("Stream ID: ", streamId);
-                  pluginHandle.send({ message: { request: 'watch', id: streamId } });
-                }
-    
+                console.log("Watch message:", msg, jsep);
                 if (jsep) {
                   pluginHandle.createAnswer({
                     jsep,
@@ -52,11 +70,6 @@ export default function VideoStream() {
                       console.error('createAnswer error', err);
                     },
                   });
-                }
-              },
-              onremotestream: (stream: MediaStream) => {
-                if (videoRef.current) {
-                  window.Janus.attachMediaStream(videoRef.current, stream);
                 }
               },
               error: (err: any) => {
