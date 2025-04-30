@@ -4,7 +4,7 @@ public class I2CPin : BasePin
 {
     private Dictionary<int, I2CDevice> _devices = new Dictionary<int, I2CDevice>();
 
-    internal I2CPin(int pinNumber, int deviceAddress) : base(pinNumber)
+    internal I2CPin(int pinNumber, int deviceAddress, IServiceProvider serviceProvider) : base(pinNumber, serviceProvider)
     {
     }
 
