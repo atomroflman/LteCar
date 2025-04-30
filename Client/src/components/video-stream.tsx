@@ -1,155 +1,97 @@
-"use client";
+'use client';
 
-import React, {useEffect, useRef, useState} from "react";
-//import "bootstrap/dist/css/bootstrap.min.css";
-//import "font-awesome/css/font-awesome.min.css";
-// import Janus from "janus-gateway";
-import Script from "next/script";
+import { useEffect, useRef, useState } from 'react';
 
-
-interface PluginHandle {
-  send: (message: any) => void;
-  createAnswer: (options: {
-    jsep: any;
-    media: { audioSend: boolean; videoSend: boolean };
-    success: (jsep: any) => void;
-    error: (error: Error) => void;
-  }) => void;
+declare global {
+  interface Window {
+    Janus: any;
+  }
 }
 
-declare var Janus: any | undefined;
-
-export default function VideoStream(): React.ReactElement {
+export default function VideoStream() {
   const videoRef = useRef<HTMLVideoElement>(null);
-  // const [janus, setJanus] = useState<Janus | null>(null);
-  const [pluginHandle, setPluginHandle] = useState<PluginHandle | null>(null);
-
-  const loadJanusScript = (): Promise<void> => {
-    return new Promise((resolve, reject) => {
-      if (typeof Janus !== "undefined") {
-        resolve();
-        return;
-      }
-
-      const script = document.createElement("script");
-      script.src = "https://cdn.jsdelivr.net/npm/janus-gateway@latest";
-      script.async = true;
-      script.onload = () => {
-        console.log("Janus script loaded");
-        resolve();
-      };
-      script.onerror = () => {
-        reject(new Error("Failed to load Janus script"));
-      };
-      document.body.appendChild(script);
-    });
-  };
 
   useEffect(() => {
-    const loadJanus = async () => {
-      
-      await loadJanusScript(); // Warte, bis das Skript geladen ist
-      if (typeof Janus === "undefined") {
-        console.error("Janus is still undefined after script load");
-        return;
-      }
+    if (typeof window === 'undefined' || !window.Janus) return;
 
-      console.log("Janus is available:", Janus);
-
-      try {
-        Janus.init({
-          debug: "all",
-          callback: () => {
-            const janusInstance = new Janus({
-              server: "ws://192.168.3.149:8188",
-              success: () => {
-                if (!janusInstance || !janusInstance.attach) return;
-                janusInstance.attach({
-                  plugin: "janus.plugin.streaming",
-                  success: (handle: any) => {
-                    setPluginHandle(handle);
-                    console.log("Plugin attached:", handle);
-                    handle.send({ message: { request: "list" } });
-                  },
-                  error: (error: string) => {
-                    console.error("Error attaching plugin:", error);
-                  },
-                  onmessage: (msg: any, jsep: any) => {
-                    if (msg.result && msg.result.list) {
-                      console.log("Available streams:", msg.result.list);
-                      const streamId = msg.result.list[0]?.id;
-                      if (streamId && pluginHandle) {
-                        pluginHandle.send({ message: { request: "watch", id: streamId } });
-                      }
-                    }
-                    if (jsep && pluginHandle) {
-                      pluginHandle.createAnswer({
-                        jsep,
-                        media: { audioSend: false, videoSend: false },
-                        success: (jsep) => {
-                          pluginHandle.send({ message: { request: "start" }, jsep });
-                        },
-                        error: (error: Error) => {
-                          console.error("Error creating answer:", error);
-                        },
-                      });
-                    }
-                  },
-                  onremotetrack: (stream: any) => {
-                    console.log("Remote stream received:", stream);
+    window.Janus.init({
+      debug: 'all',
+      dependencies: window.Janus.useDefaultDependencies(),
+      callback: () => {
+        const janus = new window.Janus({
+          server: ['http://192.168.3.149:8088/janus', 'ws://192.168.3.149:8188/'],
+          success: () => {
+            let pluginHandle: any;
+    
+            janus.attach({
+              plugin: 'janus.plugin.streaming',
+              success: (handle: any) => {
+                console.log("handle recieved:", handle);
+                pluginHandle = handle;
+                pluginHandle.onremotetrack = (track: MediaStreamTrack) => {
+                  console.log("onremotetrack:", track);
+                  if (track.kind == "video") {
+                    const stream = new MediaStream([track]);
+                    // Weise den Stream dem Video-Element zu
                     if (videoRef.current) {
                       videoRef.current.srcObject = stream;
                     }
-                  },
-                  oncleanup: () => {
-                    console.log("Plugin cleaned up");
-                  },
+                  }
+                };
+                pluginHandle.onremotestream = (stream: MediaStream) => {
+                  console.log("OnMediStream", stream);
+                  if (videoRef.current) {
+                    window.Janus.attachMediaStream(videoRef.current, stream);
+                  }
+                };
+                pluginHandle.send({ message: { request: 'list' }, success: (msg: any) => {
+                  console.log("List message:", msg);
+                  if (msg.streaming === 'list' && msg.list.length > 0) {
+                    const streamId = msg.list[0].id; // nimm ersten verfügbaren Stream
+                    console.log("Stream ID: ", streamId);
+                    pluginHandle.send({ message: { request: 'watch', id: streamId }});
+                  }
+                }
                 });
               },
-              error: (error: Error) => {
-                console.error("Janus initialization error:", error);
+              onmessage: (msg: any, jsep: any) => {
+                console.log("Watch message:", msg, jsep);
+                if (jsep) {
+                  pluginHandle.createAnswer({
+                    jsep,
+                    media: { audioSend: false, videoSend: false },
+                    success: (jsepAnswer: any) => {
+                      pluginHandle.send({
+                        message: { request: 'start' },
+                        jsep: jsepAnswer,
+                      });
+                    },
+                    error: (err: any) => {
+                      console.error('createAnswer error', err);
+                    },
+                  });
+                }
               },
-              destroyed: () => {
-                console.log("Janus instance destroyed");
+              error: (err: any) => {
+                console.error('Plugin attach error:', err);
               },
             });
-            // setJanus(janusInstance);
+          },
+          error: (err: any) => {
+            console.error('Janus init error:', err);
+          },
+          destroyed: () => {
+            console.log('Janus session destroyed');
           },
         });
-      } catch (error) {
-        console.error("Error loading Janus.js:", error);
-      }
-    };
-
-    loadJanus();
-
-    // return () => {
-    //   if (janus) {
-    //     janus.destroy({ });
-    //   }
-    // };
-  }, [pluginHandle]);
+      },
+    });
+  }, []);
 
   return (
-    <>
-
-<Script
-        src="https://cdn.jsdelivr.net/npm/janus-gateway@latest"
-        strategy="beforeInteractive"
-        onLoad={() => console.log("Janus script loaded")}
-      />
-      <div className="container mt-4">
-        <h1>Janus Video Stream</h1>
-        <div className="video-container">
-          <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              controls
-              style={{ width: "100%", height: "auto", backgroundColor: "black" }}
-          />
-        </div>
-      </div>
-      </>
+    <div>
+      <>Hier sollte video sein</>
+      <video ref={videoRef} autoPlay playsInline muted style={{ width: '100%' }} />
+    </div>
   );
-};
+}
