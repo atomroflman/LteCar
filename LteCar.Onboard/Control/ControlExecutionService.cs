@@ -34,23 +34,27 @@ public class ControlExecutionService
             var control = ServiceProvider.GetService(controlType) as ControlTypeBase;
             if (control == null)
                 throw new Exception($"ControlType '{channel.Value.ControlType}' can not be instantiated");
-            var prop = typeof(RaspberryPiPinMap).GetProperty($"PIN_{channel.Value.PhysicalGpio}");
-            var functions = prop.GetCustomAttribute<PinFunctionAttribute>()!.Functions;
-            var gpio = prop.GetValue(null) as int?;
-            if (gpio == null)
-            {
-                Logger.LogError($"Channel {prop.Name} does not resolve a GPIO-Pin. Skipping channel.");
-                continue;
+            var functions = PinFunctionFlags.None;
+            if (channel.Value.PhysicalGpio != null) {
+                var prop = typeof(RaspberryPiPinMap).GetProperty($"PIN_{channel.Value.PhysicalGpio}");
+                functions = prop.GetCustomAttribute<PinFunctionAttribute>()!.Functions;
+                var gpio = prop.GetValue(null) as int?;
+                if (gpio == null)
+                {
+                    Logger.LogError($"Channel {prop.Name} does not resolve a GPIO-Pin. Skipping channel.");
+                    continue;
+                }
+                control.Pin = gpio!.Value;
             }
             control.TestDisabled = channel.Value.IgnoreTest;
-            control.Pin = gpio!.Value;
+            
             control.Name = channel.Key;
             control.Options = channel.Value.Options;
             if (!functions.HasFlag(control.RequiredFunctions))
-                Logger.LogWarning($"Required function: '{control.RequiredFunctions}' not met by Channel {channel.Value.PhysicalGpio} (GPIO: {gpio})");
+                Logger.LogWarning($"Required function: '{control.RequiredFunctions}' not met by Channel {channel.Value.PhysicalGpio} (GPIO: {control.Pin})");
             control.Initialize();
             _controls.Add(channel.Key, control);
-            Logger.LogInformation($"Initialized Channel: {channel.Key} - {channel.Value.ControlType}@{channel.Value.PhysicalGpio} (GPIO: {gpio})");
+            Logger.LogInformation($"Initialized Channel: {channel.Key} - {channel.Value.ControlType}@{channel.Value.PhysicalGpio} (GPIO: {control.Pin})");
         }
     }
 

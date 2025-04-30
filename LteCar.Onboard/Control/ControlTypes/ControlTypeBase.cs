@@ -3,7 +3,7 @@ namespace LteCar.Onboard.Control.ControlTypes;
 public abstract class ControlTypeBase
 {
     public abstract PinFunctionFlags RequiredFunctions { get; }
-    public int Pin { get; set; }
+    public int? Pin { get; set; }
     public string Name { get; set; } = string.Empty;
     public bool TestDisabled {get;set;} = false;
     public Dictionary<string, object> Options {get;set;} = new Dictionary<string, object>();

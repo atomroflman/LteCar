@@ -20,7 +20,7 @@ public abstract class ServoControlBase : ControlTypeBase
     public override void Initialize()
     {
         base.Initialize();
-        _pinInstance = PinManager.AllocatePin<PwmPin>(Pin);
+        _pinInstance = PinManager.AllocatePin<PwmPin>(Pin!.Value);
     }
     
     public override void OnControlRecived(decimal newValue)

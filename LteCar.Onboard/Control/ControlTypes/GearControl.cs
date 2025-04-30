@@ -2,6 +2,7 @@ using LteCar.Onboard.Vehicle;
 
 namespace LteCar.Onboard.Control.ControlTypes;
 
+[ControlType("GearShift")]
 public class GearControl : ControlTypeBase 
 {
     private IGearbox _gearbox;
