@@ -10,6 +10,7 @@ public class ChannelMapItem
     public string ControlType { get; set; }
     [JsonPropertyName("ignoreTest")]
     public bool IgnoreTest {get;set;}
+    [JsonPropertyName("options")]
     public Dictionary<string, object> Options { get; set; } = new();
 }
 
