@@ -18,7 +18,7 @@ export default function Home() {
     <div
       className={`${geistSans.className} ${geistMono.className} min-h-screen p-8 pb-20 font-[family-name:var(--font-geist-sans)]`}
     >
-      {/* <VideoStream key="video-stream" /> */}
+      <VideoStream key="video-stream" />
       <CarControl />
     </div>
   );
