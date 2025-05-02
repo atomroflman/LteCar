@@ -14,39 +14,45 @@ public class ControlService : ICarControlClient, IHubConnectionObserver
     public ILogger<ControlService> Logger { get; }
     public ControlExecutionService Control { get; }
     public IConfiguration Configuration { get; }
+    public ServerConnectionService ServerConnectionService { get; }
+
     private HubConnection _connection;
     private string? _sessionId;
+    private DateTime _lastControlUpdate = DateTime.Now;
 
-    public ControlService(ILogger<ControlService> logger, ControlExecutionService control, IServiceProvider serviceProvider, IConfiguration configuration, IConfiguration hubConfiguration)
+    public ControlService(ILogger<ControlService> logger, ControlExecutionService control, IServiceProvider serviceProvider, IConfiguration configuration, ServerConnectionService serverConnectionService)
     {
         Logger = logger;
         Control = control;
         ServiceProvider = serviceProvider;
         Configuration = configuration;
+        ServerConnectionService = serverConnectionService;
     }
-    public async Task ConnectToServer(string carId)
+    
+    public async Task ConnectToServer()
     {
-        _connection = new HubConnectionBuilder()
-            .WithUrl(Configuration.GetSection("ServerAddress").GetValue<string>("Url") + "/carconnectionhub")
-            .WithAutomaticReconnect()
-            .Build();
+        _connection = ServerConnectionService.ConnectToHub("control");
         _connection.Register<ICarControlClient>(this);
         
         await _connection.StartAsync();
         Logger.LogInformation("Connected to server.");
     }
     
-    public Task<string> AquireCarControl(string carSecret)
+    public async Task<string?> AquireCarControl(string carSecret)
     {
-        if (_sessionId != null)
-            throw new ApplicationException("Already connected to driver session.");
+        if (_sessionId != null && _lastControlUpdate.AddSeconds(30) > DateTime.Now) {
+            Logger.LogError("Cannot aquire control: Already connected to driver session.");
+            return null;
+        }
         var secret = Configuration.GetValue<string>("CarSecret");
-        if (secret != carSecret)
-            throw new ApplicationException("Invalid car secret.");
+        if (secret != carSecret) {
+            Logger.LogError("Cannot aquire control: Invalid car secret.");
+            return null;
+        }
         var sessionId = ShortGuid.NewGuid().ToString();
         _sessionId = sessionId;
         Logger.LogInformation($"Aquired control for car. SessionID: {_sessionId}.");
-        return Task.FromResult(sessionId);
+        return sessionId;
     }
 
     public Task ReleaseCarControl(string sessionId)
@@ -65,6 +71,7 @@ public class ControlService : ICarControlClient, IHubConnectionObserver
             return Task.CompletedTask;
         Logger.LogDebug($"Update channel {channelId} to {value}");
         Control.SetControl(channelId, value);
+        _lastControlUpdate = DateTime.Now;
         return Task.CompletedTask;
     }
 

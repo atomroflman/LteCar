@@ -5,6 +5,7 @@ using LteCar.Onboard.Control.ControlTypes;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Configuration;
 using Microsoft.Extensions.Logging.Console;
 
 var carId = Guid.NewGuid().ToString();
@@ -34,10 +35,14 @@ serviceCollection.AddSingleton<CarConfigurationService>();
 serviceCollection.AddSingleton<ControlService>();
 serviceCollection.AddSingleton<ControlExecutionService>();
 serviceCollection.AddAllTransient(typeof(ControlTypeBase));
-serviceCollection.AddLogging(c => c.AddConsole());
+serviceCollection.AddLogging(c =>  {
+    c.AddConsole(); 
+    c.AddConfiguration(configuration.GetSection("Logging"));
+});
 
 var serviceProvider = serviceCollection.BuildServiceProvider();
 var logger = serviceProvider.GetRequiredService<ILogger<Program>>();
+logger.LogDebug("Debug log enabled...");
 
 var configService = serviceProvider.GetRequiredService<CarConfigurationService>();
 configService.OnConfigurationChanged += () =>
@@ -47,13 +52,9 @@ configService.OnConfigurationChanged += () =>
 };
 var videoStreamService = serviceProvider.GetRequiredService<VideoStreamService>();
 var connectionService = serviceProvider.GetRequiredService<ServerConnectionService>();
+var carControlService = serviceProvider.GetRequiredService<ControlService>();
 await connectionService.ConnectToServer(carId);
+await carControlService.ConnectToServer();
 
-
-
-
-
-
-
-
-
+logger.LogInformation($"Car Engine Started...");
+await Task.Delay(Timeout.Infinite);
