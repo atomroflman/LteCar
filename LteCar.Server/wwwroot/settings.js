@@ -53,9 +53,9 @@
 //
 var server = null;
 if(window.location.protocol === 'http:')
-	server = "http://192.168.3.141:8088/janus";
+	server = "http://192.168.3.149:8088/janus";
 else
-	server = "https://192.168.3.141:8089/janus";
+	server = "https://192.168.3.149:8188/janus";
 
 // When creating a Janus object, we can also specify which STUN/TURN
 // servers we'd like to use to gather additional candidates. This is
