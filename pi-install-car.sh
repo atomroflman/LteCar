@@ -4,7 +4,9 @@ if [ "$EUID" -ne 0 ]
   exit
 fi
 
-if [! -f pi-install-base.sh]; then 
+if [-f pi-install-base.sh]; then 
+    echo "Repository is already checked out!"
+else
     apt install git
     git pull https://github.com/atomroflman/LteCar.git
     cd LteCar
