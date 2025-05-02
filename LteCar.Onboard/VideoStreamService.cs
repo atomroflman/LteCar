@@ -1,5 +1,8 @@
 using System.Diagnostics;
-x^
+using System.Text.Json;
+using LteCar.Shared;
+using Microsoft.Extensions.Configuration;
+
 namespace LteCar.Onboard;
 
 public class VideoSettings
@@ -18,9 +21,17 @@ public class VideoSettings
 
 public class VideoStreamService
 {
+    private const string CACHE_FILE_NAME = "videoSettings.cache.json";
     private VideoSettings _videoSettings;
     private Process _libcameraProcess;
+    private JanusConfiguration _janusConfiguration;
+    public ServerConnectionService ServerConnectionService { get; }
 
+    public VideoStreamService(ServerConnectionService serverConnectionService)
+    {
+        ServerConnectionService = serverConnectionService;
+    }
+    
     public void UpdateCameraSettings(VideoSettings newSettings)
     {
         var hasChanges = false;
@@ -46,8 +57,34 @@ public class VideoStreamService
         }
         // Update the camera settings
         _videoSettings = newSettings;
+        File.WriteAllText(CACHE_FILE_NAME, JsonSerializer.Serialize(_videoSettings));
         StartLibcameraProcess();
+    }
+    
+    public void Initialize()
+    {
+        // _janusConfiguration = ServerConnectionService.RequestJanusConfigAsync();
+        // Load the video settings from the cache file
+        if (File.Exists(CACHE_FILE_NAME))
+        {
+            var json = File.ReadAllText(CACHE_FILE_NAME);
+            _videoSettings = JsonSerializer.Deserialize<VideoSettings>(json);
+        }
+        else
+        {
+            _videoSettings = VideoSettings.Default;
+        }
 
+        StartLibcameraProcess();
+    }
+    
+    public void ResetCameraSettings()
+    {
+        // Reset the camera settings to default
+        _videoSettings = VideoSettings.Default;
+        if (File.Exists(CACHE_FILE_NAME))
+            File.Delete(CACHE_FILE_NAME);
+        StartLibcameraProcess();
     }
 
     public void StartLibcameraProcess()
@@ -62,8 +99,13 @@ public class VideoStreamService
         }
 
         var process = new Process();
-        process.StartInfo.FileName = "libcamera-vid";
-        process.StartInfo.Arguments = "--width 640 --height 480 --framerate 30 --inline --output -";
+
+        var parameters = $@"libcamera-vid -t 0 --inline --width {_videoSettings.Width} --height {_videoSettings.Height} --framerate {_videoSettings.Framerate} \
+  --codec h264 --profile high \
+  -o - | gst-launch-1.0 -v fdsrc ! h264parse ! rtph264pay config-interval=1 pt=96 ! \
+  udpsink host={_janusConfiguration.JanusServerHost} port={_janusConfiguration.JanusUdpPort}";
+        process.StartInfo.FileName = "bash";
+        process.StartInfo.Arguments = $"-c \"{parameters}\"";
         process.StartInfo.UseShellExecute = false;
         process.StartInfo.RedirectStandardOutput = true;
         process.StartInfo.RedirectStandardError = true;
