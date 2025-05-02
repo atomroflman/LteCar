@@ -1,5 +1,6 @@
 using CSharpVitamins;
 using LteCar.Onboard.Control;
+using LteCar.Server.Hubs;
 using LteCar.Shared.HubClients;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Configuration;
@@ -19,6 +20,7 @@ public class ControlService : ICarControlClient, IHubConnectionObserver
     private HubConnection _connection;
     private string? _sessionId;
     private DateTime _lastControlUpdate = DateTime.Now;
+    private ICarControlServer _server;
 
     public ControlService(ILogger<ControlService> logger, ControlExecutionService control, IServiceProvider serviceProvider, IConfiguration configuration, ServerConnectionService serverConnectionService)
     {
@@ -28,13 +30,16 @@ public class ControlService : ICarControlClient, IHubConnectionObserver
         Configuration = configuration;
         ServerConnectionService = serverConnectionService;
     }
-    
+
     public async Task ConnectToServer()
     {
+        // TODO: Send the setup to the server
+        Control.Initialize();
         _connection = ServerConnectionService.ConnectToHub("control");
         _connection.Register<ICarControlClient>(this);
-        
         await _connection.StartAsync();
+        _server = _connection.CreateHubProxy<ICarControlServer>();
+        await _server.RegisterForControl(Configuration.GetValue<string>("carId"));
         Logger.LogInformation("Connected to server.");
     }
     
@@ -45,6 +50,8 @@ public class ControlService : ICarControlClient, IHubConnectionObserver
             return null;
         }
         var secret = Configuration.GetValue<string>("CarSecret");
+        if (string.IsNullOrWhiteSpace(secret))
+            Logger.LogWarning("CarSecret is not set!");
         if (secret != carSecret) {
             Logger.LogError("Cannot aquire control: Invalid car secret.");
             return null;
@@ -81,9 +88,9 @@ public class ControlService : ICarControlClient, IHubConnectionObserver
         return Task.CompletedTask;
     }
 
-    public Task OnReconnected(string? connectionId)
+    public async Task OnReconnected(string? connectionId)
     {
-        return Task.CompletedTask;
+        await _server.RegisterForControl(Configuration.GetValue<string>("carId"));
     }
 
     public Task OnReconnecting(Exception? exception)

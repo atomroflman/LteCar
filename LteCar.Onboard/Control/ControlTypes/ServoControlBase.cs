@@ -1,3 +1,6 @@
+using Microsoft.Extensions.Logging;
+using Unosquare.RaspberryIO.Abstractions;
+using Unosquare.WiringPi;
 using Unosquare.WiringPi.Native;
 
 namespace LteCar.Onboard.Control.ControlTypes;
@@ -5,9 +8,21 @@ namespace LteCar.Onboard.Control.ControlTypes;
 public abstract class ServoControlBase : ControlTypeBase
 {
     public override PinFunctionFlags RequiredFunctions => PinFunctionFlags.PWM;
-    
+
+    public ILogger<ServoControlBase> Logger { get; }
+
+    public ServoControlBase(ILogger<ServoControlBase> logger)
+    {
+        Logger = logger;
+    }
+
+    public override void Initialize()
+    {
+        base.Initialize();
+    }
     public override void OnControlRecived(decimal newValue)
     {
+        Logger.LogDebug($"{this.GetType().Name} rec: {newValue} pwm: {ScaleRangeToPwm(newValue)}");
         WiringPi.PwmWrite(Pin, ScaleRangeToPwm(newValue));
     }
 
