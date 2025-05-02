@@ -1,5 +1,8 @@
+"use client";
+
 import React, { useEffect, useRef, useState } from "react";
 import * as signalR from "@microsoft/signalr";
+import { Config } from "@/config";
 
 type GamepadState = {
   id: string;
@@ -50,7 +53,7 @@ export default function GamepadViewer() {
 
     if (uiHubConnection == null) {
         uiHubConnection = new signalR.HubConnectionBuilder()
-            .withUrl("/carui")
+            .withUrl(`${Config.serverPath}/carui`)
             .withAutomaticReconnect()
             .build();
         uiHubConnection.on("CarStateUpdated", (newState: CarState) => {
@@ -73,7 +76,7 @@ export default function GamepadViewer() {
     }
     if (controlHubConnection == null) {
         controlHubConnection = new signalR.HubConnectionBuilder()
-            .withUrl("/control")
+            .withUrl(`${Config.serverPath}/control`)
             .withAutomaticReconnect()
             .build();
         controlHubConnection.start();
