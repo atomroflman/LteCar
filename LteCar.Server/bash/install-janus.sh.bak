@@ -7,13 +7,17 @@ set -e  # Stop on error
 # 1. Update und notwendige Pakete installieren
 apt update
 apt install -y \
-  git tcpdump build-essential automake libtool \
+  tcpdump build-essential automake libtool \
   pkg-config gengetopt gtk-doc-tools \
   libmicrohttpd-dev libjansson-dev libnice-dev \
   libssl-dev libsrtp2-dev libsofia-sip-ua-dev \
   libglib2.0-dev libopus-dev libogg-dev \
   libini-config-dev libcollection-dev \
+<<<<<<< HEAD
+  cmake libusrsctp-dev gstreamer1.0-libcamera
+=======
   cmake libusrsctp-dev libglib2.0-dev libssl-dev zlib1g-dev libconfig-dev libwebsockets-dev
+>>>>>>> refs/rewritten/Merge-Update-Janus-install
 
 # 2. Quellcode klonen
 git clone https://github.com/meetecho/janus-gateway.git
