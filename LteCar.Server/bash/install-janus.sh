@@ -4,7 +4,7 @@ mkdir janus
 cd janus
 set -e  # Stop on error
 
-# 1. Update und notwendige Pakete installieren
+# 1. Update and install packages
 apt update
 apt install -y \
   git tcpdump build-essential automake libtool \
@@ -15,18 +15,17 @@ apt install -y \
   libini-config-dev libcollection-dev \
   cmake libusrsctp-dev libglib2.0-dev libssl-dev zlib1g-dev libconfig-dev libwebsockets-dev
 
-# 2. Quellcode klonen
+# 2. Clone Janus
 git clone https://github.com/meetecho/janus-gateway.git
 cd janus-gateway
 
-# 3. Autogen und Konfiguration mit Custom-Options
+# 3. Custom options
 ./autogen.sh
 
 ./configure \
   --prefix=/opt/janus \
   --enable-websockets \
   --enable-plugin-streaming \
-  --enable-plugin-videoroom \
   --enable-plugin-audiobridge \
   --enable-rest \
   --disable-data-channels \
@@ -42,17 +41,16 @@ cd janus-gateway
   --disable-plugin-echotest \
   --disable-plugin-nanomsg \
   --disable-mqtt-event-handler \
-  --disable-rabbitmq-event-handler
-
-# AudioBridge bleibt aktiviert – für spätere Sprachfunktionen
+  --disable-rabbitmq-event-handler \
+  --disable-plugin-videoroom 
 
 # 4. Build und Installation
 make -j$(nproc)
 make install
 make configs
 
-# 5. Fertig
-echo "✅ Janus erfolgreich gebaut und installiert!"
-echo "👉 Starte mit: /opt/janus/bin/janus"
+# 5. Done
+echo "✅ Janus built successful!"
+echo "👉 Start Janus with: /opt/janus/bin/janus"
 
 cd ..

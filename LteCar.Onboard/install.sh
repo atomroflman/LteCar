@@ -10,15 +10,9 @@ sudo apt install -y \
   libnice-dev libcurl4-openssl-dev liblua5.3-dev libnanomsg-dev \
   libwebsockets-dev libevent-dev
   
-  
-  cd ~
-  git clone https://github.com/meetecho/janus-gateway.git
-  cd janus-gateway
-  sh autogen.sh
-  ./configure --prefix=/opt/janus   --enable-websockets   --disable-data-channels   --enable-libsrtp2   --enable-audio-bridge   --disable-rest   --disable-rabbitmq   --disable-mqtt   --disable-nanomsg   --disable-recordings   --disable-doxygen   --disable-lua   --disable-duktape   --disable-sctp   --disable-sip   --disable-video-room   --disable-text-room   --disable-video-call   --disable-no-sip
-  make -j4
-  sudo make install
-  sudo make configs
-  
+cd ~
+git clone https://github.com/WiringPi/WiringPi.git
+cd WiringPi
+./build
  
- 
+ gpio -v

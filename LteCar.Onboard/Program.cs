@@ -2,6 +2,7 @@
 using LteCar.Onboard;
 using LteCar.Onboard.Control;
 using LteCar.Onboard.Control.ControlTypes;
+using LteCar.Onboard.Hardware;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -34,6 +35,7 @@ serviceCollection.AddSingleton<VideoStreamService>();
 serviceCollection.AddSingleton<CarConfigurationService>();
 serviceCollection.AddSingleton<ControlService>();
 serviceCollection.AddSingleton<ControlExecutionService>();
+serviceCollection.AddSingleton<PinManager>();
 serviceCollection.AddAllTransient(typeof(ControlTypeBase));
 serviceCollection.AddLogging(c =>  {
     c.AddConsole(); 
@@ -53,6 +55,13 @@ configService.OnConfigurationChanged += () =>
 var videoStreamService = serviceProvider.GetRequiredService<VideoStreamService>();
 var connectionService = serviceProvider.GetRequiredService<ServerConnectionService>();
 var carControlService = serviceProvider.GetRequiredService<ControlService>();
+logger.LogInformation("Initializing car control...");
+carControlService.Initialize();
+if (configuration.GetValue<bool>("EnableChannelTest")) {
+    logger.LogInformation("Running channel test...");
+    await carControlService.TestControlsAsync();
+}
+
 await connectionService.ConnectToServer(carId);
 await carControlService.ConnectToServer();
 

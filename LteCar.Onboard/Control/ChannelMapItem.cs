@@ -8,6 +8,8 @@ public class ChannelMapItem
     public int PhysicalGpio { get; set; }
     [JsonPropertyName("controlType")]
     public string ControlType { get; set; }
+    [JsonPropertyName("ignoreTest")]
+    public bool IgnoreTest {get;set;}
     public Dictionary<string, object> Options { get; set; } = new();
 }
 
