@@ -1,3 +1,4 @@
+using System.Collections.Concurrent;
 using LteCar.Shared;
 
 namespace LteCar.Server;

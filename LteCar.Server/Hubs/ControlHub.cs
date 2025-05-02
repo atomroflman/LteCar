@@ -1,3 +1,4 @@
+using LteCar.Server.Services;
 using LteCar.Shared.HubClients;
 using Microsoft.AspNetCore.SignalR;
 
@@ -6,27 +7,38 @@ namespace LteCar.Server.Hubs;
 public class CarControlHub : Hub<ICarControlClient>, ICarControlServer
 {
     public IConfiguration Configuration { get; }
-    private readonly CarConnectionStore _carConnectionStore;
+    private BiDictionary<string, string> _connectionMap = new BiDictionary<string, string>();
 
-    public CarControlHub(CarConnectionStore carConnectionStore, IConfiguration configuration)
+    public CarControlHub(IConfiguration configuration)
     {
         Configuration = configuration;
-        _carConnectionStore = carConnectionStore;
+    }
+
+    public async Task RegisterForControl(string carId) 
+    {
+        _connectionMap.Add(carId, Context.ConnectionId);
     }
     
     public async Task<string> AquireCarControl(string carId, string carSecret)
     {
-        var session = await Clients.Client(carId).AquireCarControl(carSecret);
+        if (!_connectionMap.TryGetByKey(carId, out var carClientId))
+            return null;
+
+        var session = await Clients.Client(carClientId).AquireCarControl(carSecret);
         return session;
     }
     
     public async Task ReleaseCarControl(string carId, string sessionId)
     {
-        await Clients.Client(carId).ReleaseCarControl(sessionId);
+        if (!_connectionMap.TryGetByKey(carId, out var carClientId))
+            return;
+        await Clients.Client(carClientId).ReleaseCarControl(sessionId);
     }
     
     public async Task UpdateChannel(string carId, string sessionId, string channelId, decimal value)
     {
-        await Clients.Client(carId).UpdateChannel(sessionId, channelId, value);
+        if (!_connectionMap.TryGetByKey(carId, out var carClientId))
+            return;
+        await Clients.Client(carClientId).UpdateChannel(sessionId, channelId, value);
     }
 }
