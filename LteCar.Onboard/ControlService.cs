@@ -43,7 +43,8 @@ public class ControlService : ICarControlClient, IHubConnectionObserver
         _connection.Register<ICarControlClient>(this);
         await _connection.StartAsync();
         _server = _connection.CreateHubProxy<ICarControlServer>();
-        await _server.RegisterForControl(Configuration.GetValue<string>("carId"));
+        var carId = Configuration.GetValue<string>("carId");
+        await _server.RegisterForControl(carId);
         Logger.LogInformation("Connected to server.");
     }
 
