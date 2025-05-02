@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Janus WebRTC Stream</title>
+    <script src="https://cdn.jsdelivr.net/npm/janus-gateway@0.10.0/dist/janus.js"></script> <!-- Correct Janus.js URL -->
+</head>
+<body>
+<h1>Janus WebRTC Stream</h1>
+<video id="janus-video" width="640" height="480" autoplay></video> <!-- Video Element -->
+<script>
+    // Janus Server URL
+    var server = "http://192.168.3.148/janus"; // Replace with your Janus server IP
+
+    var janus = new Janus.Client('ws://192.168.3.148:8188', {
+        keepalive: true
+    });
+
+    janus.createConnection('id').then(function(connection) {
+        connection.createSession().then(function(session) {
+            session.attachPlugin('bla').then(function(plugin) {
+                plugin.send({}).then(function(response){});
+                plugin.on('message', function(message) {});
+                plugin.detach();
+            });
+        });
+    });
+</script>
+</body>
+</html>
