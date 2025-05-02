@@ -12,10 +12,10 @@
     "@microsoft/signalr": "^8.0.7",
     "@microsoft/signalr-protocol-msgpack": "^8.0.7",
     "@types/signalr": "^2.4.3",
-    "janus-gateway": "github:meetecho/janus-gateway",
     "next": "15.3.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "janus-gateway": "git://github.com/meetecho/janus-gateway.git"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
