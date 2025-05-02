@@ -24,6 +24,9 @@ public static class WiringPi
     [DllImport(WiringPiLib)] public static extern void pwmSetMode(int mode);
     [DllImport(WiringPiLib)] public static extern void pwmSetRange(uint range);
     [DllImport(WiringPiLib)] public static extern void pwmSetClock(int divisor);
+    
+    [DllImport(WiringPiLib)] public static extern void pwmToneWrite(int pin, int freq);
+    [DllImport(WiringPiLib)] public static extern void gpioClockSet(int pin, int freq) ;
 
     // --- Timing ---
     [DllImport(WiringPiLib)] public static extern void delay(uint howLong);
