@@ -1,5 +1,6 @@
 ﻿using System.Text.Json;
 using LteCar.Onboard;
+using LteCar.Onboard.Control;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Console;
@@ -21,6 +22,7 @@ Console.WriteLine($"Car ID: {carId}");
 var serviceCollection = new ServiceCollection();
 serviceCollection.AddSingleton<ServerConnectionService>();
 serviceCollection.AddSingleton<VideoStreamService>();
+serviceCollection.AddAllTransient(typeof(ControlService));
 serviceCollection.AddLogging(c => c.AddConsole());
 
 var serviceProvider = serviceCollection.BuildServiceProvider();
