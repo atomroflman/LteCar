@@ -1,5 +1,5 @@
 using CSharpVitamins;
-using LteCar.Onboard.Control;
+using LteCar.Onboard.Telemetry;
 using LteCar.Server.Hubs;
 using LteCar.Shared.HubClients;
 using Microsoft.AspNetCore.SignalR.Client;
@@ -7,12 +7,13 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using TypedSignalR.Client;
 
-namespace LteCar.Onboard;
+namespace LteCar.Onboard.Control;
 
 public class ControlService : ICarControlClient, IHubConnectionObserver
 {
     public IServiceProvider ServiceProvider { get; }
     public ILogger<ControlService> Logger { get; }
+    public TelemetryService TelemetryService { get; }
     public ControlExecutionService Control { get; }
     public IConfiguration Configuration { get; }
     public ServerConnectionService ServerConnectionService { get; }
@@ -22,9 +23,10 @@ public class ControlService : ICarControlClient, IHubConnectionObserver
     private DateTime _lastControlUpdate = DateTime.Now;
     private ICarControlServer _server;
 
-    public ControlService(ILogger<ControlService> logger, ControlExecutionService control, IServiceProvider serviceProvider, IConfiguration configuration, ServerConnectionService serverConnectionService)
+    public ControlService(ILogger<ControlService> logger, TelemetryService telemetryService, ControlExecutionService control, IServiceProvider serviceProvider, IConfiguration configuration, ServerConnectionService serverConnectionService)
     {
         Logger = logger;
+        TelemetryService = telemetryService;
         Control = control;
         ServiceProvider = serviceProvider;
         Configuration = configuration;
@@ -46,6 +48,7 @@ public class ControlService : ICarControlClient, IHubConnectionObserver
         var carId = Configuration.GetValue<string>("carId");
         await _server.RegisterForControl(carId);
         Logger.LogInformation("Connected to server.");
+        TelemetryService.UpdateTelemetry("Control Server", "Connected");
     }
 
     public async Task TestControlsAsync() {
@@ -68,17 +71,18 @@ public class ControlService : ICarControlClient, IHubConnectionObserver
         var sessionId = ShortGuid.NewGuid().ToString();
         _sessionId = sessionId;
         Logger.LogInformation($"Aquired control for car. SessionID: {_sessionId}.");
+        TelemetryService.UpdateTelemetry("Control Session", "Connected");
         return sessionId;
     }
 
-    public Task ReleaseCarControl(string sessionId)
+    public async Task ReleaseCarControl(string sessionId)
     {
         if (_sessionId != sessionId)
-            return Task.CompletedTask;
+            return;
         Logger.LogInformation($"Release control for session {sessionId}");
         Control.ReleaseControl();
+        await TelemetryService.UpdateTelemetry("Control Session", "Ended");
         _sessionId = null;
-        return Task.CompletedTask;
     }
 
     public Task UpdateChannel(string sessionId, string channelId, decimal value)
@@ -91,20 +95,21 @@ public class ControlService : ICarControlClient, IHubConnectionObserver
         return Task.CompletedTask;
     }
 
-    public Task OnClosed(Exception? exception)
+    public async Task OnClosed(Exception? exception)
     {
         Control.ReleaseControl();
-        return Task.CompletedTask;
+        await TelemetryService.UpdateTelemetry("Control Server", "Disconnected");
     }
 
     public async Task OnReconnected(string? connectionId)
     {
         await _server.RegisterForControl(Configuration.GetValue<string>("carId"));
+        await TelemetryService.UpdateTelemetry("Control Server", "Connected");
     }
 
-    public Task OnReconnecting(Exception? exception)
+    public async Task OnReconnecting(Exception? exception)
     {
         Control.ReleaseControl();
-        return Task.CompletedTask;
+        await TelemetryService.UpdateTelemetry("Control Server", "Disconnected");
     }
 }
