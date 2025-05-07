@@ -125,9 +125,40 @@ export default function GamepadViewer() {
     controlHubConnection.invoke("AquireCarControl", carId, carKey)
         .then((res: string) => setCarSession(res));
   }
+let gamepdview =  <div className="p-4">🎮 Bitte Gamepad anschließen…</div>;
+  if (gamepad) {
+      gamepdview = <><div>
+          <b className="font-bold">🎮 {gamepad.id}</b>
+          <b className="font-semibold">🕹️ Achsen:</b>
+          <ul className="list-disc ml-4">
+              {gamepad.axes.map((value, i) => (
+                  <li key={i}>
+                      Achse {i}: <span className="font-mono">{value.toFixed(2)}</span>
+                  </li>
+              ))}
+          </ul>
+      </div>
 
-  if (!gamepad) {
-    return <div className="p-4">🎮 Bitte Gamepad anschließen…</div>;
+          <div>
+              <h3 className="font-semibold">🔘 Buttons:</h3>
+              <ul className="list-disc ml-4">
+                  {gamepad.buttons.map((value, i) => (
+                      <li key={i}>
+                          Button {i}:{" "}
+                          <span
+                              className={
+                                  value > 0
+                                      ? "text-green-600 font-bold"
+                                      : "text-gray-400 font-mono"
+                              }
+                          >
+                {value.toFixed(2)}
+              </span>
+                      </li>
+                  ))}
+              </ul>
+          </div>
+      </>;
   }
 
   return (
@@ -150,37 +181,7 @@ export default function GamepadViewer() {
       />
       <button onClick={aquireCarControl}>Aquire Control</button>
       </>}
-      <h2 className="text-xl font-bold">🎮 {gamepad.id}</h2>
-      <div>
-        <h3 className="font-semibold">🕹️ Achsen:</h3>
-        <ul className="list-disc ml-4">
-          {gamepad.axes.map((value, i) => (
-            <li key={i}>
-              Achse {i}: <span className="font-mono">{value.toFixed(2)}</span>
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      <div>
-        <h3 className="font-semibold">🔘 Buttons:</h3>
-        <ul className="list-disc ml-4">
-          {gamepad.buttons.map((value, i) => (
-            <li key={i}>
-              Button {i}:{" "}
-              <span
-                className={
-                  value > 0
-                    ? "text-green-600 font-bold"
-                    : "text-gray-400 font-mono"
-                }
-              >
-                {value.toFixed(2)}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </div>
+        {gamepdview}
     </div>
   );
 }
