@@ -49,7 +49,7 @@ public class ServerConnectionService
     
     public async Task ConnectToServer(string carId)
     {
-        _connection = ConnectToHub("connection");
+        _connection = ConnectToHub(HubPaths.CarConnectionHub);
         _connection.Reconnected += async (connectionId) =>
         {
             Logger.LogInformation($"Connection {connectionId} reestablished.");
