@@ -44,13 +44,9 @@ app.UseStaticFiles(new StaticFileOptions()
 app.UseRouting();
 
 app.MapControllers();
-
-app.UseEndpoints(endpoints =>
-{
-    endpoints.MapHub<CarConnectionHub>("/connection");
-    endpoints.MapHub<CarControlHub>("/control");
-    endpoints.MapHub<TelemetryHub>("/telemetry");
-    endpoints.MapHub<CarUiHub>("/carui");
-});
+app.MapHub<CarConnectionHub>(HubPaths.CarConnectionHub);
+app.MapHub<CarControlHub>(HubPaths.CarControlHub);
+app.MapHub<TelemetryHub>(HubPaths.TelemetryHub);
+app.MapHub<CarUiHub>(HubPaths.CarUiHub);
 
 app.Run();

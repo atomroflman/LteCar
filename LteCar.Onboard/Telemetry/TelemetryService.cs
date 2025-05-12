@@ -24,7 +24,7 @@ public class TelemetryService : IHubConnectionObserver
 
     public async Task ConnectToServer()
     {
-        _connection = ServerConnectionService.ConnectToHub("telemetry");
+        _connection = ServerConnectionService.ConnectToHub(HubPaths.TelemetryHub);
         await _connection.StartAsync();
         _server = _connection.CreateHubProxy<ITelemetryServer>();
         _carId = Configuration.GetValue<string>("carId");
