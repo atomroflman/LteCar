@@ -2,8 +2,10 @@ using System.Text;
 using System.Text.Json;
 using LteCar.Onboard;
 using LteCar.Server;
+using LteCar.Server.Data;
 using LteCar.Server.Services;
 using LteCar.Shared;
+using LteCar.Shared.Channels;
 using Microsoft.AspNetCore.SignalR;
 
 namespace LteCar.Server.Hubs;
@@ -13,63 +15,56 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
     public IHubContext<CarUiHub, ICarUiClient> UiHub { get; }
     public IConfiguration Configuration { get; }
     public ILogger<CarConnectionHub> Logger { get; }
-    private readonly CarConnectionStore _carConnectionStore;
     
-    public CarConnectionHub(CarConnectionStore carConnectionStore, IHubContext<CarUiHub, ICarUiClient> uiHub, IConfiguration configuration, ILogger<CarConnectionHub> logger)
+    public CarConnectionHub(IHubContext<CarUiHub, ICarUiClient> uiHub, IConfiguration configuration, ILogger<CarConnectionHub> logger)
     {
         Configuration = configuration;
-        _carConnectionStore = carConnectionStore;
         UiHub = uiHub;
         Logger = logger;
     }
     
-    public async Task<CarConfiguration> OpenCarConnection(string carId)
+    public async Task<CarConfiguration> OpenCarConnection(string carId, string channelMapHash)
     {
-        Logger.LogInformation($"Open Car Connection: {carId}");
-        if (_carConnectionStore.TryGetValue(carId, out var carConfiguration))
+        var dbContext = Context.GetHttpContext().RequestServices.GetRequiredService<LteCarContext>();
+        var car = dbContext.Cars.FirstOrDefault(c => c.CarId == carId);
+        if (car == null)
         {
-            return carConfiguration.CarConfiguration;
+            Logger.LogWarning($"Car with ID {carId} not found. Creating a new one.");
+            car = new Car() { CarId = carId };
+            dbContext.Cars.Add(car);
+            await dbContext.SaveChangesAsync();            
         }
-        var storagePath = Configuration.GetSection("CarConfigStore").GetValue<string>("Path");
-        Logger.LogDebug($"Storage Path: {storagePath}");
-        if (storagePath == null)
-            throw new Exception("CarConfigStore.Path needs to be configured.");
+        car.LastSeen = DateTime.Now;
 
-        var filePath = Path.Combine(storagePath, carId);
-        var fileInfo = new FileInfo(filePath);
-        if (!fileInfo.Directory!.Exists)
-            fileInfo.Directory.Create();
-        CarConfiguration carConfig = null;
-        if (fileInfo.Exists)
-        {
-            var config = JsonSerializer.Deserialize<CarConfiguration>(File.ReadAllText(filePath));
-            _carConnectionStore.Add(carId, new CarConnectionInfo() { CarConfiguration = config });
-            carConfig = config;
-            Logger.LogDebug("Loaded car config...");
-        }
-        if (carConfig == null) 
-        {
-            carConfig = new CarConfiguration();
-            _carConnectionStore.Add(carId, new CarConnectionInfo() { CarConfiguration = carConfig });
-        }
+        CarConfiguration carConfig = new CarConfiguration();
+        carConfig.JanusConfiguration = new JanusConfiguration() {
+            JanusServerHost = Configuration.GetSection("JanusConfiguration").GetValue<string>("HostName"),
+            JanusUdpPort = car.VideoStreamPort ?? GetNextAvailablePort(),
+        };
+        carConfig.VideoSettings = car.VideoSettings;
+        carConfig.RequiresChannelMapUpdate = car.ChannelMapHash != channelMapHash;
         
-        if (carConfig.JanusConfiguration == null)
-            carConfig.JanusConfiguration = new JanusConfiguration();
-        carConfig.JanusConfiguration.JanusServerHost 
-            = Configuration.GetSection("JanusConfiguration").GetValue<string>("HostName");
-        
-        // TODO: Track Open Ports
-        carConfig.JanusConfiguration.JanusUdpPort = 10000;
-        
-        if (carConfig.VideoSettings == null)
-            carConfig.VideoSettings = VideoSettings.Default;
-
-        var json = JsonSerializer.Serialize(carConfig);
-            File.WriteAllText(filePath, json);
         await UiHub.Clients.All.CarStateUpdated(new CarStateModel() {
             Id = carId
         });
         return carConfig;
+    }
+
+    private int GetNextAvailablePort()
+    {
+        var dbContext = Context.GetHttpContext().RequestServices.GetRequiredService<LteCarContext>();
+        var lastPort = (dbContext.Cars.OrderByDescending(c => c.VideoStreamPort).FirstOrDefault()?.VideoStreamPort ?? 9999) + 1;
+        if (lastPort > 10200) {
+            Logger.LogWarning("No available ports. All ports are in use. Take the longest inactive port.");
+            var kickedCar = dbContext.Cars.OrderBy(c => c.LastSeen).FirstOrDefault(e => e.VideoStreamPort != null);
+            if (kickedCar != null) {
+                Logger.LogWarning($"Kicking car {kickedCar} from port {kickedCar.VideoStreamPort}");
+                kickedCar.VideoStreamPort = null;
+                dbContext.SaveChanges();
+                lastPort = kickedCar.VideoStreamPort!.Value;
+            }
+        }
+        return lastPort;
     }
 
     public async Task Test() 
@@ -87,5 +82,37 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
     {
         Logger.LogWarning($"Client disconnected: {exception}");
         return base.OnDisconnectedAsync(exception);
+    }
+
+    public async Task UpdateChannelMap(string carId, ChannelMap channelMap)
+    {
+        var dbContext = Context.GetHttpContext().RequestServices.GetRequiredService<LteCarContext>();
+        var car = dbContext.Cars.FirstOrDefault(c => c.CarId == carId);
+        if (car == null)
+        {
+            Logger.LogWarning($"Car with ID {carId} not found.");
+            return;        
+        }
+        car.ChannelMapHash = ChannelMapHashProvider.GenerateHash(channelMap);
+        foreach (var channel in channelMap)
+        {
+            var channelDb = dbContext.CarChannels.FirstOrDefault(c => c.ChannelName == channel.Key && c.CarId == car.Id);
+            if (channelDb == null)
+            {
+                Logger.LogWarning($"Channel with ID {channel.Key} not found. Creating a new one.");
+                channelDb = new CarChannel() { ChannelName = channel.Key, CarId = car.Id };
+                dbContext.CarChannels.Add(channelDb);
+            }
+        }
+        foreach (var channel in dbContext.CarChannels.Where(c => c.CarId == car.Id))
+        {
+            if (!channelMap.ContainsKey(channel.ChannelName))
+            {
+                Logger.LogWarning($"Channel with ID {channel.ChannelName} not found in the new channel map. Removing it.");
+                dbContext.CarChannels.Remove(channel);
+            }
+        }
+        await dbContext.SaveChangesAsync();
+        Logger.LogInformation($"Channel map updated for car {carId}. Channel map hash: {car.ChannelMapHash}");
     }
 }

@@ -2,6 +2,7 @@ using System.Reflection;
 using System.Text.Json;
 using LteCar.Onboard.Control.ControlTypes;
 using LteCar.Onboard.Hardware;
+using LteCar.Shared.Channels;
 using Microsoft.Extensions.Logging;
 
 namespace LteCar.Onboard.Control;
@@ -12,22 +13,19 @@ public class ControlExecutionService
     public ILogger<ControlExecutionService> Logger { get; }
 
     private readonly Dictionary<string, ControlTypeBase> _controls = new();
-    public ControlExecutionService(IServiceProvider serviceProvider, ILogger<ControlExecutionService> logger)
+    private readonly ChannelMap _channelMap;
+
+    public ControlExecutionService(ChannelMap channelMap, IServiceProvider serviceProvider, ILogger<ControlExecutionService> logger)
     {
+        _channelMap = channelMap;
         ServiceProvider = serviceProvider;
         Logger = logger;
     }
     
     public void Initialize()
     {
-        var channelMapFile = new FileInfo("channelMap.json");
-        if (!channelMapFile.Exists)
-            throw new FileNotFoundException("channelMap.json could not be found");
-        var channelMap = JsonSerializer.Deserialize<ChannelMap>(channelMapFile.OpenRead());
-        if (channelMap == null)
-            throw new Exception("channelMap.json could not be deserialized");
         WiringPi.wiringPiSetupGpio();
-        foreach (var channel in channelMap)
+        foreach (var channel in _channelMap)
         {
             var controlType = GetControlType(channel.Value.ControlType);
             Logger.LogDebug($"Got type {controlType.Name} for channel {channel.Key}.");
