@@ -4,11 +4,11 @@ using LteCar.Onboard.Control;
 using LteCar.Onboard.Control.ControlTypes;
 using LteCar.Onboard.Hardware;
 using LteCar.Onboard.Vehicle;
+using LteCar.Shared.Channels;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Configuration;
-using Microsoft.Extensions.Logging.Console;
 
 var carId = Guid.NewGuid().ToString();
 
@@ -29,7 +29,16 @@ var configuration = new ConfigurationBuilder()
     })
     .AddJsonFile("appSettings.json")
     .Build();
+
+var channelMapFile = new FileInfo("channelMap.json");
+if (!channelMapFile.Exists)
+    throw new FileNotFoundException("channelMap.json could not be found");
+var channelMap = JsonSerializer.Deserialize<ChannelMap>(channelMapFile.OpenRead());
+if (channelMap == null)
+    throw new Exception("channelMap.json could not be deserialized");
+
 var serviceCollection = new ServiceCollection();
+serviceCollection.AddSingleton<ChannelMap>(channelMap);
 serviceCollection.AddSingleton<IConfiguration>(configuration);
 serviceCollection.AddSingleton<ServerConnectionService>();
 serviceCollection.AddSingleton<VideoStreamService>();

@@ -1,7 +1,9 @@
 using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using System.Threading.Channels;
 using LteCar.Shared;
+using LteCar.Shared.Channels;
 using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Configuration;
@@ -15,13 +17,16 @@ public class ServerConnectionService
 {
     public IServiceProvider ServiceProvider { get; }
     public ILogger<ServerConnectionService> Logger { get; }
+
+    private readonly ChannelMap _channelMap;
     private readonly IConfiguration _configuration;
     private HubConnection _connection;
     
-    public ServerConnectionService(IConfiguration configuration, IServiceProvider serviceProvider, ILogger<ServerConnectionService> logger)
+    public ServerConnectionService(ChannelMap channelMap, IConfiguration configuration, IServiceProvider serviceProvider, ILogger<ServerConnectionService> logger)
     {
         ServiceProvider = serviceProvider;
         Logger = logger;
+        _channelMap = channelMap;
         _configuration = configuration;
     }
 
@@ -73,7 +78,17 @@ public class ServerConnectionService
         // Logger.LogDebug("invoked manually...");
         var connectionServer = _connection.CreateHubProxy<ICarConnectionServer>();
         Logger.LogDebug("Proxy created...");
-        var config = await connectionServer.OpenCarConnection(carId);
+        var channelMapHash = ChannelMapHashProvider.GenerateHash(_channelMap);
+        var config = await connectionServer.OpenCarConnection(carId, channelMapHash);
+        if (config == null)
+        {
+            Logger.LogError("Failed to open car connection.");
+            return;
+        }
+        if (config.RequiresChannelMapUpdate) {
+            Logger.LogInformation("Channel map update required.");
+            await connectionServer.UpdateChannelMap(carId, _channelMap);
+        }
         Logger.LogDebug($"OpenCarConnection called: {JsonSerializer.Serialize(config)}");
         if (config == null)
         {

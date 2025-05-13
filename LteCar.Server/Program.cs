@@ -1,7 +1,9 @@
 ﻿using LteCar.Server;
+using LteCar.Server.Data;
 using LteCar.Server.Hubs;
 using LteCar.Shared;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -12,6 +14,10 @@ builder.Logging.AddConsole()
 
 builder.Services.AddSingleton<VideoStreamRecieverService>();
 builder.Services.AddSingleton<CarConnectionStore>();
+builder.Services.AddDbContext<LteCarContext>(options =>
+{
+    options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection"));
+});
 
 builder.Services.AddControllers();
 builder.Services.AddSignalR()
@@ -19,6 +25,9 @@ builder.Services.AddSignalR()
     .AddJsonProtocol();
 
 var app = builder.Build();
+var dbContext = app.Services.GetRequiredService<LteCarContext>();
+dbContext.Database.EnsureCreated();
+
 var logger = app.Services.GetRequiredService<ILogger<Program>>();
 
 logger.LogInformation("Starting Janus service...");
@@ -35,11 +44,17 @@ app.Use(async(ctx, next) => {
     logger.LogDebug($"{ctx.Response.StatusCode}");
 });
 
+var staticFilePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
+if (!Directory.Exists(staticFilePath))
+{
+    logger.LogWarning($"Static file path {staticFilePath} does not exist. Creating it. Server will run without client.");
+    Directory.CreateDirectory(staticFilePath);
+}
 app.UseStaticFiles(new StaticFileOptions()
 {
     ServeUnknownFileTypes = true,
     DefaultContentType = "application/octet-stream",
-    FileProvider = new PhysicalFileProvider(Path.Combine(Directory.GetCurrentDirectory(), "wwwroot"))
+    FileProvider = new PhysicalFileProvider(staticFilePath)
 });
 app.UseRouting();
 

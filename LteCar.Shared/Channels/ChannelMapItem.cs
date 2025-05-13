@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace LteCar.Onboard.Control;
+namespace LteCar.Shared.Channels;
 
 public class ChannelMapItem
 {

@@ -10,14 +10,12 @@
   },
   "gearDown": {
     "controlType": "GearShift",
-    "ignoreTest": true,
     "options": {
       "shiftDirection": "down"
     }
   },
   "gearUp": {
     "controlType": "GearShift",
-    "ignoreTest": true,
     "options": {
       "shiftDirection": "up"
     }
