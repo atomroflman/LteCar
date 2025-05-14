@@ -1,5 +1,6 @@
 using CSharpVitamins;
 using LteCar.Onboard.Telemetry;
+using LteCar.Shared;
 using LteCar.Server.Hubs;
 using LteCar.Shared.HubClients;
 using Microsoft.AspNetCore.SignalR.Client;
@@ -64,14 +65,16 @@ public class ControlService : ICarControlClient, IHubConnectionObserver
         var secret = Configuration.GetValue<string>("CarSecret");
         if (string.IsNullOrWhiteSpace(secret))
             Logger.LogWarning("CarSecret is not set!");
-        if (secret != carSecret) {
+
+        if (PasswordHasher.VerifyPassword(carSecret, secret)) 
+        {
             Logger.LogError("Cannot aquire control: Invalid car secret.");
             return null;
         }
         var sessionId = ShortGuid.NewGuid().ToString();
         _sessionId = sessionId;
         Logger.LogInformation($"Aquired control for car. SessionID: {_sessionId}.");
-        TelemetryService.UpdateTelemetry("Control Session", "Connected");
+        await TelemetryService.UpdateTelemetry("Control Session", "Connected");
         return sessionId;
     }
 
