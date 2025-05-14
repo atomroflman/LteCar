@@ -3,6 +3,7 @@ using LteCar.Onboard;
 using LteCar.Onboard.Control;
 using LteCar.Onboard.Control.ControlTypes;
 using LteCar.Onboard.Hardware;
+using LteCar.Onboard.Telemetry;
 using LteCar.Onboard.Vehicle;
 using LteCar.Shared.Channels;
 using Microsoft.Extensions.Configuration;
@@ -46,9 +47,10 @@ serviceCollection.AddSingleton<CarConfigurationService>();
 serviceCollection.AddSingleton<ControlService>();
 serviceCollection.AddSingleton<ControlExecutionService>();
 serviceCollection.AddSingleton<IGearbox, VirtualAutomaticGearbox>();
+serviceCollection.AddSingleton<TelemetryService>();
 serviceCollection.AddSingleton<PinManager>();
 serviceCollection.AddAllTransient(typeof(ControlTypeBase));
-serviceCollection.AddLogging(c =>  {
+serviceCollection.AddLogging(c => {
     c.AddConsole(); 
     c.AddConfiguration(configuration.GetSection("Logging"));
 });
