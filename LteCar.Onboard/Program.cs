@@ -12,7 +12,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Configuration;
 
 var carId = Guid.NewGuid().ToString();
-
+var startupTime = DateTime.Now;
 if (File.Exists("carId.txt"))
 {
     carId = File.ReadAllText("carId.txt");
@@ -80,4 +80,12 @@ await connectionService.ConnectToServer(carId);
 await carControlService.ConnectToServer();
 
 logger.LogInformation($"Car Engine Started...");
+Task.Run(async () => {
+    var telemetryService = serviceProvider.GetRequiredService<TelemetryService>();
+    while (true)
+    {
+        telemetryService.Tick();
+        await Task.Delay(100);
+    }
+});
 await Task.Delay(Timeout.Infinite);

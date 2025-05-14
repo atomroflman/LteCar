@@ -1,23 +1,35 @@
 {
-  "steer": {
-    "physicalGpio": 32,
-    "controlType": "Steering"
-  },
-  "throttle": {
-    "physicalGpio": 35,
-    "controlType": "Throttle",
-    "ignoreTest": true
-  },
-  "gearDown": {
-    "controlType": "GearShift",
-    "options": {
-      "shiftDirection": "down"
+  "controlChannels": {
+    "steer": {
+      "physicalGpio": 32,
+      "controlType": "Steering"
+    },
+    "throttle": {
+      "physicalGpio": 35,
+      "controlType": "Throttle",
+      "ignoreTest": true
+    },
+    "gearDown": {
+      "controlType": "GearShift",
+      "options": {
+        "shiftDirection": "down"
+      }
+    },
+    "gearUp": {
+      "controlType": "GearShift",
+      "options": {
+        "shiftDirection": "up"
+      }
     }
   },
-  "gearUp": {
-    "controlType": "GearShift",
-    "options": {
-      "shiftDirection": "up"
+  "telemetryChannels": {
+    "speed": {
+      "telemetryType": "SpeedSensor",
+      "physicalGpio": 40
+    },
+    "temperature": {
+      "telemetryType": "TempSensor",
+      "physicalGpio": 41
     }
   }
 }

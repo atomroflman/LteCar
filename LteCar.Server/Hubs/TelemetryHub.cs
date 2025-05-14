@@ -10,8 +10,3 @@ public class TelemetryHub : Hub<ITelemetryClient>, ITelemetryServer
         return Clients.Groups(carId).UpdateTelemetry(valueName, value);
     }
 }
-
-public interface ITelemetryClient
-{
-    Task UpdateTelemetry(string valueName, string value);
-}
