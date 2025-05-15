@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 
 namespace LteCar.Onboard.Hardware;
 
+[Obsolete("Use gpio on bash instead")]
 public static class WiringPi
 {
     private const string WiringPiLib = "libwiringPi.so";
