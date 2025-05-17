@@ -53,7 +53,7 @@ export default function GamepadViewer() {
 
     if (uiHubConnection == null) {
         uiHubConnection = new signalR.HubConnectionBuilder()
-            .withUrl(`${Config.serverPath}/carui`)
+            .withUrl(`${Config.serverPath}/hubs/carui`)
             .withAutomaticReconnect()
             .build();
         uiHubConnection.on("CarStateUpdated", (newState: CarState) => {
@@ -76,7 +76,7 @@ export default function GamepadViewer() {
     }
     if (controlHubConnection == null) {
         controlHubConnection = new signalR.HubConnectionBuilder()
-            .withUrl(`${Config.serverPath}/control`)
+            .withUrl(`${Config.serverPath}/hubs/control`)
             .withAutomaticReconnect()
             .build();
         controlHubConnection.start();
@@ -105,12 +105,10 @@ export default function GamepadViewer() {
     };
 
     window.addEventListener("gamepadconnected", () => {
-      console.log("🎮 Gamepad verbunden!");
       updateGamepad();
     });
 
     window.addEventListener("gamepaddisconnected", () => {
-      console.log("🔌 Gamepad getrennt.");
       setGamepad(null);
       cancelAnimationFrame(animationFrame);
     });
@@ -125,9 +123,10 @@ export default function GamepadViewer() {
     controlHubConnection.invoke("AquireCarControl", carId, carKey)
         .then((res: string) => setCarSession(res));
   }
-let gamepdview =  <div className="p-4">🎮 Bitte Gamepad anschließen…</div>;
+  let gamepdview = <div className="p-4">🎮 Bitte Gamepad anschließen…</div>;
   if (gamepad) {
-      gamepdview = <><div>
+      gamepdview = <>
+        <div>
           <b className="font-bold">🎮 {gamepad.id}</b>
           <b className="font-semibold">🕹️ Achsen:</b>
           <ul className="list-disc ml-4">
@@ -137,7 +136,7 @@ let gamepdview =  <div className="p-4">🎮 Bitte Gamepad anschließen…</div>;
                   </li>
               ))}
           </ul>
-      </div>
+        </div>
 
           <div>
               <h3 className="font-semibold">🔘 Buttons:</h3>
