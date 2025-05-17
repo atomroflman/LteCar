@@ -35,6 +35,11 @@ public class ControlExecutionService
             var functions = PinFunctionFlags.None;
             if (channel.Value.PhysicalGpio != null) {
                 var prop = typeof(RaspberryPiPinMap).GetProperty($"PIN_{channel.Value.PhysicalGpio}");
+                if (prop == null)
+                {
+                    Logger.LogError($"Channel {channel.Key} does not resolve a GPIO-Pin. Skipping channel.");
+                    continue;
+                }
                 functions = prop.GetCustomAttribute<PinFunctionAttribute>()!.Functions;
                 var gpio = prop.GetValue(null) as int?;
                 if (gpio == null)
