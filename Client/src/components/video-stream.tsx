@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { Config } from '@/config';
 
 declare global {
   interface Window {
@@ -19,7 +20,7 @@ export default function VideoStream() {
       dependencies: window.Janus.useDefaultDependencies(),
       callback: () => {
         const janus = new window.Janus({
-          server: ['http://192.168.3.149:8088/janus', 'ws://192.168.3.149:8188/'],
+          server: [`${Config.janusServerPath}`, `${Config.janusWsPath}`],
           success: () => {
             let pluginHandle: any;
     

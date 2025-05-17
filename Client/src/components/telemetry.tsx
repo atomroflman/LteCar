@@ -13,7 +13,7 @@ const Telemetry: React.FC = () => {
     useEffect(() => {
         // Create a connection to the SignalR hub
         const connection = new signalR.HubConnectionBuilder()
-            .withUrl("/telemetry")
+            .withUrl("/hubs/telemetry")
             .withAutomaticReconnect()
             .build();
 
