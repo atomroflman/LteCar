@@ -1,3 +1,5 @@
+using System.Text.Json.Serialization;
+
 namespace LteCar.Shared.Channels;
 
 public class ChannelMap
