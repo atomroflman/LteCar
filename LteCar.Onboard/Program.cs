@@ -80,12 +80,13 @@ await connectionService.ConnectToServer(carId);
 await carControlService.ConnectToServer();
 
 logger.LogInformation($"Car Engine Started...");
-Task.Run(async () => {
+
+// Application loop
+await Task.Run(async () =>
+{
     var telemetryService = serviceProvider.GetRequiredService<TelemetryService>();
     while (true)
     {
-        telemetryService.Tick();
-        await Task.Delay(100);
+        await Task.WhenAll(telemetryService.Tick(), Task.Delay(100));
     }
 });
-await Task.Delay(Timeout.Infinite);

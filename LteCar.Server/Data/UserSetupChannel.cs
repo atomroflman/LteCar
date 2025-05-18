@@ -2,9 +2,8 @@ using System.ComponentModel.DataAnnotations;
 
 namespace LteCar.Server.Data
 {
-    public class UserSetupChannel
+    public class UserSetupChannel : EntityBase
     {
-        public int Id { get; set; }
         public int UserSetupId { get; set; }
         public UserCarSetup UserSetup { get; set; }
         [MaxLength(64)]

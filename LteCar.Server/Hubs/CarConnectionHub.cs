@@ -140,6 +140,27 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
                 dbContext.CarChannels.Remove(channel);
             }
         }
+
+        foreach (var channel in channelMap.TelemetryChannels)
+        {
+            var channelDb = dbContext.CarTelemetry.FirstOrDefault(c => c.ChannelName == channel.Key && c.CarId == car.Id);
+            if (channelDb == null)
+            {
+                Logger.LogWarning($"Telemetry channel with ID {channel.Key} not found. Creating a new one.");
+                channelDb = new CarTelemetry() { ChannelName = channel.Key, CarId = car.Id };
+                dbContext.CarTelemetry.Add(channelDb);
+            }
+            channelDb.TelemetryType = channel.Value.TelemetryType;
+            channelDb.ReadIntervalTicks = channel.Value.ReadIntervalTicks;
+        }
+        foreach (var channel in dbContext.CarTelemetry.Where(c => c.CarId == car.Id))
+        {
+            if (!channelMap.TelemetryChannels.ContainsKey(channel.ChannelName))
+            {
+                Logger.LogWarning($"Telemetry channel with ID {channel.ChannelName} not found in the new channel map. Removing it.");
+                dbContext.CarTelemetry.Remove(channel);
+            }
+        }
         await dbContext.SaveChangesAsync();
         Logger.LogInformation($"Channel map updated for car {carId}. Channel map hash: {car.ChannelMapHash}");
     }

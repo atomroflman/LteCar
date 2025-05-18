@@ -2,9 +2,8 @@ using System.ComponentModel.DataAnnotations;
 
 namespace LteCar.Server.Data
 {
-    public class SetupFilterType 
+    public class SetupFilterType : EntityBase
     {
-        public int Id { get; set; }
         [MaxLength(256)]
         public string TypeName { get; set; }
         [MaxLength(64)]

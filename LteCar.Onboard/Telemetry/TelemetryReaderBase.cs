@@ -2,7 +2,7 @@ using Microsoft.Extensions.Logging;
 
 namespace LteCar.Onboard.Telemetry;
 
-public abstract class TelemetryReaderBase
+public abstract class TelemetryReaderBase : IDisposable
 {
     protected readonly ILogger Logger;
     public int ReadIntervalTicks { get; set; } = 1;
@@ -12,5 +12,9 @@ public abstract class TelemetryReaderBase
         Logger = logger;
     }
 
-    public abstract void ReadTelemetry();
+    public abstract Task<string> ReadTelemetry();
+
+    public void Dispose()
+    {
+    }
 }

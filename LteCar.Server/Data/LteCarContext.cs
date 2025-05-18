@@ -9,7 +9,12 @@ namespace LteCar.Server.Data
         public DbSet<Car> Cars { get; set; }
         public DbSet<User> Users { get; set; }
         public DbSet<CarChannel> CarChannels { get; set; }
-        
+        public DbSet<CarTelemetry> CarTelemetry { get; set; }
+        public DbSet<UserCarSetup> UserSetups { get; set; }
+        public DbSet<UserSetupFilter> UserSetupFilters { get; set; }
+        public DbSet<UserSetupChannel> UserSetupChannels { get; set; }
+        public DbSet<UserSetupTelemetry> UserSetupTelemetries { get; set; }
+        public DbSet<UserSetupLink> UserSetupLinks { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -65,5 +70,15 @@ namespace LteCar.Server.Data
 
             base.OnModelCreating(modelBuilder);
         }
+    }
+
+    public class UserSetupTelemetry : EntityBase
+    {
+        public int CarTelemetryId { get; set; }
+        public CarTelemetry CarTelemetry { get; set; } = null!;
+        public int UserSetupId { get; set; }
+        public UserCarSetup UserSetup { get; set; } = null!;
+        public int Order { get; set; }
+        public int? OverrideTicks { get; set; }
     }
 }
