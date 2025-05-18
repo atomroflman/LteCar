@@ -15,6 +15,9 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
     public IHubContext<CarUiHub, ICarUiClient> UiHub { get; }
     public IConfiguration Configuration { get; }
     public ILogger<CarConnectionHub> Logger { get; }
+
+    protected int JanusUdpPortMin => Configuration.GetSection("JanusConfiguration").GetValue<int?>("UdpPortRangeStart") ?? 10000;
+    protected int JanusUdpPortMax => Configuration.GetSection("JanusConfiguration").GetValue<int?>("UdpPortRangeEnd") ?? 10200;
     
     public CarConnectionHub(IHubContext<CarUiHub, ICarUiClient> uiHub, IConfiguration configuration, ILogger<CarConnectionHub> logger)
     {
@@ -25,24 +28,31 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
     
     public async Task<CarConfiguration> OpenCarConnection(string carId, string channelMapHash)
     {
-        var dbContext = Context.GetHttpContext().RequestServices.GetRequiredService<LteCarContext>();
+        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
         var car = dbContext.Cars.FirstOrDefault(c => c.CarId == carId);
         if (car == null)
         {
             Logger.LogWarning($"Car with ID {carId} not found. Creating a new one.");
             car = new Car() { CarId = carId };
             dbContext.Cars.Add(car);
-            await dbContext.SaveChangesAsync();            
+            car.ChannelMapHash = new Guid().ToString();
         }
         car.LastSeen = DateTime.Now;
+        var janusServerHost = Configuration.GetSection("JanusConfiguration").GetValue<string>("HostName");
+        if (string.IsNullOrEmpty(janusServerHost))
+        {
+            janusServerHost = System.Net.Dns.GetHostName();
+            Logger.LogWarning($"Janus server host is not configured. Using default: {janusServerHost}");
+        }
 
         CarConfiguration carConfig = new CarConfiguration();
         carConfig.JanusConfiguration = new JanusConfiguration() {
-            JanusServerHost = Configuration.GetSection("JanusConfiguration").GetValue<string>("HostName"),
+            JanusServerHost = janusServerHost,
             JanusUdpPort = car.VideoStreamPort ?? GetNextAvailablePort(),
         };
         carConfig.VideoSettings = car.VideoSettings;
         carConfig.RequiresChannelMapUpdate = car.ChannelMapHash != channelMapHash;
+        await dbContext.SaveChangesAsync();  
         
         await UiHub.Clients.All.CarStateUpdated(new CarStateModel() {
             Id = carId
@@ -52,23 +62,41 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
 
     private int GetNextAvailablePort()
     {
-        var dbContext = Context.GetHttpContext().RequestServices.GetRequiredService<LteCarContext>();
-        var lastPort = (dbContext.Cars.OrderByDescending(c => c.VideoStreamPort).FirstOrDefault()?.VideoStreamPort ?? 9999) + 1;
-        if (lastPort > 10200) {
-            Logger.LogWarning("No available ports. All ports are in use. Take the longest inactive port.");
-            var kickedCar = dbContext.Cars.OrderBy(c => c.LastSeen).FirstOrDefault(e => e.VideoStreamPort != null);
-            if (kickedCar != null) {
-                Logger.LogWarning($"Kicking car {kickedCar} from port {kickedCar.VideoStreamPort}");
-                kickedCar.VideoStreamPort = null;
-                dbContext.SaveChanges();
-                lastPort = kickedCar.VideoStreamPort!.Value;
+        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
+
+        // Get all allocated ports
+        var allocatedPorts = dbContext.Cars
+            .Where(c => c.VideoStreamPort != null)
+            .Select(c => c.VideoStreamPort)
+            .ToHashSet();
+
+        // Find the first unallocated port in the range
+        for (int port = JanusUdpPortMin; port <= JanusUdpPortMax; port++)
+        {
+            if (!allocatedPorts.Contains(port))
+            {
+                return port;
             }
         }
-        return lastPort;
+
+        // If no ports are available, take the longest inactive port
+        Logger.LogWarning("No available ports. All ports are in use. Taking the longest inactive port.");
+        var kickedCar = dbContext.Cars.OrderBy(c => c.LastSeen).FirstOrDefault(c => c.VideoStreamPort.HasValue);
+        if (kickedCar != null && kickedCar.VideoStreamPort.HasValue)
+        {
+            Logger.LogWarning($"Kicking car {kickedCar.CarId} from port {kickedCar.VideoStreamPort}");
+            var port = kickedCar.VideoStreamPort.Value;
+            kickedCar.VideoStreamPort = null;
+            dbContext.SaveChanges();
+            return port;
+        }
+
+        throw new InvalidOperationException("No available ports and no cars to kick.");
     }
 
     public async Task Test() 
     {
+        await Task.CompletedTask;
         Logger.LogInformation("Test Invoked");
     }
 
@@ -86,7 +114,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
 
     public async Task UpdateChannelMap(string carId, ChannelMap channelMap)
     {
-        var dbContext = Context.GetHttpContext().RequestServices.GetRequiredService<LteCarContext>();
+        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
         var car = dbContext.Cars.FirstOrDefault(c => c.CarId == carId);
         if (car == null)
         {
@@ -94,7 +122,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
             return;        
         }
         car.ChannelMapHash = ChannelMapHashProvider.GenerateHash(channelMap);
-        foreach (var channel in channelMap)
+        foreach (var channel in channelMap.ControlChannels)
         {
             var channelDb = dbContext.CarChannels.FirstOrDefault(c => c.ChannelName == channel.Key && c.CarId == car.Id);
             if (channelDb == null)
@@ -106,7 +134,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
         }
         foreach (var channel in dbContext.CarChannels.Where(c => c.CarId == car.Id))
         {
-            if (!channelMap.ContainsKey(channel.ChannelName))
+            if (!channelMap.ControlChannels.ContainsKey(channel.ChannelName))
             {
                 Logger.LogWarning($"Channel with ID {channel.ChannelName} not found in the new channel map. Removing it.");
                 dbContext.CarChannels.Remove(channel);

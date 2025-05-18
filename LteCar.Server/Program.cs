@@ -25,14 +25,24 @@ builder.Services.AddSignalR()
     .AddJsonProtocol();
 
 var app = builder.Build();
+var configuration = app.Configuration;
 var dbContext = app.Services.GetRequiredService<LteCarContext>();
-dbContext.Database.EnsureCreated();
+dbContext.Database.Migrate();
 
 var logger = app.Services.GetRequiredService<ILogger<Program>>();
 
-logger.LogInformation("Starting Janus service...");
+logger.LogInformation("Database migrations applied successfully.");
 var vss = app.Services.GetRequiredService<VideoStreamRecieverService>();
-vss.RunVideoStreamServer();
+
+if (configuration.GetValue<bool?>("RunJanusServer") ?? true)
+{
+    logger.LogInformation("Starting Janus service...");
+    vss.RunVideoStreamServer();
+}
+else
+{
+    logger.LogWarning("Running Janus server is disabled.");
+}
 
 if (app.Environment.IsDevelopment())
 {
@@ -47,8 +57,11 @@ app.Use(async(ctx, next) => {
 var staticFilePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
 if (!Directory.Exists(staticFilePath))
 {
-    logger.LogWarning($"Static file path {staticFilePath} does not exist. Creating it. Server will run without client.");
     Directory.CreateDirectory(staticFilePath);
+}
+if (!Directory.GetFiles(staticFilePath).Any()) 
+{    
+    logger.LogWarning($"No static files in path: '{staticFilePath}'. Server will run without client.");
 }
 app.UseStaticFiles(new StaticFileOptions()
 {
