@@ -1,3 +1,4 @@
+using LteCar.Shared.HubClients;
 using LteCar.Shared.Hubs;
 using Microsoft.AspNetCore.SignalR;
 
