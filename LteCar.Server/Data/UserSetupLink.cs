@@ -1,8 +1,7 @@
 namespace LteCar.Server.Data
 {
-    public class UserSetupLink 
+    public class UserSetupLink : EntityBase
     {
-        public int Id { get; set; }
         public int UserSetupId { get; set; }
         public UserCarSetup UserSetup { get; set; }
 

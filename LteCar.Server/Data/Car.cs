@@ -3,9 +3,8 @@ using LteCar.Onboard;
 
 namespace LteCar.Server.Data
 {
-    public class Car
+    public class Car : EntityBase
     {
-        public int Id { get; set; }
         [MaxLength(64)]
         public string? Name { get; set; }
         [MaxLength(64)]
@@ -24,6 +23,17 @@ namespace LteCar.Server.Data
         public override string ToString()
         {
             return $"{Name ?? CarId} ({CarId})";
+        }
+    }
+
+    public class EntityBase
+    {
+        [Key]
+        public int Id { get; set; }
+        
+        public override string ToString()
+        {
+            return $"{GetType().Name} #{Id}";
         }
     }
 }

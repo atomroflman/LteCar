@@ -24,8 +24,7 @@ public class ControlExecutionService
     
     public void Initialize()
     {
-        WiringPi.wiringPiSetupGpio();
-        foreach (var channel in _channelMap)
+        foreach (var channel in _channelMap.ControlChannels)
         {
             var controlType = GetControlType(channel.Value.ControlType);
             Logger.LogDebug($"Got type {controlType.Name} for channel {channel.Key}.");

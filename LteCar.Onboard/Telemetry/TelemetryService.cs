@@ -1,6 +1,9 @@
+using LteCar.Shared.Channels;
+using LteCar.Shared.HubClients;
 using LteCar.Shared.Hubs;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using TypedSignalR.Client;
 
@@ -12,17 +15,20 @@ public class TelemetryService : IHubConnectionObserver, ITelemetryClient
     private HubConnection? _connection;
     private ITelemetryServer? _server;
     private string? _carId;
+    private readonly Dictionary<string, TelemetryReaderBase> _telemetryReaders = new();
     public IConfiguration Configuration { get; set; }
     public ILogger<TelemetryService> Logger { get; }
     public ServerConnectionService ServerConnectionService { get; }
+    public IServiceProvider ServiceProvider { get; }
     public ChannelMap ChannelMap { get; }
     
-    public TelemetryService(ChannelMap channelMap, ServerConnectionService serverConnectionService, IConfiguration configuration, ILogger<TelemetryService> logger)
+    public TelemetryService(ChannelMap channelMap, ServerConnectionService serverConnectionService, IConfiguration configuration, ILogger<TelemetryService> logger, IServiceProvider serviceProvider)
     {
+        ServiceProvider = serviceProvider;
+        ChannelMap = channelMap;
         ServerConnectionService = serverConnectionService;
         Configuration = configuration;
         Logger = logger;
-        ChannelMap = channelMap;
     }
 
     public async Task ConnectToServer()
@@ -31,21 +37,16 @@ public class TelemetryService : IHubConnectionObserver, ITelemetryClient
         await _connection.StartAsync();
         _server = _connection.CreateHubProxy<ITelemetryServer>();
         _connection.Register<ITelemetryClient>(this);
-        _connection.RegisterObserver(this);
+        // _connection.RegisterObserver(this);
         _carId = Configuration.GetValue<string>("carId");
         Logger.LogInformation("Connected to server.");
 
-        foreach (var telemetryChannel in ChannelMap.TelemetryChannels)
-        {
-            Logger.LogInformation("Registering telemetry channel: {Channel}", telemetryChannel);
-
-            await _server.RegisterTelemetryChannel(_carId, telemetryChannel);
-        }
+        
     }
 
-    public async Task<IEnumerable<string>> GetAvailableTelemetryChannels() 
+    public Task<IEnumerable<string>> GetAvailableTelemetryChannels() 
     {
-        return TelemetryReaders.Select(x => x.GetType().Name);
+        return Task.FromResult(ChannelMap.TelemetryChannels.Select(x => x.GetType().Name));
     }
     
     public async Task UpdateTelemetry(string valueName, string value)
@@ -73,13 +74,25 @@ public class TelemetryService : IHubConnectionObserver, ITelemetryClient
         await _server.UpdateTelemetry(_carId, valueName, value);
     }
 
-    public void Tick()
+    public async Task Tick()
     {
         foreach (var reader in _telemetryReaders)
         {
-            if (reader.ShouldRead())
+            if (_tick % reader.Value.ReadIntervalTicks == 0)
             {
-                reader.ReadTelemetry();
+                try
+                {
+                    var value = await reader.Value.ReadTelemetry();
+                    if (value != null)
+                    {
+                        Logger.LogInformation("Telemetry from {Channel}: {Value}", reader.Key, value);
+                        await UpdateTelemetry(reader.Key, value);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, "Error reading telemetry from {Channel}", reader.Key);
+                }
             }
         }
     }
@@ -97,5 +110,58 @@ public class TelemetryService : IHubConnectionObserver, ITelemetryClient
     public async Task OnReconnecting(Exception? exception)
     {
         Logger.LogError($"Reconnecting after: {exception}");
+    }
+
+    public Task SubscribeToTelemetryChannel(string channelName)
+    {
+        if (_telemetryReaders.ContainsKey(channelName))
+        {
+            Logger.LogWarning("Already subscribed to telemetry channel: {Channel}", channelName);
+            return Task.CompletedTask;
+        }
+
+        var reader = CreateTelemetryReader(channelName);
+        if (reader == null)
+        {
+            Logger.LogError("Failed to create telemetry reader for channel: {Channel}", channelName);
+            return Task.CompletedTask;
+        }
+
+        Logger.LogInformation("Subscribed to telemetry channel: {Channel}", channelName);
+        return Task.CompletedTask;
+    }
+
+    private TelemetryReaderBase? CreateTelemetryReader(string channelName)
+    {
+        var definition = ChannelMap.TelemetryChannels.TryGetValue(channelName, out var channel) 
+            ? channel 
+            : throw new ArgumentException($"Telemetry channel {channelName} not found.");
+        
+        var readerType = Type.GetType(definition.TelemetryType);
+        var reader = ServiceProvider.GetRequiredService(readerType) as TelemetryReaderBase;
+        if (reader == null)
+        {
+            Logger.LogError("Telemetry reader type {Reader} not found.", readerType);
+            return null;
+        }
+        reader.ReadIntervalTicks = definition.ReadIntervalTicks;
+        _telemetryReaders.Add(channelName, reader);
+        Logger.LogInformation("Subscribed to telemetry channel: {Channel}", channelName);
+        return reader;
+    }
+
+    public Task UnsubscribeFromTelemetryChannel(string channelName)
+    {
+        if (_telemetryReaders.ContainsKey(channelName))
+        {
+            _telemetryReaders[channelName].Dispose();
+            _telemetryReaders.Remove(channelName);
+            Logger.LogInformation("Unsubscribed from telemetry channel: {Channel}", channelName);
+        }
+        else
+        {
+            Logger.LogWarning("No subscription found for telemetry channel: {Channel}", channelName);
+        }
+        return Task.CompletedTask;
     }
 }

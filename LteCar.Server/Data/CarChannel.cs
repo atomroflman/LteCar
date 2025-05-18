@@ -2,9 +2,8 @@ using System.ComponentModel.DataAnnotations;
 
 namespace LteCar.Server.Data
 {
-    public class CarChannel
+    public class CarChannel : EntityBase
     {
-        public int Id { get; set; }
         [MaxLength(64)]
         public string? DisplayName { get; set; }
         [MaxLength(64)]
