@@ -68,6 +68,10 @@ namespace LteCar.Server.Data
                 .WithMany(v => v.Functions)
                 .HasForeignKey(f => f.CarId);
 
+            modelBuilder.Entity<User>()
+                .HasIndex(u => u.SessionToken)
+                .IsUnique();
+
             base.OnModelCreating(modelBuilder);
         }
     }

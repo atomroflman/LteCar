@@ -15,7 +15,8 @@
     "janus-gateway": "git://github.com/meetecho/janus-gateway.git",
     "next": "15.3.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "react-flow": "^1.0.3"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",

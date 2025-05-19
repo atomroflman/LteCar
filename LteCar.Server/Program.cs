@@ -5,6 +5,7 @@ using LteCar.Shared;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
+using Microsoft.AspNetCore.Authentication.Cookies;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.Configuration.AddJsonFile("appSettings.json");
@@ -23,6 +24,20 @@ builder.Services.AddControllers();
 builder.Services.AddSignalR()
     .AddMessagePackProtocol()
     .AddJsonProtocol();
+
+builder.Services.AddAuthentication("cookie")
+    .AddCookie("cookie", options =>
+    {
+        options.Cookie.Name = "LteCarAuth";
+        options.LoginPath = "/"; // Kein Redirect, API-only
+        options.Cookie.HttpOnly = true;
+        options.Cookie.SameSite = SameSiteMode.Lax;
+        options.Events.OnRedirectToLogin = ctx =>
+        {
+            ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
+            return Task.CompletedTask;
+        };
+    });
 
 var app = builder.Build();
 var configuration = app.Configuration;
@@ -70,6 +85,9 @@ app.UseStaticFiles(new StaticFileOptions()
     FileProvider = new PhysicalFileProvider(staticFilePath)
 });
 app.UseRouting();
+
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapControllers();
 app.MapHub<CarConnectionHub>(HubPaths.CarConnectionHub);
