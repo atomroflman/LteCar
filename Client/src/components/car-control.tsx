@@ -31,6 +31,8 @@ export default function GamepadViewer() {
   const [carKey, setCarKey] = useState<string>("");
   const [carId, setCarId] = useState<string>("");
   const [carSession, setCarSession] = useState<string>("");
+  const [telemetrySubscribed, setTelemetrySubscribed] = useState<boolean>(false);
+  const [userSetup, setUserSetup] = useState<any>(null);
   
   const carIdRef = useRef(carId);
   const carSessionRef = useRef(carSession);
@@ -115,6 +117,35 @@ export default function GamepadViewer() {
 
     return () => cancelAnimationFrame(animationFrame);
   }, []);
+
+  useEffect(() => {
+    // Fahrzeuge vom Controller laden
+    fetch(`${Config.serverPath}/api/car`)
+      .then(res => res.json())
+      .then(data => {
+        setCars(data);
+        if (data.length === 1) setCarId(data[0].id);
+      });
+  }, []);
+
+  // User-Setup laden (Dummy-API, ggf. anpassen)
+  function loadUserSetup() {
+    fetch(`${Config.serverPath}/api/user/setup`)
+      .then(res => res.json())
+      .then(setUserSetup);
+  }
+
+  // Telemetrie abonnieren/deabonnieren
+  function handleTelemetrySubscription(checked: boolean) {
+    setTelemetrySubscribed(checked);
+    if (!carId) return;
+    if (!uiHubConnection) return;
+    if (checked) {
+      uiHubConnection.invoke("JoinGroup", carId); // Annahme: JoinGroup existiert
+    } else {
+      uiHubConnection.invoke("LeaveGroup", carId);
+    }
+  }
 
   function aquireCarControl() {
     console.log("Aquiring Car: ", carId, carKey);
