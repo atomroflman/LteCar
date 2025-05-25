@@ -13,39 +13,37 @@ source ~/.bashrc
 
 apt install -y nodejs npm
 # build client
+
 cd ../Client
 npm i
 npm run build
-cp -r ./out/* ../LteCar.Server/wwwroot
+#cp -r ./out/* ../LteCar.Server/wwwroot
 
 # build server
 cd "$(dirname "$0")"
 dotnet build -c=Release
 cp -R ./wwwroot/* ./bin/Release/net8.0/wwwroot
 
-SERVICE_NAME=LteCarServer
-SCRIPT_PATH="$(dirname "$0")/../start-server.sh"
-SERVICE_FILE=/etc/systemd/system/$SERVICE_NAME.service
+read -p "Do you want to install the .NET and Node applications as services? (y/n): " install_service
+if [[ "$install_service" =~ ^[Yy]$ ]]; then
+    # .NET Service
+    DOTNET_SERVICE_NAME=LteCarServer
+    DOTNET_SCRIPT_PATH="$(dirname "$0")/bin/Release/net8.0/LteCar.Server"
+    DOTNET_SERVICE_FILE=/etc/systemd/system/$DOTNET_SERVICE_NAME.service
 
-echo "??? Erstelle systemd-Service: $SERVICE_NAME"
-
-# Sicherstellen, dass das Script existiert
-if [ ! -f "$SCRIPT_PATH" ]; then
-    echo "? Fehler: $SCRIPT_PATH existiert nicht!"
-    exit 1
-fi
-
-# Skript ausführbar machen
-chmod +x "$SCRIPT_PATH"
-
-# Service-Datei schreiben
-sudo bash -c "cat > $SERVICE_FILE" <<EOF
+    echo "Creating systemd service: $DOTNET_SERVICE_NAME"
+    if [ ! -f "$DOTNET_SCRIPT_PATH" ]; then
+        echo "Error: $DOTNET_SCRIPT_PATH does not exist!"
+        exit 1
+    fi
+    chmod +x "$DOTNET_SCRIPT_PATH"
+    bash -c "cat > $DOTNET_SERVICE_FILE" <<EOF
 [Unit]
-Description=LteCar Server
+Description=LteCar .NET Server
 After=network.target
 
 [Service]
-ExecStart=$SCRIPT_PATH
+ExecStart=/usr/bin/dotnet $DOTNET_SCRIPT_PATH
 Restart=on-failure
 User=root
 
@@ -53,11 +51,41 @@ User=root
 WantedBy=multi-user.target
 EOF
 
-# systemd neu laden und aktivieren
-echo "?? Lade systemd neu und aktiviere den Service..."
-sudo systemctl daemon-reload
-sudo systemctl enable "$SERVICE_NAME"
-sudo systemctl start "$SERVICE_NAME"
+    # Node Service
+    NODE_SERVICE_NAME=LteCarClient
+    NODE_SCRIPT_PATH="$(dirname \"$0\")/../Client/out"
+    NODE_SERVICE_FILE=/etc/systemd/system/$NODE_SERVICE_NAME.service
 
-# Status anzeigen
-sudo systemctl status "$SERVICE_NAME" --no-pager
+    if [ ! -f "$NODE_SCRIPT_PATH" ]; then
+        echo "Error: $NODE_SCRIPT_PATH does not exist!"
+        exit 1
+    fi
+    chmod +x "$NODE_SCRIPT_PATH"
+    bash -c "cat > $NODE_SERVICE_FILE" <<EOF
+[Unit]
+Description=LteCar Node Client
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/node $NODE_SCRIPT_PATH
+Restart=on-failure
+User=root
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+    # Reload systemd and enable/start both services
+    echo "Reloading systemd and enabling services..."
+    systemctl daemon-reload
+    systemctl enable "$DOTNET_SERVICE_NAME"
+    systemctl enable "$NODE_SERVICE_NAME"
+    systemctl start "$DOTNET_SERVICE_NAME"
+    systemctl start "$NODE_SERVICE_NAME"
+
+    # Show status
+    systemctl status "$DOTNET_SERVICE_NAME" --no-pager
+    systemctl status "$NODE_SERVICE_NAME" --no-pager
+else
+    echo "Service installation skipped."
+fi

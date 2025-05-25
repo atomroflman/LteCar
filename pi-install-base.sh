@@ -12,4 +12,12 @@ apt update
 apt upgrade
 apt install git nano -y
 
-git clone https://github.com/atomroflman/LteCar.git
+# Check if we are already inside a git repo
+if [ -d ".git" ]; then
+    echo "Already inside a git repository. Skipping clone."
+else
+    git clone https://github.com/atomroflman/LteCar.git
+    if [ -n "$SUDO_USER" ]; then
+        chown -R "$SUDO_USER":"$SUDO_USER" LteCar
+    fi
+fi
