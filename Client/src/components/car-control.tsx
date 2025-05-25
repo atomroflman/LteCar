@@ -1,217 +1,92 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
-import * as signalR from "@microsoft/signalr";
-import { Config } from "@/config";
+import React, { useEffect, useState } from "react";
+import GamepadViewer from "./gamepad-viewer";
+import CarFunctionsView from "./car-functions-view";
+import { useControlFlowStore } from "./control-flow-store";
 
-type GamepadState = {
-  id: string;
-  axes: number[];
-  buttons: number[];
-};
+export default function CarControl({
+  onShowUserSetupFlow,
+}: {
+  onShowUserSetupFlow?: () => void;
+}) {
+  const [cars, setCars] = useState<{ id: string; driverId: string; driverName: string }[] | null>(null);
+  const [carKey, setCarKey] = useState("");
+  const [selectedCarId, setSelectedCarId] = useState<string>("");
+  const [telemetrySubscribed, setTelemetrySubscribed] = useState(false);
+  const controlFlow = useControlFlowStore();
 
-interface CarState{
-    id: string;
-    driverId: string;
-    driverName: string;
-}
-
-var uiHubConnection: signalR.HubConnection;
-var controlHubConnection: signalR.HubConnection;
-
-// TODO: Make it configurable
-const axisMap = [
-    "steer",
-    "throttle"
-];
-
-export default function GamepadViewer() {
-  const [gamepad, setGamepad] = useState<GamepadState | null>(null);
-  const [cars, setCars] = useState<CarState[] | null>(null);
-  const [carKey, setCarKey] = useState<string>("");
-  const [carId, setCarId] = useState<string>("");
-  const [carSession, setCarSession] = useState<string>("");
-  const [telemetrySubscribed, setTelemetrySubscribed] = useState<boolean>(false);
-  const [userSetup, setUserSetup] = useState<any>(null);
-  
-  const carIdRef = useRef(carId);
-  const carSessionRef = useRef(carSession);
-  const gamepadRef = useRef(gamepad);
-
+  // Load cars from backend
   useEffect(() => {
-    carIdRef.current = carId;
-  }, [carId]);
-  
-  useEffect(() => {
-    carSessionRef.current = carSession;
-  }, [carSession]);
-
-  useEffect(() => {
-    gamepadRef.current = gamepad;
-  }, [gamepad]);
-
-  useEffect(() => {
-    let animationFrame: number;
-
-    if (uiHubConnection == null) {
-        uiHubConnection = new signalR.HubConnectionBuilder()
-            .withUrl(`${Config.serverPath}/hubs/carui`)
-            .withAutomaticReconnect()
-            .build();
-        uiHubConnection.on("CarStateUpdated", (newState: CarState) => {
-            let tmpCars = cars?.filter(c => c.id != newState.id) ?? [];
-            tmpCars.push(newState);
-            tmpCars = tmpCars.sort((a,b) => a.driverName > b.driverName ? 1 : -1);
-            if (tmpCars.length == 1)
-                setCarId(tmpCars[0].id);
-            setCars(tmpCars);
-        })
-        uiHubConnection.start().then(() => {
-            uiHubConnection.invoke("UiClientConnected")
-                .then((value: CarState[]) => {
-                    console.log(value);
-                    setCars(value);
-                    if (value.length == 1)
-                        setCarId(value[0].id);
-                });
-        });
-    }
-    if (controlHubConnection == null) {
-        controlHubConnection = new signalR.HubConnectionBuilder()
-            .withUrl(`${Config.serverPath}/hubs/control`)
-            .withAutomaticReconnect()
-            .build();
-        controlHubConnection.start();
-    }
-
-    // Not under react management, so values need to go here by ref.
-    const updateGamepad = () => {
-      const gp = navigator.getGamepads()[0]; 
-      if (gp) {
-        if (carSessionRef.current) {
-            let gpOldValues = gamepadRef.current;
-            let axisUpdate = gp.axes.map((ax, i) => ({ax,i})).filter((ax) => ax.ax != gpOldValues?.axes[ax.i]);
-            let buttonUpdate = gp.buttons.filter((bt, i) => bt.value != gpOldValues?.buttons[i]);
-            // TODO: Send buttons as well
-            axisUpdate.forEach(ax => {
-                controlHubConnection.invoke("UpdateChannel", carIdRef.current, carSessionRef.current, axisMap[ax.i], ax.ax)
-            });
-        }
-        setGamepad({
-          id: gp.id,
-          axes: gp.axes.slice(),
-          buttons: gp.buttons.map((b) => b.value),
-        });
-      }
-      animationFrame = requestAnimationFrame(updateGamepad);
-    };
-
-    window.addEventListener("gamepadconnected", () => {
-      updateGamepad();
-    });
-
-    window.addEventListener("gamepaddisconnected", () => {
-      setGamepad(null);
-      cancelAnimationFrame(animationFrame);
-    });
-
-    return () => cancelAnimationFrame(animationFrame);
-  }, []);
-
-  useEffect(() => {
-    // Fahrzeuge vom Controller laden
-    fetch(`${Config.serverPath}/api/car`)
-      .then(res => res.json())
-      .then(data => {
+    fetch(`/api/car`)
+      .then((res) => res.json())
+      .then((data) => {
         setCars(data);
-        if (data.length === 1) setCarId(data[0].id);
+        if (data.length === 1) 
+          setSelectedCarId(data[0].carId);
       });
   }, []);
 
-  // User-Setup laden (Dummy-API, ggf. anpassen)
-  function loadUserSetup() {
-    fetch(`${Config.serverPath}/api/user/setup`)
-      .then(res => res.json())
-      .then(setUserSetup);
-  }
+  useEffect(() => { 
+    controlFlow.startConnection(selectedCarId, undefined);
+  }, [selectedCarId]);
 
-  // Telemetrie abonnieren/deabonnieren
+  // Start connection and session when carId and carKey are set
+  const handleAquireCarControl = async () => {
+    if (!selectedCarId || !carKey) return;
+    await controlFlow.startConnection(selectedCarId, carKey);
+  };
+
+  // Telemetry subscription (UI only, not part of control flow)
   function handleTelemetrySubscription(checked: boolean) {
     setTelemetrySubscribed(checked);
-    if (!carId) return;
-    if (!uiHubConnection) return;
-    if (checked) {
-      uiHubConnection.invoke("JoinGroup", carId); // Annahme: JoinGroup existiert
-    } else {
-      uiHubConnection.invoke("LeaveGroup", carId);
-    }
-  }
-
-  function aquireCarControl() {
-    console.log("Aquiring Car: ", carId, carKey);
-    if (!carId) return;
-    if (!carKey) return;
-    controlHubConnection.invoke("AquireCarControl", carId, carKey)
-        .then((res: string) => setCarSession(res));
-  }
-  let gamepdview = <div className="p-4">🎮 Bitte Gamepad anschließen…</div>;
-  if (gamepad) {
-      gamepdview = <>
-        <div>
-          <b className="font-bold">🎮 {gamepad.id}</b>
-          <b className="font-semibold">🕹️ Achsen:</b>
-          <ul className="list-disc ml-4">
-              {gamepad.axes.map((value, i) => (
-                  <li key={i}>
-                      Achse {i}: <span className="font-mono">{value.toFixed(2)}</span>
-                  </li>
-              ))}
-          </ul>
-        </div>
-
-          <div>
-              <h3 className="font-semibold">🔘 Buttons:</h3>
-              <ul className="list-disc ml-4">
-                  {gamepad.buttons.map((value, i) => (
-                      <li key={i}>
-                          Button {i}:{" "}
-                          <span
-                              className={
-                                  value > 0
-                                      ? "text-green-600 font-bold"
-                                      : "text-gray-400 font-mono"
-                              }
-                          >
-                {value.toFixed(2)}
-              </span>
-                      </li>
-                  ))}
-              </ul>
-          </div>
-      </>;
+    // ...existing code for UI hub if needed...
   }
 
   return (
-    <div className="p-4 space-y-4">
-        {carSession ? <>
-            <label className="font-green-400">Control Session aquired: {carSession} - {carId}</label>
-        </> : <>
-        <select onSelect={(e) => setCarId(e.currentTarget.value)}>
-            {cars?.map(c => <option key={c.id} selected={c.id == carId}>{c.id}</option>)}
-        </select>
-        <label htmlFor="textInput" className="block mb-2 font-medium">
-        Car Key:
-      </label>
-      <input
-        type="text"
-        id="carKeyInput"
-        value={carKey}
-        onChange={(e) => setCarKey(e.target.value)}
-        className="p-2 border rounded w-full"
-      />
-      <button onClick={aquireCarControl}>Aquire Control</button>
-      </>}
-        {gamepdview}
+    <div className="p-2 space-y-2 text-xs leading-tight">
+      <button
+        className="mb-1 p-1 bg-gray-200 rounded w-full text-xs"
+        onClick={onShowUserSetupFlow}
+        type="button"
+      >
+        Steuerungs-Setup anzeigen
+      </button>
+      {controlFlow.carSession ? (
+        <>
+          <label className="font-green-400 text-xs">
+            Control Session aquired: {controlFlow.carSession} - {controlFlow.carId}
+          </label>
+        </>
+      ) : (
+        <>
+          <select
+            onChange={(e) => setSelectedCarId(e.currentTarget.value)}
+            value={selectedCarId}
+            className="text-xs p-1"
+            style={{ minWidth: 0 }}
+          >
+            {cars?.map((c) => (
+              <option key={c.id} value={c.id} className="text-xs">
+                {c.id}
+              </option>
+            ))}
+          </select>
+          <label htmlFor="textInput" className="block mb-1 font-medium text-xs">
+            Car Key:
+          </label>
+          <input
+            type="text"
+            id="carKeyInput"
+            value={carKey}
+            onChange={(e) => setCarKey(e.target.value)}
+            className="p-1 border rounded w-full text-xs"
+          />
+          <button className="text-xs p-1 mt-1" onClick={handleAquireCarControl}>Aquire Control</button>
+        </>
+      )}
+      <GamepadViewer />
+      {controlFlow.carId && <CarFunctionsView carId={controlFlow.carId} />}
     </div>
   );
 }

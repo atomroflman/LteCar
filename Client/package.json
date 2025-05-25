@@ -16,7 +16,9 @@
     "next": "15.3.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "react-flow": "^1.0.3"
+    "react-flow": "^1.0.3",
+    "reactflow": "^11.11.4",
+    "zustand": "^5.0.5"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
