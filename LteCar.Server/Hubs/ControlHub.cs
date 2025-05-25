@@ -24,9 +24,9 @@ public class CarControlHub : Hub<ICarControlClient>, ICarControlServer
         _connectionMap.Add(carId, Context.ConnectionId);
     }
     
-    public async Task<string> AquireCarControl(string carId, string carSecret)
+    public async Task<string?> AquireCarControl(string carId, string? carSecret)
     {
-        Logger.LogDebug($"Invoked: AquireCarControl({carId}, {carSecret})");
+        Logger.LogDebug($"Invoked: AquireCarControl({carId}, {carSecret}) as {this.Context?.User?.Identity?.Name}");
         if (!_connectionMap.TryGetByKey(carId, out var carClientId))
         {
             Logger.LogDebug($"Car not found in connection dictionary. {JsonSerializer.Serialize(_connectionMap)}");

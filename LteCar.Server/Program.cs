@@ -20,7 +20,10 @@ builder.Services.AddDbContext<LteCarContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection"));
 });
 
-builder.Services.AddControllers();
+builder.Services.AddControllers().AddJsonOptions(options =>
+{
+    options.JsonSerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
+});
 builder.Services.AddSignalR()
     .AddMessagePackProtocol()
     .AddJsonProtocol();

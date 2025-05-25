@@ -15,6 +15,7 @@ namespace LteCar.Server.Data
         public DbSet<UserSetupChannel> UserSetupChannels { get; set; }
         public DbSet<UserSetupTelemetry> UserSetupTelemetries { get; set; }
         public DbSet<UserSetupLink> UserSetupLinks { get; set; }
+        public DbSet<SetupFilterType> SetupFilterTypes { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
