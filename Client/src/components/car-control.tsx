@@ -4,12 +4,9 @@ import React, { useEffect, useState } from "react";
 import GamepadViewer from "./gamepad-viewer";
 import CarFunctionsView from "./car-functions-view";
 import { useControlFlowStore } from "./control-flow-store";
+import Link from "next/link";
 
-export default function CarControl({
-  onShowUserSetupFlow,
-}: {
-  onShowUserSetupFlow?: () => void;
-}) {
+export default function CarControl() {
   const [cars, setCars] = useState<{ id: string; driverId: string; driverName: string }[] | null>(null);
   const [carKey, setCarKey] = useState("");
   const [selectedCarId, setSelectedCarId] = useState<string>("");
@@ -45,13 +42,6 @@ export default function CarControl({
 
   return (
     <div className="p-2 space-y-2 text-xs leading-tight">
-      <button
-        className="mb-1 p-1 bg-gray-200 rounded w-full text-xs"
-        onClick={onShowUserSetupFlow}
-        type="button"
-      >
-        Steuerungs-Setup anzeigen
-      </button>
       {controlFlow.carSession ? (
         <>
           <label className="font-green-400 text-xs">
@@ -85,8 +75,11 @@ export default function CarControl({
           <button className="text-xs p-1 mt-1" onClick={handleAquireCarControl}>Aquire Control</button>
         </>
       )}
-      <GamepadViewer />
-      {controlFlow.carId && <CarFunctionsView carId={controlFlow.carId} />}
+      <GamepadViewer hideFlowButtons={true} />
+      {controlFlow.carId && <CarFunctionsView carId={controlFlow.carId} hideFlowButtons={true} />}
+      <Link href={`/car/${selectedCarId}`} className="text-xs text-blue-400 hover:underline">
+        Control Flow Editor
+      </Link>
     </div>
   );
 }
