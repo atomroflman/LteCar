@@ -10,8 +10,5 @@ namespace LteCar.Server.Data
         public Car Car { get; set; }
         [MaxLength(64)]
         public string? CarSecret { get; set; }
-        public ICollection<UserSetupLink> UserSetupLinks { get; set; }
-        public ICollection<UserSetupChannel> UserSetupChannels { get; set; }
-        public ICollection<UserSetupFilter> UserSetupFilters { get; set; }
     }
 }

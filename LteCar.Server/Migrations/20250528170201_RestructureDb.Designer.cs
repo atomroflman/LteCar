@@ -3,6 +3,7 @@ using System;
 using LteCar.Server.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace LteCar.Server.Migrations
 {
     [DbContext(typeof(LteCarContext))]
-    partial class LteCarContextModelSnapshot : ModelSnapshot
+    [Migration("20250528170201_RestructureDb")]
+    partial class RestructureDb
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.4");
@@ -274,9 +277,6 @@ namespace LteCar.Server.Migrations
                         .ValueGeneratedOnAdd()
                         .HasColumnType("INTEGER");
 
-                    b.Property<int>("Accuracy")
-                        .HasColumnType("INTEGER");
-
                     b.Property<float?>("CalibrationMax")
                         .HasColumnType("REAL");
 
@@ -290,7 +290,6 @@ namespace LteCar.Server.Migrations
                         .HasColumnType("INTEGER");
 
                     b.Property<string>("Name")
-                        .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
                     b.Property<int>("UserChannelDeviceId")
@@ -298,8 +297,7 @@ namespace LteCar.Server.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("UserChannelDeviceId", "IsAxis", "ChannelId")
-                        .IsUnique();
+                    b.HasIndex("UserChannelDeviceId");
 
                     b.ToTable("UserChannel");
                 });
@@ -320,8 +318,7 @@ namespace LteCar.Server.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("UserId", "DeviceName")
-                        .IsUnique();
+                    b.HasIndex("UserId");
 
                     b.ToTable("UserChannelDevice");
                 });
@@ -501,7 +498,7 @@ namespace LteCar.Server.Migrations
             modelBuilder.Entity("UserChannel", b =>
                 {
                     b.HasOne("UserChannelDevice", "UserChannelDevice")
-                        .WithMany("Channels")
+                        .WithMany()
                         .HasForeignKey("UserChannelDeviceId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -512,7 +509,7 @@ namespace LteCar.Server.Migrations
             modelBuilder.Entity("UserChannelDevice", b =>
                 {
                     b.HasOne("LteCar.Server.Data.User", "User")
-                        .WithMany("UserChannelDevices")
+                        .WithMany()
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -545,16 +542,6 @@ namespace LteCar.Server.Migrations
             modelBuilder.Entity("LteCar.Server.Data.Car", b =>
                 {
                     b.Navigation("Functions");
-                });
-
-            modelBuilder.Entity("LteCar.Server.Data.User", b =>
-                {
-                    b.Navigation("UserChannelDevices");
-                });
-
-            modelBuilder.Entity("UserChannelDevice", b =>
-                {
-                    b.Navigation("Channels");
                 });
 #pragma warning restore 612, 618
         }

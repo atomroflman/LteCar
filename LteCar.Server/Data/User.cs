@@ -11,5 +11,6 @@ namespace LteCar.Server.Data
         [MaxLength(64)]
         public string? SessionToken { get; set; }
         public DateTime LastSeen { get; set; } = DateTime.Now;
+        public ICollection<UserChannelDevice> UserChannelDevices { get; set; }
     }
 }

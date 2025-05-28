@@ -1,11 +1,9 @@
-import React, { useEffect, useRef } from "react";
+import React, { useEffect, useState } from "react";
 import { useControlFlowStore } from "./control-flow-store";
-
-type GamepadState = {
-  id: string;
-  axes: number[];
-  buttons: number[];
-};
+import { useGamepadStore } from "./controller-store";
+import GamepadAxisCalibration from "./gamepad-axis-calibration";
+import GamepadAxisView from "./gamepad-axis-view";
+import GamepadButtonView from "./gamepad-button-view";
 
 // Unified event model for ReactFlow: { name: string, value: number, gamepadId: string }
 export type GamepadUnifiedEvent = {
@@ -14,73 +12,30 @@ export type GamepadUnifiedEvent = {
   gamepadId: string;
 };
 
-export default function GamepadViewer({ onUpdate, onRegisterInputChannelValue }: { onUpdate?: (event: GamepadUnifiedEvent) => void, onRegisterInputChannelValue?: (input: { name: string, value: number, gamepadId: string }) => void }) {
-  const gamepadRef = useRef<Record<string, GamepadState>>({}); // gamepadId -> state
-  const accuracyRef = useRef<number[]>([2, 2]);
+export default function GamepadViewer({ onUpdate, onRegisterInputChannelValue, hideFlowButtons }: { onUpdate?: (event: GamepadUnifiedEvent) => void, onRegisterInputChannelValue?: (input: { name: string, value: number, gamepadId: string }) => void, hideFlowButtons?: boolean }) {
   const [fps, setFps] = React.useState(15);
-  const [gamepads, setGamepads] = React.useState<Record<string, GamepadState>>({});
   const [collapsed, setCollapsed] = React.useState(false);
+  const [axesCollapsed, setAxesCollapsed] = useState<{ [gpId: string]: boolean }>({});
+  const [buttonsCollapsed, setButtonsCollapsed] = useState<{ [gpId: string]: boolean }>({});
+  const [calibCollapsed, setCalibCollapsed] = useState<{ [gpId: string]: boolean }>({});
   const controlFlow = useControlFlowStore();
-
-  // Funktion: Unified Input Processing
-  function handleInputUpdate(event: GamepadUnifiedEvent) {
-    controlFlow.handleInputUpdate(event);
-  }
+  const gamepadStore = useGamepadStore();
 
   useEffect(() => {
-    let lastGamepadIds: string[] = [];
-    let interval: number;
-    let running = true;
-    const pollGamepad = () => {
-      if (!running) return;
-      const gps = Array.from(navigator.getGamepads()).filter(Boolean) as Gamepad[];
-      const newGamepads: Record<string, GamepadState> = { ...gamepadRef.current };
-      gps.forEach((gp) => {
-        if (!gp) return;
-        let old = gamepadRef.current[gp.id];
-        const axes = gp.axes.map((ax, i) => {
-          const acc = Math.pow(10, -accuracyRef.current[i] || 2);
-          return Math.round(ax / acc) * acc;
-        });
-        const buttons = gp.buttons.map((b) => b.value);
-        // New gamepad detected (send initial values)
-        if (!lastGamepadIds.includes(gp.id)) {
-          axes.forEach((a, i) => {
-            handleInputUpdate({ name: `axis-${i}`, value: a, gamepadId: gp.id });
-          });
-          buttons.forEach((b, i) => {
-            handleInputUpdate({ name: `button-${i}`, value: b, gamepadId: gp.id });
-          });
-        }
-        if (old) {
-          axes.forEach((a, i) => {
-            if (a !== old.axes[i]) {
-              handleInputUpdate({ name: `axis-${i}`, value: a, gamepadId: gp.id });
-            }
-          });
-          buttons.forEach((b, i) => {
-            if (b !== old.buttons[i]) {
-              handleInputUpdate({ name: `button-${i}`, value: b, gamepadId: gp.id });
-            }
-          });
-        }
-        newGamepads[gp.id] = { id: gp.id, axes, buttons };
-      });
-      gamepadRef.current = newGamepads;
-      setGamepads(newGamepads);
-      lastGamepadIds = gps.map(gp => gp.id);
-    };
-    interval = window.setInterval(pollGamepad, 1000 / fps);
+    gamepadStore.loadInitialGamepads();
+    gamepadStore.pollGamepads();
+    gamepadStore.setPollFps(fps);
     return () => {
-      running = false;
-      clearInterval(interval);
+      gamepadStore.stopPolling();
     };
+  }, []);
+
+  useEffect(() => {
+    gamepadStore.setPollFps(fps);
   }, [fps]);
 
-  // UI: Sliders for accuracy, FPS, and gamepad status
   return (
-    <div className={collapsed ? "mt-2 bg-zinc-900 text-zinc-100 rounded-lg p-0 text-xs leading-tight" : "mt-2 bg-zinc-900 text-zinc-100 rounded-lg p-2 border border-zinc-800 text-xs leading-tight"}
-      style={!collapsed ? { maxHeight: 320, overflowY: 'auto' } : {}}>
+    <div className={collapsed ? "mt-2 bg-zinc-900 text-zinc-100 rounded-lg p-0 text-xs leading-tight" : "mt-2 bg-zinc-900 text-zinc-100 rounded-lg border border-zinc-800 text-xs leading-tight"}>
       <button
         className="mb-2 px-2 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded text-xs border border-zinc-700 transition-colors duration-150 w-full flex items-center justify-between"
         onClick={() => setCollapsed(c => !c)}
@@ -92,34 +47,6 @@ export default function GamepadViewer({ onUpdate, onRegisterInputChannelValue }:
       </button>
       {!collapsed && (
         <>
-          <div className="mb-1 font-semibold text-zinc-200 text-xs">Gamepad Accuracy:</div>
-          {[0, 1].map((i) => {
-            const accVal = accuracyRef.current[i] ?? 2;
-            const decimals = accVal;
-            const step = 1;
-            const min = 0;
-            const max = 8;
-            const pow = Math.pow(10, -decimals);
-            return (
-              <div key={i} className="flex items-center mb-1">
-                <span className="mr-1 text-zinc-300 text-xs">Axis {i}:</span>
-                <input
-                  type="range"
-                  min={min}
-                  max={max}
-                  step={step}
-                  defaultValue={decimals}
-                  onChange={e => {
-                    accuracyRef.current[i] = parseInt(e.target.value);
-                    setFps(fps => fps); // force rerender
-                  }}
-                  className="mx-1 accent-blue-400 bg-zinc-800 h-2"
-                  style={{ width: 80 }}
-                />
-                <span className="ml-1 text-zinc-400 text-xs">{`${decimals} Dezimal${decimals === 1 ? '' : 'en'} (${pow.toFixed(decimals)})`}</span>
-              </div>
-            );
-          })}
           <div className="mt-2 mb-1 font-semibold text-zinc-200 text-xs">Poll Interval (FPS):</div>
           <div className="flex items-center mb-1">
             <input
@@ -136,55 +63,82 @@ export default function GamepadViewer({ onUpdate, onRegisterInputChannelValue }:
           </div>
           <div className="mt-3">
             <div className="font-bold mb-1 text-zinc-200 text-xs">Gamepads:</div>
-            {Object.values(gamepads).length === 0 && <div className="text-zinc-400 text-xs">No gamepad connected.</div>}
-            {Object.values(gamepads).map(gp => (
+            {Object.values(gamepadStore.knownGamepads).length === 0 && <div className="text-zinc-400 text-xs">No gamepad connected.</div>}
+            {Object.values(gamepadStore.knownGamepads).map(gp => (
               <div key={gp.id} className="mb-2 border border-zinc-700 p-1 rounded bg-zinc-800 text-xs">
-                <div className="font-mono text-[10px] mb-1 text-zinc-400">ID: {gp.id}</div>
-                <div className="font-semibold text-zinc-300 text-xs">Axes:</div>
-                <ul className="ml-2 mb-1">
-                  {gp.axes.map((a, i) => {
-                    const acc = Math.pow(10, -(accuracyRef.current[i] || 2));
-                    const formatted = (Math.round(a / acc) * acc).toFixed(accuracyRef.current[i] || 2);
-                    return (
-                      <li key={i} className="flex items-center text-xs justify-between whitespace-nowrap">
-                        <div className="flex items-center min-w-0">
-                          <span className="w-14 text-zinc-400 text-xs text-left whitespace-nowrap">axis-{i}:</span>
-                          <span className="font-mono w-10 text-zinc-100 text-xs text-left whitespace-pre">{a > 0 ? " " + formatted : formatted}</span>
-                        </div>
-                        <button
-                          className="ml-2 px-1 py-0.5 bg-blue-900 hover:bg-blue-800 text-blue-100 rounded text-[10px] border border-blue-800 transition-colors duration-150 text-right whitespace-nowrap"
-                          onClick={() => onRegisterInputChannelValue?.({ name: `axis-${i}`, value: a, gamepadId: gp.id })}
-                        >
-                          +Flow
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-                <div className="font-semibold text-zinc-300 text-xs">Buttons:</div>
-                <ul className="ml-2">
-                  {gp.buttons.map((b, i) => {
-                    const isPressed = b > 0.5;
-                    return (
-                      <li key={i} className="flex items-center text-xs justify-between whitespace-nowrap">
-                        <div className="flex items-center min-w-0">
-                          <span className="w-14 text-zinc-400 text-xs text-left whitespace-nowrap">button-{i}:</span>
-                          <span
-                            className={`inline-block w-4 h-4 rounded-full border transition-colors duration-150 ${isPressed ? "bg-zinc-100 border-zinc-400" : "bg-zinc-700 border-zinc-500"}`}
-                            style={{ marginLeft: '1.5rem', marginRight: '1.5rem' }}
-                            title={isPressed ? "Pressed" : "Not pressed"}
-                          />
-                        </div>
-                        <button
-                          className="ml-2 px-1 py-0.5 bg-blue-900 hover:bg-blue-800 text-blue-100 rounded text-[10px] border border-blue-800 transition-colors duration-150 text-right whitespace-nowrap"
-                          onClick={() => onRegisterInputChannelValue?.({ name: `button-${i}`, value: b, gamepadId: gp.id })}
-                        >
-                          +Flow
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
+                <div className="font-mono text-[10px] mb-1 text-zinc-400"><div
+                  className={`inline-block mx-1 w-2 h-2 rounded-full border transition-colors duration-150 ${gp.connected ? "bg-green-700 border-zinc-400" : "bg-red-700 border-zinc-400"}`}
+                  title={gp.connected ? "Connected" : "Not connected"}
+                />{gp.id}: {gp.name.length > 40 ? gp.name.slice(0, 40) + "…" : gp.name}</div>
+                {/* Calibration Section */}
+                <div className="mt-2 mb-1 font-semibold text-zinc-200 text-xs flex items-center justify-between cursor-pointer" onClick={() => setCalibCollapsed(c => ({ ...c, [gp.id]: !c[gp.id] }))}>
+                  <span>Axis Accuracy Calibration</span>
+                  <span>{calibCollapsed[gp.id] ? '▼' : '▲'}</span>
+                </div>
+                {!calibCollapsed[gp.id] && Array.isArray(gp.axes) && gp.axes.length > 0 && (
+                  <div className="mb-2">
+                    {gp.axes.map((axis, i) => (
+                      <GamepadAxisCalibration
+                        key={i}
+                        value={axis}
+                        onVauleChange={(newValue) => gamepadStore.setChannelAccuracy(gp.name, newValue.channelId, newValue.accuracy)}
+                        index={i}
+                      />
+                    ))}
+                  </div>
+                )}
+                {/* Axes Section */}
+                <div className="mt-2 mb-1 font-semibold text-zinc-200 text-xs flex items-center justify-between cursor-pointer" onClick={() => setAxesCollapsed(c => ({ ...c, [gp.id]: !c[gp.id] }))}>
+                  <span>Axes</span>
+                  <span>{axesCollapsed[gp.id] ? '▼' : '▲'}</span>
+                </div>
+                {!axesCollapsed[gp.id] && Array.isArray(gp.axes) && (
+                  <ul className="ml-2 mb-1">
+                    {gp.axes.map((axis, i) => {
+                      const accuracy = typeof axis.accuracy === 'number' ? axis.accuracy : 2;
+                      // Use .latestValue for live axis value
+                      const value = typeof axis.latestValue === 'number' ? axis.latestValue : 0;
+                      const alreadyUsed = controlFlow.nodes.some(n => n.type === "input" && n.data?.gamepadId === gp.id && n.data?.name === `axis-${i}`);
+                      return (
+                        <GamepadAxisView
+                          key={i}
+                          gpId={String(gp.id)}
+                          index={i}
+                          value={value}
+                          accuracy={accuracy}
+                          alreadyUsed={alreadyUsed}
+                          hideFlowButtons={hideFlowButtons}
+                          onRegisterInputChannelValue={onRegisterInputChannelValue}
+                        />
+                      );
+                    })}
+                  </ul>
+                )}
+                {/* Buttons Section */}
+                <div className="mt-2 mb-1 font-semibold text-zinc-200 text-xs flex items-center justify-between cursor-pointer" onClick={() => setButtonsCollapsed(c => ({ ...c, [gp.id]: !c[gp.id] }))}>
+                  <span>Buttons</span>
+                  <span>{buttonsCollapsed[gp.id] ? '▼' : '▲'}</span>
+                </div>
+                {!buttonsCollapsed[gp.id] && Array.isArray(gp.buttons) && (
+                  <ul className="ml-2 mb-1">
+                    {gp.buttons.map((btn, i) => {
+                      // Use .latestValue for live button value; pressed if > 0.5
+                      const isPressed = typeof btn.latestValue === 'number' ? btn.latestValue > 0.5 : false;
+                      const alreadyUsed = controlFlow.nodes.some(n => n.type === "input" && n.data?.gamepadId === gp.id && n.data?.name === `button-${i}`);
+                      return (
+                        <GamepadButtonView
+                          key={i}
+                          gpId={String(gp.id)}
+                          index={i}
+                          isPressed={isPressed}
+                          alreadyUsed={alreadyUsed}
+                          hideFlowButtons={hideFlowButtons}
+                          onRegisterInputChannelValue={onRegisterInputChannelValue}
+                        />
+                      );
+                    })}
+                  </ul>
+                )}
               </div>
             ))}
           </div>

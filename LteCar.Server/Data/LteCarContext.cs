@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 
 namespace LteCar.Server.Data
@@ -11,10 +12,7 @@ namespace LteCar.Server.Data
         public DbSet<CarChannel> CarChannels { get; set; }
         public DbSet<CarTelemetry> CarTelemetry { get; set; }
         public DbSet<UserCarSetup> UserSetups { get; set; }
-        public DbSet<UserSetupFilter> UserSetupFilters { get; set; }
-        public DbSet<UserSetupChannel> UserSetupChannels { get; set; }
         public DbSet<UserSetupTelemetry> UserSetupTelemetries { get; set; }
-        public DbSet<UserSetupLink> UserSetupLinks { get; set; }
         public DbSet<SetupFilterType> SetupFilterTypes { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -34,36 +32,6 @@ namespace LteCar.Server.Data
                     b.Property(v => v.Bitrate).HasColumnName("VideoBitrate");
                 });
 
-            modelBuilder.Entity<UserSetupFilter>()
-                .HasOne(f => f.UserSetup)
-                .WithMany(u => u.UserSetupFilters)
-                .HasForeignKey(f => f.UserSetupId);
-
-            modelBuilder.Entity<UserSetupChannel>()
-                .HasOne(c => c.UserSetup)
-                .WithMany(u => u.UserSetupChannels)
-                .HasForeignKey(c => c.UserSetupId);
-            var userSetupLink = modelBuilder.Entity<UserSetupLink>();
-            userSetupLink.HasOne(l => l.UserSetup)
-                .WithMany(u => u.UserSetupLinks)
-                .HasForeignKey(l => l.UserSetupId)
-                .OnDelete(DeleteBehavior.ClientCascade);
-            userSetupLink.HasOne(l => l.ChannelSource)
-                .WithMany()
-                .HasForeignKey(l => l.ChannelSourceId)
-                .OnDelete(DeleteBehavior.ClientCascade);
-            userSetupLink.HasOne(l => l.FilterSource)
-                .WithMany()
-                .HasForeignKey(l => l.FilterSourceId)
-                .OnDelete(DeleteBehavior.ClientCascade);
-            userSetupLink.HasOne(l => l.FilterTarget)
-                .WithMany()
-                .HasForeignKey(l => l.FilterTargetId)
-                .OnDelete(DeleteBehavior.ClientCascade);
-            userSetupLink.HasOne(l => l.VehicleFunctionTarget)
-                .WithMany()
-                .HasForeignKey(l => l.VehicleFunctionTargetId)
-                .OnDelete(DeleteBehavior.ClientCascade);
             var carChannel = modelBuilder.Entity<CarChannel>();
             carChannel.HasOne(f => f.Car)
                 .WithMany(v => v.Functions)
@@ -72,6 +40,41 @@ namespace LteCar.Server.Data
             modelBuilder.Entity<User>()
                 .HasIndex(u => u.SessionToken)
                 .IsUnique();
+
+            modelBuilder.Entity<UserSetupFlowNodeBase>()
+                .ToTable("UserSetupFlowNodes")
+                .HasDiscriminator<string>("NodeType")
+                .HasValue<UserSetupCarChannelNode>("C")
+                .HasValue<UserSetupFunctionNode>("F")
+                .HasValue<UserSetupUserChannelNode>("U");
+            modelBuilder.Entity<UserSetupLink>()
+                .HasOne(l => l.UserSetupFromNode)
+                .WithMany()
+                .HasForeignKey(l => l.UserSetupFromNodeId)
+                .OnDelete(DeleteBehavior.Restrict);
+            modelBuilder.Entity<UserSetupLink>()
+                .HasOne(l => l.UserSetupToNode)
+                .WithMany()
+                .HasForeignKey(l => l.UserSetupToNodeId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<UserChannelDevice>()
+                .HasOne(d => d.User)
+                .WithMany(u => u.UserChannelDevices)
+                .HasForeignKey(d => d.UserId);
+            modelBuilder.Entity<UserChannelDevice>()
+                .HasIndex(d => new { d.UserId, d.DeviceName })
+                .IsUnique();
+            modelBuilder.Entity<UserChannel>()
+                .HasOne(c => c.UserChannelDevice)
+                .WithMany(d => d.Channels)
+                .HasForeignKey(c => c.UserChannelDeviceId);
+            modelBuilder.Entity<UserChannel>()
+                .HasIndex(c => new { c.UserChannelDeviceId, c.IsAxis, c.ChannelId })
+                .IsUnique();
+            modelBuilder.Entity<UserChannel>()
+                .Property(c => c.Name)
+                .HasMaxLength(64);
 
             base.OnModelCreating(modelBuilder);
         }
