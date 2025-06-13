@@ -11,11 +11,11 @@ public class UserSetupFunctionNodeParameterMapping : IEntityTypeConfiguration<Us
     {
         builder.HasKey(x => x.Id);
 
-        builder.HasOne(x => x.UserSetupFunctionNode)
+        builder.HasOne(x => x.Node)
             .WithMany(x => x.Parameters)
-            .HasForeignKey(x => x.UserSetupFunctionNodeId)
+            .HasForeignKey(x => x.NodeId)
             .OnDelete(DeleteBehavior.Cascade);
-        builder.HasIndex(x => new { x.UserSetupFunctionNodeId, x.ParameterName })
+        builder.HasIndex(x => new { x.NodeId, x.ParameterName })
             .IsUnique();
 
         builder.Property(x => x.ParameterName)

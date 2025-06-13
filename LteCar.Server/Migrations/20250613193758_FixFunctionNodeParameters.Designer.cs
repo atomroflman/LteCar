@@ -3,6 +3,7 @@ using System;
 using LteCar.Server.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace LteCar.Server.Migrations
 {
     [DbContext(typeof(LteCarContext))]
-    partial class LteCarContextModelSnapshot : ModelSnapshot
+    [Migration("20250613193758_FixFunctionNodeParameters")]
+    partial class FixFunctionNodeParameters
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.4");
@@ -45,7 +48,7 @@ namespace LteCar.Server.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Cars", (string)null);
+                    b.ToTable("Cars");
                 });
 
             modelBuilder.Entity("LteCar.Server.Data.CarChannel", b =>
@@ -76,7 +79,7 @@ namespace LteCar.Server.Migrations
 
                     b.HasIndex("CarId");
 
-                    b.ToTable("CarChannels", (string)null);
+                    b.ToTable("CarChannels");
                 });
 
             modelBuilder.Entity("LteCar.Server.Data.CarTelemetry", b =>
@@ -103,7 +106,7 @@ namespace LteCar.Server.Migrations
 
                     b.HasIndex("CarId");
 
-                    b.ToTable("CarTelemetry", (string)null);
+                    b.ToTable("CarTelemetry");
                 });
 
             modelBuilder.Entity("LteCar.Server.Data.SetupFilterType", b =>
@@ -127,7 +130,7 @@ namespace LteCar.Server.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("SetupFilterTypes", (string)null);
+                    b.ToTable("SetupFilterTypes");
                 });
 
             modelBuilder.Entity("LteCar.Server.Data.User", b =>
@@ -157,7 +160,7 @@ namespace LteCar.Server.Migrations
                     b.HasIndex("SessionToken")
                         .IsUnique();
 
-                    b.ToTable("Users", (string)null);
+                    b.ToTable("Users");
                 });
 
             modelBuilder.Entity("LteCar.Server.Data.UserCarSetup", b =>
@@ -182,7 +185,7 @@ namespace LteCar.Server.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("UserSetups", (string)null);
+                    b.ToTable("UserSetups");
                 });
 
             modelBuilder.Entity("LteCar.Server.Data.UserChannel", b =>
@@ -218,7 +221,7 @@ namespace LteCar.Server.Migrations
                     b.HasIndex("UserChannelDeviceId", "IsAxis", "ChannelId")
                         .IsUnique();
 
-                    b.ToTable("UserChannel", (string)null);
+                    b.ToTable("UserChannel");
                 });
 
             modelBuilder.Entity("LteCar.Server.Data.UserChannelDevice", b =>
@@ -240,7 +243,7 @@ namespace LteCar.Server.Migrations
                     b.HasIndex("UserId", "DeviceName")
                         .IsUnique();
 
-                    b.ToTable("UserChannelDevice", (string)null);
+                    b.ToTable("UserChannelDevice");
                 });
 
             modelBuilder.Entity("LteCar.Server.Data.UserSetupFlowNodeBase", b =>
@@ -295,7 +298,7 @@ namespace LteCar.Server.Migrations
                     b.HasIndex("NodeId", "ParameterName")
                         .IsUnique();
 
-                    b.ToTable("UserSetupFunctionNodeParameter", (string)null);
+                    b.ToTable("UserSetupFunctionNodeParameter");
                 });
 
             modelBuilder.Entity("LteCar.Server.Data.UserSetupLink", b =>
@@ -322,7 +325,7 @@ namespace LteCar.Server.Migrations
 
                     b.HasIndex("UserSetupToNodeId");
 
-                    b.ToTable("UserSetupLink", (string)null);
+                    b.ToTable("UserSetupLink");
                 });
 
             modelBuilder.Entity("LteCar.Server.Data.UserSetupTelemetry", b =>
@@ -349,7 +352,7 @@ namespace LteCar.Server.Migrations
 
                     b.HasIndex("UserSetupId");
 
-                    b.ToTable("UserSetupTelemetries", (string)null);
+                    b.ToTable("UserSetupTelemetries");
                 });
 
             modelBuilder.Entity("LteCar.Server.Data.UserSetupCarChannelNode", b =>
@@ -437,7 +440,7 @@ namespace LteCar.Server.Migrations
 
                             b1.HasKey("CarId");
 
-                            b1.ToTable("Cars", (string)null);
+                            b1.ToTable("Cars");
 
                             b1.WithOwner()
                                 .HasForeignKey("CarId");

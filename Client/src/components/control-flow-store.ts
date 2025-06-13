@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { filterFunctionRegistry } from './filter-function-registry';
+import { filterFunctionRegistry } from './filters/filter-function-registry';
 import { Connection } from 'reactflow';
 
 export type ControlFlowNode = {
@@ -95,10 +95,17 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
   setEdges(edges) {
     set({ edges });
   },
-  updateNode(node) {
+  async updateNode(node) {
     set(state => ({
-      nodes: state.nodes.map(n => n.nodeId === node.nodeId ? { ...n, ...node, params: { ...n.params, ...node.params } } : n),
+      nodes: state.nodes.map(n => n.nodeId === node.nodeId ? { ...n, ...node, params: { ...node.params ?? n.params } } : n),
     }));
+    if (node.params) {
+      await fetch(`/api/flow/${node.nodeId}/params`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(node.params),
+      });
+    }
   },
   async addEdge(params: Connection) {
     const newEdgeRes = await fetch(`/api/flow/link`, {
