@@ -41,7 +41,6 @@ namespace LteCar.Server.Controllers
                 return Ok(new { authenticated = true, userId = user.Id, sessionToken = user.SessionToken });
             }
 
-            // Kein Auth-Cookie oder User nicht gefunden: neuen User anlegen
             var newSessionToken = Guid.NewGuid().ToString();
             var claims = new[] { new Claim(ClaimTypes.NameIdentifier, newSessionToken) };
             var identity = new ClaimsIdentity(claims, "cookie");

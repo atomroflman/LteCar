@@ -180,7 +180,7 @@ export const useGamepadStore = create<GamepadStoreState>((set, get) => {
                 }
 
                 axes.forEach((val, i) => {
-                    const channelId = known[gp.id].axes.find(a => a.channelId == i)?.id;
+                    const channelId = known[gp.id]?.axes.find(a => a.channelId == i)?.id;
                     if (!channelId) {
                         console.warn(`Axis: ${gp.id} -> ${i} was not registered.`)
                         return;

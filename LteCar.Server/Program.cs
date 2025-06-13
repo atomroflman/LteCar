@@ -32,9 +32,10 @@ builder.Services.AddAuthentication("cookie")
     .AddCookie("cookie", options =>
     {
         options.Cookie.Name = "LteCarAuth";
-        options.LoginPath = "/"; // Kein Redirect, API-only
+        options.LoginPath = "/";
         options.Cookie.HttpOnly = true;
         options.Cookie.SameSite = SameSiteMode.Lax;
+        options.Cookie.MaxAge = TimeSpan.MaxValue;
         options.Events.OnRedirectToLogin = ctx =>
         {
             ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;

@@ -1,6 +1,6 @@
 import React from "react";
 import { Handle, Position, NodeProps } from "reactflow";
-import { filterFunctionRegistry } from "./filter-function-registry";
+import { filterFunctionRegistry } from "./filters/filter-function-registry";
 import { useControlFlowStore } from "./control-flow-store";
 import { stringify } from "querystring";
 

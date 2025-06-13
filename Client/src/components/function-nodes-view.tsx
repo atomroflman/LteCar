@@ -1,5 +1,5 @@
 import React from "react";
-import { filterFunctionRegistry } from "./filter-function-registry";
+import { filterFunctionRegistry } from "./filters/filter-function-registry";
 import { useControlFlowStore } from "./control-flow-store";
 
 export default function FunctionNodesView({ hideFlowButtons }: { hideFlowButtons?: boolean }) {
