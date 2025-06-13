@@ -9,11 +9,8 @@ namespace LteCar.Server.Controllers
     [Route("api/[controller]")]
     public class CarController : ControllerBase
     {
-        private readonly LteCarContext _context;
-
-        public CarController(LteCarContext context)
+        public CarController(LteCarContext context) : base(context)
         {
-            _context = context;
         }
 
         [HttpGet]
@@ -40,14 +37,14 @@ namespace LteCar.Server.Controllers
         [HttpGet("{carid}/setup")]
         public async Task<IActionResult> GetCarSetup(string carid)
         {
-            var sessionId = ((ClaimsIdentity)this.User.Identity).Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
-            var user = await _context.Users
-                .FirstOrDefaultAsync(u => u.SessionToken == sessionId);
+            var user = await GetCurrentUserAsync();
             if (user == null)
                 return Unauthorized("User not found");
 
             var car = await _context.Cars
                 .FirstOrDefaultAsync(c => c.CarId == carid);
+            if (car == null)
+                return NotFound("Car not found");
             var setup = await _context.UserSetups
                 .FirstOrDefaultAsync(u => u.UserId == user.Id && u.Car.CarId == carid);
 

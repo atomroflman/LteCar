@@ -16,11 +16,8 @@ const geistMono = Geist_Mono({
 });
 
 export default function Home() {
-  const [showUserSetupFlow, setShowUserSetupFlow] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [carSession, setCarSession] = useState<string>("");
-  const [carId, setCarId] = useState<string>("");
 
   useEffect(() => {
     fetch("/api/user/me")

@@ -1,79 +1,90 @@
 import { create } from 'zustand';
-import { useEffect } from "react";
+import { filterFunctionRegistry } from './filter-function-registry';
+import { Connection } from 'reactflow';
 
 export type ControlFlowNode = {
-  id: string;
+  nodeId: number;
+  representingId?: number;
+  label: string;
+  metadata: any;
   type: string;
   data: any;
   position: { x: number; y: number };
+  nodeTypeName: string; // Name of Db Node Type für evaluation
+  latestValue?: number | number[];
+  params: Record<string, any>; // explizit als Objekt
+  inputPorts?: number; // Anzahl Eingänge
+  outputPorts?: number; // Anzahl Ausgänge
 };
 
 export type ControlFlowEdge = {
-  id: string;
-  source: string;
-  target: string;
-  type?: string;
-  data?: any;
+  id: number;
+  source: number;
+  sourcePort?: string;
+  target: number;
+  targetPort?: string;
 };
 
 export type ControlFlowState = {
+  removeEdge(dbId: number): void;
+  addEdge(params: Connection): void;
+  nodeLatestValues: Record<string, number>;
+  frame: number,
   nodes: ControlFlowNode[];
   edges: ControlFlowEdge[];
   isLoading: boolean;
   error: string | null;
-  load: (userId: string) => Promise<void>;
-  save: (userId: string) => Promise<void>;
+  load: (carId: string) => Promise<void>;
+  // save: (userId: string) => Promise<void>;
   setNodes: (nodes: ControlFlowNode[]) => void;
   setEdges: (edges: ControlFlowEdge[]) => void;
   updateNode: (node: ControlFlowNode) => void;
-  updateEdge: (edge: ControlFlowEdge) => void;
   reset: () => void;
-  registerInput: (input: { name: string; value: number; gamepadId: string }) => void;
-  registerOutput: (output: { channelName: string; displayName: string }) => void;
-  deleteNode: (nodeId: string) => void;
-  sendOutput: (channelName: string, value: number) => Promise<void>;
+  registerInput: (dbInputId: number ) => void;
+  registerOutput: (dbOutputId: number) => void;
+  registerFunctionNode: (fnName: string, params?: Record<string, any>, inputPorts?: number, outputPorts?: number) => void;
+  deleteNode: (nodeId: number) => void;
+  sendOutput: (channelId: number, value: number) => Promise<void>;
   startConnection: (carId: string, carKey: string | undefined) => Promise<void>;
-  handleInputUpdate: (event: { name: string; value: number; gamepadId: string }) => void;
+  stopConnection: (carId: string, session: string | undefined) => Promise<void>;
+  handleInputUpdate: (inputDbId: number, value: number) => void;
   connection: any;
   carId: string | undefined;
-  carSession: string | undefined;
+  userSetupId: number | undefined;
   setConnection: (connection: any) => void;
   setCarId: (carId: string) => void;
   setCarSession: (carSession: string) => void;
+  carSession: string | undefined;
 };
 
 export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
+  nodeLatestValues: {},
   nodes: [],
   edges: [],
-  isLoading: false,
+  frame: 0,
+  isLoading: true,
   error: null,
-  async load(userId: string) {
+  carId: undefined,
+  userSetupId: undefined,
+  async load(carId: string) {
     set({ isLoading: true, error: null });
     try {
-      const res = await fetch(`/api/user/setup?userId=${userId}`);
-      if (!res.ok) throw new Error('Fehler beim Laden der Control Flows');
-      const data = await res.json();
+      const res = await fetch(`/api/userconfig/setup/${carId}`);
+      if (!res.ok) 
+        throw new Error('Loading setup failed...');
+      const data = await res.json() as {carId: number, id: number, userId: number};
+      const flowRes = await fetch(`/api/flow/${data.id}`);
+      if (!flowRes.ok)      
+        throw new Error('Loading flow failed...');
+      const flowData = await flowRes.json() as {nodes: ControlFlowNode[], edges: ControlFlowEdge[]};
       set({
-        nodes: data.nodes || [],
-        edges: data.edges || [],
+        nodes: flowData.nodes || [],
+        edges: flowData.edges || [],
         isLoading: false,
         error: null,
+        carId,
+        userSetupId: data.id,
       });
-    } catch (e: any) {
-      set({ isLoading: false, error: e.message });
-    }
-  },
-  async save(userId: string) {
-    set({ isLoading: true, error: null });
-    try {
-      const { nodes, edges } = get();
-      const res = await fetch(`/api/user/setup?userId=${userId}`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nodes, edges }),
-      });
-      if (!res.ok) throw new Error('Fehler beim Speichern der Control Flows');
-      set({ isLoading: false, error: null });
     } catch (e: any) {
       set({ isLoading: false, error: e.message });
     }
@@ -86,61 +97,178 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
   },
   updateNode(node) {
     set(state => ({
-      nodes: state.nodes.map(n => n.id === node.id ? node : n),
+      nodes: state.nodes.map(n => n.nodeId === node.nodeId ? { ...n, ...node, params: { ...n.params, ...node.params } } : n),
     }));
   },
-  updateEdge(edge) {
-    set(state => ({
-      edges: state.edges.map(e => e.id === edge.id ? edge : e),
-    }));
+  async addEdge(params: Connection) {
+    const newEdgeRes = await fetch(`/api/flow/link`, {
+      method: "POST",
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        fromNodeId: params.source,
+        toNodeId: params.target,
+        fromPort: params.sourceHandle,
+        toPort: params.targetHandle,
+      })
+    });
+    if (!newEdgeRes.ok) 
+      throw new Error("Linking failed...");
+    const newEdge = await newEdgeRes.json();
+    set((state) => { 
+      return {
+        edges: [
+          ...state.edges, 
+          {
+            id: newEdge.id,
+            source: newEdge.source,
+            target: newEdge.target,
+            sourcePort: newEdge.sourcePort,
+            targetPort: newEdge.targetPort,
+          } as ControlFlowEdge
+        ]
+      };
+    });
+  },
+  async removeEdge(dbId: number) {
+    await fetch(`/api/flow/unlink/` + dbId, {
+      method: "DELETE"
+    });
+    set(state => ({edges: state.edges.filter(e => e.id != dbId)}));
   },
   reset() {
     set({ nodes: [], edges: [], error: null });
   },
-  registerInput(input: { name: string; value: number; gamepadId: string }) {
-    set(state => {
-      const nodeId = `input-${input.gamepadId}-${input.name}`;
-      if (state.nodes.some(n => n.id === nodeId)) return {};
+  async registerInput(dbId: number) {
+    if (get().nodes.some(n => n.representingId == dbId && n.type == "input")) 
+      return {};
+    const res = await fetch(`/api/flow/input/${dbId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userSetupId: get().userSetupId,
+        id: dbId,
+        positionX: 100,
+        positionY: 100 + get().nodes.length * 40,
+      })
+    });
+    if (!res.ok) {
+      console.error("Failed to register input node", res.status, res.statusText);
+      return {};
+    }
+    const input = await res.json();
+    set(state => {      
       return {
         nodes: [
           ...state.nodes,
           {
-            id: nodeId,
+            nodeId: input.nodeId,
+            representingId: dbId,
             type: 'input',
             data: { ...input },
-            position: { x: 100, y: 100 + state.nodes.length * 40 },
+            position: { x: input.positionX, y: input.positionY },
+            nodeTypeName: input.nodeTypeName,
+            metadata: undefined,
+            label: input.label,
+            params: {}, // immer ein Objekt
           },
         ],
       };
     });
   },
-  registerOutput(output: { channelName: string; displayName: string }) {
-    set(state => {
-      const nodeId = `output-${output.channelName}`;
-      if (state.nodes.some(n => n.id === nodeId)) return {};
+  async registerOutput(dbId: number) {
+    const nodeId = `output-${dbId}`;
+    if (get().nodes.some(n => n.representingId == dbId && n.type == "output")) 
+      return {};
+    const res = await fetch(`/api/flow/output/${dbId}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userSetupId: get().userSetupId,
+        id: dbId,
+        positionX: 100,
+        positionY: 400 + get().nodes.length * 40,
+      })
+    });
+    if (!res.ok) {
+      console.error("Failed to register input node", res.status, res.statusText);
+      return {};
+    }
+    const output = await res.json();
+
+    set(state => {     
       return {
         nodes: [
           ...state.nodes,
           {
-            id: nodeId,
+            nodeId: output.nodeId,
+            representingId: dbId,
             type: 'output',
             data: { ...output },
-            position: { x: 400, y: 100 + state.nodes.length * 40 },
+            position: { x: output.positionX, y: output.positionY },
+            nodeTypeName: output.nodeTypeName,
+            metadata: undefined,
+            label: output.label,
+            params: {}, // immer ein Objekt
           },
         ],
-      };
+      }
     });
   },
-  deleteNode(nodeId: string) {
+  async registerFunctionNode(fnName: string, params: Record<string, any> = {}, inputPorts: number = 1, outputPorts: number = 1) {
+    const res = await fetch(`/api/flow/function`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userSetupId: get().userSetupId,
+        SetupFunctionName: fnName,
+        positionX: 100,
+        positionY: 200 + get().nodes.length * 40,
+        params,
+        inputPorts,
+        outputPorts,
+      })
+    });
+    if (!res.ok) {
+      console.error("Failed to register function node", res.status, res.statusText);
+      return;
+    }
+    const fnNode = await res.json();
     set(state => ({
-      nodes: state.nodes.filter(n => n.id !== nodeId),
+      nodes: [
+        ...state.nodes,
+        {
+          nodeId: fnNode.nodeId,
+          representingId: undefined,
+          type: 'default',
+          data: { ...fnNode },
+          position: { x: fnNode.positionX, y: fnNode.positionY },
+          nodeTypeName: fnNode.nodeTypeName,
+          metadata: fnNode.metadata,
+          label: fnNode.label,
+          params: fnNode.params || params || {},
+          inputPorts: fnNode.inputPorts || inputPorts,
+          outputPorts: fnNode.outputPorts || outputPorts,
+        },
+      ],
+    }));
+  },
+  async deleteNode(nodeId: number) {
+    var res = await fetch(`/api/flow/${nodeId}`, {
+      method: "DELETE"
+    })
+    if (!res.ok)
+      throw new Error("Node deletion failed.");
+
+    set(state => ({
+      nodes: state.nodes.filter(n => n.nodeId !== nodeId),
       edges: state.edges.filter(e => e.source !== nodeId && e.target !== nodeId),
     }));
   },
-  async sendOutput(channelName: string, value: number) {
+  async sendOutput(channelId: number, value: number) {
     const { carId, carSession, connection } = get();
+    console.log("send out", carId, carSession, connection?.state);
     if (connection && carId && carSession) {
-      await connection.invoke("UpdateChannel", carId, carSession, channelName, value);
+      await connection.invoke("UpdateChannel", carId, carSession, channelId, value);
     }
   },
   async startConnection(carId: string, carKey: string | undefined) {
@@ -159,48 +287,111 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
     const carSession = await connection.invoke("AquireCarControl", carId, carKey);
     set({ connection, carId, carSession });
   },
-  handleInputUpdate(event: { name: string; value: number; gamepadId: string }) {
+  async stopConnection(carId: string, session: string | undefined) {
+    const { connection } = get();
+    if (connection && carId && session) {
+      await connection.invoke("ReleaseCarControl", carId, session)
+      connection.stop();
+      set({ connection: undefined, carId: undefined, carSession: undefined });
+    } 
+  },  
+  handleInputUpdate(inputDbId: number, value: number) {
     const state = get();
-    // 1. Input-Node suchen und Wert setzen
+    let queue: {nodeId: number, inputValues: Record<string, number>}[] = [];
     state.nodes.forEach(node => {
-      if (node.type === "input" && node.data?.gamepadId === event.gamepadId && node.data?.name === event.name) {
-        node.data.value = event.value;
+      if (node.type === "input" && node.representingId === inputDbId) {
+        queue.push({ nodeId: node.nodeId, inputValues: { input: value } });
       }
     });
-    // 2. Alle verbundenen Nodes traversieren (BFS)
-    let queue = state.edges.filter(e => e.source.startsWith(`input-${event.gamepadId}-${event.name}`)).map(e => e.target);
-    const visited = new Set();
-    while (queue.length > 0) {
-      const nodeId = queue.shift();
-      if (!nodeId || visited.has(nodeId)) continue;
-      visited.add(nodeId);
-      const node = state.nodes.find(n => n.id === nodeId);
-      if (!node) continue;
-      // Funktionsnode: auswerten, ggf. Wert weitergeben
-      if (node.type === "function" && typeof node.data?.fn === "function") {
-        const inputVal = event.value;
-        const result = node.data.fn(inputVal);
-        if (result !== undefined) {
-          // Weiter an alle nachfolgenden Edges
-          queue.push(...state.edges.filter(e => e.source === nodeId).map(e => e.target));
-          // Wert an nachfolgende Nodes weitergeben (als neues Event)
-          state.nodes.forEach(n2 => {
-            if (state.edges.some(e => e.source === nodeId && e.target === n2.id)) {
-              if (n2.type === "output") {
-                state.sendOutput(n2.data.channelName, result);
-              } else {
-                queue.push(n2.id);
+    const visited = new Set<number>();
+    function executeNode(nodeId: number, inputValues: Record<string, number>): number[] {
+      const node = state.nodes.find(n => n.nodeId === nodeId);
+      if (!node) return [];
+      if (node.nodeTypeName === "UserSetupUserChannelNode") {
+        return [inputValues.input ?? 0];
+      }
+      if (node.nodeTypeName === "UserSetupFunctionNode") {
+        const fnName: string | undefined = node.metadata?.functionName;
+        if (!fnName) return [];
+        const fnDef = filterFunctionRegistry[fnName as keyof typeof filterFunctionRegistry];
+        if (!fnDef) return [];
+        const mappedInputs: Record<string, number> = {};
+        (fnDef.inputLabels as readonly string[]).forEach((label: string) => {
+          let val = inputValues[label];
+          if (val === undefined) {
+            const incomingEdge = state.edges.find(e => e.target === node.nodeId && e.targetPort === label);
+            if (incomingEdge) {
+              const prevNode = state.nodes.find(n => n.nodeId === incomingEdge.source);
+              if (prevNode) {
+                const prevInputs: Record<string, number> = {};
+                if (prevNode.type === "input") {
+                  prevInputs.input = state.nodeLatestValues[prevNode.nodeId] ?? 0;
+                } else {
+                  const prevFnName: string | undefined = prevNode.metadata?.functionName;
+                  if (prevFnName) {
+                    const prevFn = filterFunctionRegistry[prevFnName as keyof typeof filterFunctionRegistry];
+                    if (prevFn) {
+                      (prevFn.inputLabels as readonly string[]).forEach((lab: string) => {
+                        prevInputs[lab] = state.nodeLatestValues[prevNode.nodeId] ?? 0;
+                      });
+                    }
+                  }
+                }
+                const prevOut = executeNode(prevNode.nodeId, prevInputs);
+                val = prevOut[0];
               }
             }
-          });
-        }
-      } else if (node.type === "output") {
-        state.sendOutput(node.data.channelName, event.value);
+          }
+          mappedInputs[label] = val ?? 0;
+        });
+        return fnDef.apply(mappedInputs as any, node.params || {}, node.nodeId);
       }
+      if (node.nodeTypeName === "UserSetupCarChannelNode") {
+        state.sendOutput(node.representingId!, inputValues.input ?? 0);
+        return [inputValues.input ?? 0];
+      }
+      return [];
     }
+    while (queue.length > 0) {
+      const next = queue.shift();
+      if (!next?.nodeId) continue;
+      if (visited.has(next.nodeId)) continue;
+      visited.add(next.nodeId);
+      const node = state.nodes.find(n => n.nodeId === next.nodeId);
+      if (!node) continue;
+      let calculatedValue: number[] = executeNode(node.nodeId, next.inputValues);
+      if (calculatedValue[0] === state.nodeLatestValues[node.nodeId]) 
+        continue;
+      state.nodeLatestValues[node.nodeId] = calculatedValue[0];
+      node.latestValue = calculatedValue[0];
+      const nextEdges = state.edges.filter(e => e.source === node.nodeId);
+      if (nextEdges.length === 0) 
+        continue;
+      nextEdges.forEach((edge, idx) => {
+        const targetNode = state.nodes.find(n => n.nodeId === edge.target);
+        if (!targetNode) 
+          return;
+        const targetFnName: string | undefined = targetNode.metadata?.functionName;
+        const targetFn = targetFnName ? filterFunctionRegistry[targetFnName as keyof typeof filterFunctionRegistry] : undefined;
+        const targetInputs: Record<string, number> = {};
+        if (targetFn) {
+          (targetFn.inputLabels as readonly string[]).forEach((label: string, i: number) => {
+            const incoming = state.edges.find(e => e.target === targetNode.nodeId && e.targetPort === label);
+            if (incoming && incoming.source === node.nodeId) {
+              targetInputs[label] = calculatedValue[idx] ?? calculatedValue[0];
+            } else {
+              targetInputs[label] = state.nodeLatestValues[incoming?.source ?? 0] ?? 0;
+            }
+          });
+        } else {
+          targetInputs.input = calculatedValue[idx] ?? calculatedValue[0];
+        }
+        queue.push({ nodeId: targetNode.nodeId, inputValues: targetInputs });
+      });
+    }
+    set({ nodeLatestValues: state.nodeLatestValues, nodes: [...state.nodes], frame: state.frame + 1 });
   },
   connection: undefined,
-  carId: undefined,
   carSession: undefined,
   setConnection: (connection: any) => set({ connection }),
   setCarId: (carId: string) => set({ carId }),

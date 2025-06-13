@@ -2,16 +2,16 @@ import React, { useEffect, useState } from "react";
 import { useControlFlowStore } from "./control-flow-store";
 
 export type CarFunction = {
-  id: string;
+  id: number;
   displayName: string;
   channelName: string;
   isEnabled: boolean;
   requiresAxis: boolean;
 };
 
-export default function CarFunctionsView({ carId, onRegisterOutput, hideFlowButtons }: { carId: string, onRegisterOutput?: (output: { channelName: string, displayName: string }) => void, hideFlowButtons?: boolean }) {
+export default function CarFunctionsView({ carId, hideFlowButtons }: { carId: string, hideFlowButtons?: boolean }) {
   const [functions, setFunctions] = useState<CarFunction[]>([]);
-  const { nodes } = useControlFlowStore();
+  const controlFlow = useControlFlowStore();
 
   useEffect(() => {
     if (!carId) return;
@@ -21,28 +21,27 @@ export default function CarFunctionsView({ carId, onRegisterOutput, hideFlowButt
   }, [carId]);
 
   // Only allow one output node per function
-  const hasOutputNode = (channelName: string) =>
-    nodes.some((n) => n.type === "output" && n.data?.channelName === channelName);
-
+  const hasOutputNode = (dbId: number) =>{
+    return controlFlow.nodes.some((n) => n.type === "output" && n.data?.id === dbId);
+  };
   return (
     <div className="bg-zinc-900 rounded-lg p-2 border border-zinc-800 text-xs mt-2">
-      <div className="font-bold mb-2 text-zinc-200 text-xs">Fahrzeug-Funktionen</div>
-      {functions.length === 0 && <div className="text-zinc-400 text-xs">Keine Funktionen gefunden.</div>}
+      <div className="font-bold mb-2 text-zinc-200 text-xs">Car functions</div>
+      {functions.length === 0 && <div className="text-zinc-400 text-xs">No functions registered.</div>}
       <ul className="space-y-1">
         {functions.map((f) => {
-          const alreadyUsed = hasOutputNode(f.channelName);
+          const alreadyUsed = hasOutputNode(f.id);
           return (
             <li key={f.channelName} className="flex items-center justify-between">
               <div>
                 <span className="font-mono text-zinc-100 text-xs">{f.displayName || f.channelName}</span>
-                {f.requiresAxis && <span className="ml-2 text-zinc-400">(Achse)</span>}
-                {!f.isEnabled && <span className="ml-2 text-red-400">(deaktiviert)</span>}
+                {f.requiresAxis && <span className="ml-2 text-zinc-400">(Axis)</span>}
               </div>
-              {!hideFlowButtons && onRegisterOutput && (
+              {!hideFlowButtons &&  (
                 <button
                   className="ml-2 px-1 py-0.5 bg-green-900 hover:bg-green-800 text-green-100 rounded text-[10px] border border-green-800 transition-colors duration-150 text-right whitespace-nowrap disabled:opacity-50"
-                  disabled={alreadyUsed}
-                  onClick={() => onRegisterOutput({ channelName: f.channelName, displayName: f.displayName })}
+                  hidden={alreadyUsed}
+                  onClick={() => controlFlow.registerOutput(f.id)}
                 >
                   +Flow
                 </button>

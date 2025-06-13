@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { useControlFlowStore } from "./control-flow-store";
 
 export type UserGamepadCreateRequest = {
     id: string;
@@ -58,13 +59,34 @@ export type GamepadStoreState = {
     loadInitialGamepads: () => Promise<void>;
     pollGamepads: () => void;
     stopPolling: () => void;
-    onChannelChange?: (gamepadId: string, channelType: "axis" | "button", channelIndex: number, value: number) => void;
-    setOnChannelChange: (cb: (gamepadId: string, channelType: "axis" | "button", channelIndex: number, value: number) => void) => void;
+    onChannelChange?: (gamepadId: string, channelType: "axis" | "button", channelIndex: number, value: number, dbId: number) => void;
+    setOnChannelChange: (cb: (gamepadId: string, channelType: "axis" | "button", channelIndex: number, value: number, dbId: number) => void) => void;
 };
 
 export const useGamepadStore = create<GamepadStoreState>((set, get) => {
     let pollReference: number | undefined;
-    let lastValues: Record<string, { axes: number[]; buttons: number[] }> = {};
+    function channelUpdated(gamepadId: string, channelType: "axis" | "button", channelIndex: number, value: number, dbId: number): void {
+        const store = get();
+        const known = store.knownGamepads[gamepadId];
+        if (!known) return;
+        const prop = channelType === "axis" ? "axes" : "buttons";
+        if (!known[prop] || !known[prop][channelIndex]) return;
+        
+        let rounder = (e: number) => e;
+        if (channelType == "axis" && (known[prop][channelIndex] as GamepadAxisChannel).accuracy > 0) {
+            const acc = Math.pow(10, -(known[prop][channelIndex] as GamepadAxisChannel).accuracy);
+            rounder = (e: number) => Math.round(e / acc) * acc;
+        }
+        if (rounder(known[prop][channelIndex].latestValue ?? 0) === rounder(value)) 
+            return;
+        
+        if (typeof store.onChannelChange === 'function') {
+            store.onChannelChange(gamepadId, channelType, channelIndex, rounder(value), dbId);
+        }
+        known[prop][channelIndex].latestValue = rounder(value);
+        set({ knownGamepads: { ...store.knownGamepads } });
+    }
+
     return {
         knownGamepads: {},
         gamepadsLoaded: false,
@@ -76,6 +98,22 @@ export const useGamepadStore = create<GamepadStoreState>((set, get) => {
                 const axis = known[gamepadId].axes.find(a => a.channelId === channelIndex);
                 if (axis) {
                     axis.accuracy = accuracy;
+                    // save to backend
+                    fetch(`/api/userconfig/gamepad-axis-accuracy`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                            gamepadId,
+                            channelIndex,
+                            accuracy,
+                        }),
+                    }).then(res => {
+                        if (!res.ok) {
+                            console.error("Failed to save gamepad axis accuracy", res.status, res.statusText);
+                        }
+                    }).catch(err => {
+                        console.error("Error saving gamepad axis accuracy", err);
+                    });
                     set({ knownGamepads: { ...known } });
                 }
             }
@@ -113,7 +151,6 @@ export const useGamepadStore = create<GamepadStoreState>((set, get) => {
             const known = get().knownGamepads;
             for (const gp of gps) {
                 if (!gp) continue;
-                const last = lastValues[gp.id];
                 const axes = Array.from(gp.axes);
                 const buttons = gp.buttons.map(b => b.value);
 
@@ -139,33 +176,25 @@ export const useGamepadStore = create<GamepadStoreState>((set, get) => {
                 } else if (!known[gp.id].connected) {
                     // Gamepad was previously registered but not connected
                     known[gp.id].connected = true;
+                    set({ knownGamepads: { ...known } });
                 }
 
-                if (!last) {
-                    axes.forEach((val, i) => {
-                        if (typeof get().onChannelChange === 'function')
-                            get().onChannelChange!(gp.id, "axis", i, val);
-                    });
-                    buttons.forEach((val, i) => {
-                        if (typeof get().onChannelChange === 'function')
-                            get().onChannelChange!(gp.id, "button", i, val);
-                    });
-                } else {
-                    axes.forEach((val, i) => {
-                        if (val !== last.axes[i]) {
-                            if (typeof get().onChannelChange === 'function')
-                                get().onChannelChange!(gp.id, "axis", i, val);
-                        }
-                    });
-                    buttons.forEach((val, i) => {
-                        if (val !== last.buttons[i]) {
-                            if (typeof get().onChannelChange === 'function')
-                                get().onChannelChange!(gp.id, "button", i, val);
-                        }
-                    });
-                }
-                lastValues[gp.id] = { axes, buttons };
-
+                axes.forEach((val, i) => {
+                    const channelId = known[gp.id].axes.find(a => a.channelId == i)?.id;
+                    if (!channelId) {
+                        console.warn(`Axis: ${gp.id} -> ${i} was not registered.`)
+                        return;
+                    }
+                    channelUpdated(gp.id, "axis", i, val, channelId);
+                });
+                buttons.forEach((val, i) => {
+                    const channelId = known[gp.id].buttons.find(a => a.channelId == i)?.id;
+                    if (!channelId) {
+                        console.warn(`Button: ${gp.id} -> ${i} was not registered.`)
+                        return;
+                    }
+                    channelUpdated(gp.id, "button", i, val, channelId);
+                });
             }
             set({ knownGamepads: known });
         },

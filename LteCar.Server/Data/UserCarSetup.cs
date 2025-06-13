@@ -10,5 +10,6 @@ namespace LteCar.Server.Data
         public Car Car { get; set; }
         [MaxLength(64)]
         public string? CarSecret { get; set; }
+        public ICollection<UserSetupTelemetryNode> TelemetryNodes { get; set; }
     }
 }

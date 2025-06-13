@@ -11,7 +11,7 @@ export default function CarControl() {
   const [carKey, setCarKey] = useState("");
   const [selectedCarId, setSelectedCarId] = useState<string>("");
   const [telemetrySubscribed, setTelemetrySubscribed] = useState(false);
-  const controlFlow = useControlFlowStore();
+  const flowControl = useControlFlowStore();
 
   // Load cars from backend
   useEffect(() => {
@@ -24,14 +24,19 @@ export default function CarControl() {
       });
   }, []);
 
+  
+    useEffect(() => {
+      flowControl.load(selectedCarId as string);
+    }, [selectedCarId]);
+
   useEffect(() => { 
-    controlFlow.startConnection(selectedCarId, undefined);
+    flowControl.startConnection(selectedCarId, undefined);
   }, [selectedCarId]);
 
   // Start connection and session when carId and carKey are set
   const handleAquireCarControl = async () => {
     if (!selectedCarId || !carKey) return;
-    await controlFlow.startConnection(selectedCarId, carKey);
+    await flowControl.startConnection(selectedCarId, carKey);
   };
 
   // Telemetry subscription (UI only, not part of control flow)
@@ -42,10 +47,20 @@ export default function CarControl() {
 
   return (
     <div className="p-2 space-y-2 text-xs leading-tight">
-      {controlFlow.carSession ? (
+      {flowControl.carSession ? (
         <>
+          <button
+            className="text-xs p-1 bg-red-500 text-white rounded"
+            onClick={() => {
+              flowControl.stopConnection();
+              setSelectedCarId("");
+              setCarKey("");
+            }}
+          >
+            Stop Control
+          </button>
           <label className="font-green-400 text-xs">
-            Control Session aquired: {controlFlow.carSession} - {controlFlow.carId}
+            Control Session aquired: {flowControl.carSession} - {flowControl.carId}
           </label>
         </>
       ) : (
@@ -76,7 +91,7 @@ export default function CarControl() {
         </>
       )}
       <GamepadViewer hideFlowButtons={true} />
-      {controlFlow.carId && <CarFunctionsView carId={controlFlow.carId} hideFlowButtons={true} />}
+      {flowControl.carId && <CarFunctionsView carId={flowControl.carId} hideFlowButtons={true} />}
       <Link href={`/car/${selectedCarId}`} className="text-xs text-blue-400 hover:underline">
         Control Flow Editor
       </Link>

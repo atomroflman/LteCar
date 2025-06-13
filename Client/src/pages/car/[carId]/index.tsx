@@ -2,123 +2,103 @@ import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/router";
 import GamepadViewer from "../../../components/gamepad-viewer";
 import CarFunctionsView from "../../../components/car-functions-view";
-import ReactFlow, { MiniMap, Controls, Background } from "reactflow";
+import ReactFlow, { MiniMap, Controls, Background, useReactFlow, NodeDragHandler, Node, Edge, ReactFlowProvider, Connection, OnEdgesDelete } from "reactflow";
 import "reactflow/dist/style.css";
+import { ControlFlowEdge, ControlFlowNode, useControlFlowStore } from "@/components/control-flow-store";
+import FunctionNodesView from "@/components/function-nodes-view";
+import { useGamepadStore } from "@/components/controller-store";
+import CustomFlowNode from "@/components/custom-flow-node";
 
-type FlowNode = { id: number; type: string; positionX: number; positionY: number };
-type FlowLink = { source: number; target: number };
-type FlowData = { nodes: FlowNode[]; links: FlowLink[] };
-
-async function fetchUserSetupId(carId: string | string[] | undefined): Promise<number | null> {
-  if (!carId) return null;
-  const res = await fetch(`/api/car/${carId}/setup`);
-  if (!res.ok) return null;
-  const data = await res.json();
-  return data.id ?? null;
-}
-
-async function fetchFlow(userSetupId: number | null): Promise<FlowData> {
-  if (!userSetupId) return { nodes: [], links: [] };
-  const res = await fetch(`/api/flow/${userSetupId}`);
-  if (!res.ok) return { nodes: [], links: [] };
-  return await res.json();
-}
-
-async function registerInputNode({ userSetupId, name, value, gamepadId }: { userSetupId: number; name: string; value: number; gamepadId: string }) {
-  await fetch("/api/flow/addnode", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      userSetupId,
-      type: "userchannel",
-      elementId: `${gamepadId}:${name}`,
-      positionX: 100,
-      positionY: 100,
-    }),
-  });
-}
-
-async function registerOutputNode({ userSetupId, channelName, displayName }: { userSetupId: number; channelName: string; displayName: string }) {
-  
-  await fetch("/api/flow/addnode", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      userSetupId,
-      type: "carchannel",
-      elementId: channelName,
-      positionX: 400,
-      positionY: 100,
-    }),
-  });
-}
+const nodeTypes = { custom: CustomFlowNode };
 
 export default function CarControlFlowPage() {
   const router = useRouter();
-  const [flow, setFlow] = useState<FlowData>({ nodes: [], links: [] });
-  const [loading, setLoading] = useState(true);
-  const [userSetupId, setUserSetupId] = useState<number | null>(null);
+  const flowControl = useControlFlowStore();
+
+  function controlNodeToReact(input: ControlFlowNode): Node<any, string | undefined> {
+    return {
+      id: input.nodeId.toString(),
+      data: {
+        ...input,
+        label: `${input.nodeId}: ${input.label} (${flowControl.nodeLatestValues[input.nodeId]?.toFixed(6)})`,
+      },
+      position: input.position,
+      type: "custom"
+    };
+  }
+
+  function controlEdgeToReact(input: ControlFlowEdge): Edge<any> {
+    return {
+      id: input.id.toString(),
+      source: input.source.toString(),
+      target: input.target.toString(),
+      type: "smoothstep",
+      animated: true,
+      sourceHandle: input.sourcePort,
+      targetHandle: input.targetPort,
+    };
+  }
 
   useEffect(() => {
-    fetchUserSetupId(router.query.carId).then(setUserSetupId);
+    flowControl.load(router.query.carId as string);
   }, [router.query.carId]);
 
-  useEffect(() => {
-    fetchFlow(userSetupId).then((data) => {
-      setFlow(data);
-      setLoading(false);
+  const onNodeDrag: NodeDragHandler = async (event, node) => {
+    const oldNode = flowControl.nodes.find(n => n.nodeId === Number(node.id));
+    if (!oldNode) return;
+    flowControl.updateNode({ ...oldNode, position: { x: node.position.x, y: node.position.y } });
+  };
+
+  const onConnect = useCallback((params: Connection) => {
+    flowControl.addEdge(params);
+  }, [flowControl]);
+
+  const onEdgeClick = useCallback((event: any, edge: Edge<any>) => {
+    flowControl.removeEdge(Number(edge.id));
+  }, [flowControl]);
+
+  const onNodeDragStop: NodeDragHandler = async (event, node) => {
+    const oldNode = flowControl.nodes.find(n => n.nodeId === Number(node.id));
+    if (!oldNode) return;
+    await fetch("/api/flow/movenode", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        NodeId: typeof node.data?.id === "number" ? node.data.id : parseInt(node.id.replace(/\D/g, "")),
+        PositionX: node.position.x ?? 0,
+        PositionY: node.position.y ?? 0,
+      }),
     });
-  }, [userSetupId]);
+    flowControl.updateNode({ ...oldNode, position: { x: node.position.x, y: node.position.y } });
+  };
 
-  const handleRegisterInput = useCallback(
-    async ({ name, value, gamepadId }: { name: string; value: number; gamepadId: string }) => {
-      if (!userSetupId) return;
-      await registerInputNode({ userSetupId, name, value, gamepadId });
-      setFlow(await fetchFlow(userSetupId));
-    },
-    [userSetupId]
-  );
-
-  const handleRegisterOutput = useCallback(
-    async ({ channelName, displayName }: { channelName: string; displayName: string }) => {
-      if (!userSetupId) return;
-      await registerOutputNode({ userSetupId, channelName, displayName });
-      setFlow(await fetchFlow(userSetupId));
-    },
-    [userSetupId]
-  );
-
-  const reactFlowNodes = flow.nodes.map((n) => ({
-    id: n.id.toString(),
-    type: n.type === "UserSetupUserChannelNode" ? "input" : n.type === "UserSetupCarChannelNode" ? "output" : "default",
-    data: { label: n.type },
-    position: { x: n.positionX ?? 100, y: n.positionY ?? 100 },
-  }));
-  const reactFlowEdges = flow.links.map((l, idx) => ({
-    id: `e${l.source}-${l.target}`,
-    source: l.source.toString(),
-    target: l.target.toString(),
-    animated: true,
-  }));
-
-  if (loading) return <div className="p-8 text-zinc-300">Lade Control Flow...</div>;
-
+  if (flowControl.isLoading)
+    return <div className="p-8 text-zinc-300">Lade Control Flow...</div>;
   return (
     <div className="flex flex-col md:flex-row gap-4 p-4 bg-zinc-950 min-h-screen">
       <div className="w-full md:w-1/4 space-y-4">
-        <GamepadViewer onRegisterInputChannelValue={handleRegisterInput} hideFlowButtons={false} />
-        <CarFunctionsView carId={router.query.carId as string} onRegisterOutput={handleRegisterOutput} hideFlowButtons={false} />
+        <GamepadViewer hideFlowButtons={false} />
+        <FunctionNodesView />
+        <CarFunctionsView carId={router.query.carId as string} hideFlowButtons={false} />
       </div>
       <div className="flex-1 bg-zinc-900 rounded-lg p-2 min-h-[600px]">
-        <ReactFlow
-          nodes={reactFlowNodes}
-          edges={reactFlowEdges}
-          fitView
-        >
-          <MiniMap />
-          <Controls />
-          <Background />
-        </ReactFlow>
+        <ReactFlowProvider>
+          <ReactFlow
+            nodes={flowControl.nodes.map(controlNodeToReact)}
+            edges={flowControl.edges.map(controlEdgeToReact)}
+            fitView
+            onNodeDrag={onNodeDrag}
+            onNodeDragStop={onNodeDragStop}
+            onConnect={onConnect}
+            onEdgeClick={onEdgeClick}
+            nodeTypes={nodeTypes}
+            draggable
+          >
+            <MiniMap />
+            <Controls />
+            <Background />
+          </ReactFlow>
+        </ReactFlowProvider>
       </div>
     </div>
   );

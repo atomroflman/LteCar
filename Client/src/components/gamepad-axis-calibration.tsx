@@ -21,7 +21,6 @@ export default function GamepadAxisCalibration(props: {
                     min={min}
                     max={max}
                     step={step}
-                    defaultValue={4}
                     value={decimals}
                     onChange={e =>
                         props.onVauleChange?.({...props.value, accuracy: parseInt(e.target.value)})
