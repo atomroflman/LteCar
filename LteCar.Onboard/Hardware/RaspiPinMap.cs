@@ -124,6 +124,7 @@ public static  class RaspberryPiPinMap
 
     [PinFunction(PinFunctionFlags.None)]
     public static  int? PIN_30 => null;
+    
 
     [PinFunction(PinFunctionFlags.GPIO)]
     public static  int PIN_31 => 6;

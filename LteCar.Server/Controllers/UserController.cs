@@ -14,7 +14,7 @@ namespace LteCar.Server.Controllers
     {
         private readonly LteCarContext DbContext;
 
-        public UserController(LteCarContext context)
+        public UserController(LteCarContext context) : base(context)
         {
             DbContext = context;
         }

@@ -1,20 +1,26 @@
 import React from "react";
+import { useControlFlowStore } from "./control-flow-store";
 
 export default function GamepadButtonView({
-  gpId,
+  dbId,
   index,
   isPressed = false,
   alreadyUsed = false,
-  hideFlowButtons,
-  onRegisterInputChannelValue
+  hideFlowButtons
 }: {
-  gpId: string;
+  dbId?: number;
   index: number;
   isPressed?: boolean;
   alreadyUsed?: boolean;
   hideFlowButtons?: boolean;
-  onRegisterInputChannelValue?: (input: { name: string; value: number; gamepadId: string }) => void;
 }) {
+
+  const controlFlow = useControlFlowStore();
+  function onRegisterInputChannelValue() {
+    if (!controlFlow || !dbId) return;
+    controlFlow.registerInput(dbId as number);
+  }
+
   const name = `button-${index}`;
   return (
     <li className="flex items-center text-xs justify-between whitespace-nowrap">
@@ -30,7 +36,7 @@ export default function GamepadButtonView({
         <button
           className="ml-2 px-1 py-0.5 bg-blue-900 hover:bg-blue-800 text-blue-100 rounded text-[10px] border border-blue-800 transition-colors duration-150 disabled:opacity-50"
           disabled={alreadyUsed}
-          onClick={() => onRegisterInputChannelValue?.({ name, value: 0, gamepadId: gpId })}
+          onClick={() => onRegisterInputChannelValue()}
         >
           +Flow
         </button>

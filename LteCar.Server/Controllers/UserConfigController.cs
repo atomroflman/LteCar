@@ -13,31 +13,36 @@ namespace LteCar.Server.Controllers
     {
         private readonly LteCarContext _context;
 
-        public UserConfigController(LteCarContext context)
+        public UserConfigController(LteCarContext context) : base(context)
         {
             _context = context;
         }
 
         [HttpGet("setup/{carId}")]
-        public async Task<IActionResult> GetSetup(int carId)
+        public async Task<IActionResult> GetSetup(string carId)
         {
-            var sessionId = ((ClaimsIdentity)this.User.Identity).Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
-            var user = await _context.Users
-                .FirstOrDefaultAsync(u => u.SessionToken == sessionId);
+            var user = await GetCurrentUserAsync();
             if (user == null)
                 return Unauthorized("User not found");
 
+            var car = await _context.Cars
+                .FirstOrDefaultAsync(c => c.CarId == carId);
+            if (car == null)
+                return NotFound("Car not found");
             var setup = await _context.UserSetups
-                .FirstOrDefaultAsync(u => u.UserId == user.Id && u.CarId == carId);
+                .FirstOrDefaultAsync(u => u.UserId == user.Id && u.Car.CarId == carId);
 
             if (setup == null)
             {
                 setup = new UserCarSetup
                 {
-                    CarId = carId,
+                    CarId = car.Id,
                     UserId = user.Id
                 };
+                _context.UserSetups.Add(setup);
+                _context.SaveChanges();
             }
+
             return Ok(setup);
         }
 
@@ -53,8 +58,7 @@ namespace LteCar.Server.Controllers
         [HttpGet("gamepads")]
         public async Task<IActionResult> GetUserGamepads()
         {
-            var sessionId = ((ClaimsIdentity)this.User.Identity).Claims.FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
-            var user = await _context.Users.FirstOrDefaultAsync(u => u.SessionToken == sessionId);
+            var user = await GetCurrentUserAsync();
             if (user == null)
                 return Unauthorized("User not found");
             var gamepads = _context.Set<UserChannelDevice>()
@@ -173,11 +177,37 @@ namespace LteCar.Server.Controllers
             }
         }
 
+        [HttpPost("gamepad-axis-accuracy")]
+        public async Task<IActionResult> SetGamepadAxisAccuracy([FromBody] SetGamepadAxisAccuracyRequest req)
+        {
+            var user = await GetCurrentUserAsync();
+            if (user == null)
+                return Unauthorized("User not found");
+            var channel = _context.Set<UserChannel>()
+                .FirstOrDefault(c => c.ChannelId == req.ChannelIndex
+                    && c.UserChannelDevice.UserId == user.Id
+                    && c.IsAxis
+                    && c.UserChannelDevice.DeviceName == req.GamepadId);
+            if (channel == null)
+                return NotFound("Channel not found");
+            channel.Accuracy = req.Accuracy;
+            _context.SaveChanges();
+            return Ok();
+        }
+
+
         public class RegisterGamepadRequest
         {
             public string DeviceName { get; set; }
             public int Axes { get; set; }
             public int Buttons { get; set; }
         }
+    }
+
+    public class SetGamepadAxisAccuracyRequest
+    {
+        public string GamepadId { get; set; }
+        public int ChannelIndex { get; set; }
+        public int Accuracy { get; set; }
     }
 }

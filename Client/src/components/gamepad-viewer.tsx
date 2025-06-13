@@ -25,6 +25,9 @@ export default function GamepadViewer({ onUpdate, onRegisterInputChannelValue, h
     gamepadStore.loadInitialGamepads();
     gamepadStore.pollGamepads();
     gamepadStore.setPollFps(fps);
+    gamepadStore.setOnChannelChange((gp, type, i, newVal, dbId) => {
+      controlFlow.handleInputUpdate(dbId, newVal);
+    });
     return () => {
       gamepadStore.stopPolling();
     };
@@ -102,13 +105,12 @@ export default function GamepadViewer({ onUpdate, onRegisterInputChannelValue, h
                       return (
                         <GamepadAxisView
                           key={i}
-                          gpId={String(gp.id)}
                           index={i}
                           value={value}
                           accuracy={accuracy}
                           alreadyUsed={alreadyUsed}
                           hideFlowButtons={hideFlowButtons}
-                          onRegisterInputChannelValue={onRegisterInputChannelValue}
+                          dbId={axis.id}
                         />
                       );
                     })}
@@ -128,12 +130,11 @@ export default function GamepadViewer({ onUpdate, onRegisterInputChannelValue, h
                       return (
                         <GamepadButtonView
                           key={i}
-                          gpId={String(gp.id)}
                           index={i}
                           isPressed={isPressed}
                           alreadyUsed={alreadyUsed}
                           hideFlowButtons={hideFlowButtons}
-                          onRegisterInputChannelValue={onRegisterInputChannelValue}
+                          dbId={btn.id}
                         />
                       );
                     })}

@@ -1,4 +1,5 @@
 using System.Text.Json;
+using LteCar.Server.Data;
 using LteCar.Server.Services;
 using LteCar.Shared.HubClients;
 using Microsoft.AspNetCore.SignalR;
@@ -45,11 +46,19 @@ public class CarControlHub : Hub<ICarControlClient>, ICarControlServer
         await Clients.Client(carClientId).ReleaseCarControl(sessionId);
     }
     
-    public async Task UpdateChannel(string carId, string sessionId, string channelId, decimal value)
+    public async Task UpdateChannel(string carId, string sessionId, int channelId, decimal value)
     {
         Logger.LogDebug($"Invoked: UpdateChannel({carId}, {sessionId}, {channelId}, {value})");
         if (!_connectionMap.TryGetByKey(carId, out var carClientId))
             return;
-        await Clients.Client(carClientId).UpdateChannel(sessionId, channelId, value);
+        // TODO: Cache einbauen
+        var channelName = Context.GetHttpContext().RequestServices.GetRequiredService<LteCarContext>()
+            .Set<CarChannel>().FirstOrDefault(e => e.Id == channelId)?.ChannelName;
+        if (channelName == null)
+        {
+            Logger.LogError($"Channel ID: {channelId} unknown");
+            return;
+        }
+        await Clients.Client(carClientId).UpdateChannel(sessionId, channelName, value);
     }
 }

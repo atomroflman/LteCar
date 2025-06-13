@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using LteCar.Server.Data.EntityMapping;
 
 namespace LteCar.Server.Data
 {
@@ -12,5 +13,6 @@ namespace LteCar.Server.Data
         public bool RequiresAxis { get; set; }
         public int CarId { get; set; }
         public Car Car { get; set; }
+        public ICollection<UserSetupCarChannelNode> SetupNodes { get; set; }
     }
 }

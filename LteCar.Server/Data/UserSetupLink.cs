@@ -7,4 +7,6 @@ public class UserSetupLink : EntityBase
     
     public int UserSetupToNodeId { get; set; }
     public UserSetupFlowNodeBase UserSetupToNode { get; set; } = null!;
+    public string? SourcePort { get; set; }
+    public string? TargetPort { get; set; }
 }
