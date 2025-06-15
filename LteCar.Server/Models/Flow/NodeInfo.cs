@@ -11,6 +11,7 @@ namespace LteCar.Server.Controllers
             public string Label { get; set; } = string.Empty;
             public object? Metadata { get; set; }
             public string NodeTypeName { get; set; }
+            public Dictionary<string, string?>? Params { get; set; }
         }
     }
 }

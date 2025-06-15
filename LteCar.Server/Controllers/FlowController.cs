@@ -17,6 +17,7 @@ public partial class FlowController : ControllerBase
     public async Task<IActionResult> GetFlow(int userSetupId)
     {
         var flowNodes = await _context.Set<UserSetupFlowNodeBase>()
+            .Include(n => (n as UserSetupFunctionNode).Parameters)
             .Where(n => n.UserSetupId == userSetupId)
             .ToListAsync();
         if (flowNodes == null || !flowNodes.Any())
@@ -151,7 +152,12 @@ public partial class FlowController : ControllerBase
                 break;
             case UserSetupFunctionNode fn:
                 result.Label = fn.SetupFunctionName;
-                result.Metadata = new { functionName = fn.SetupFunctionName };
+                result.Metadata = new
+                {
+                    functionName = fn.SetupFunctionName
+                };                
+                result.Params = fn.Parameters
+                    .ToDictionary(p => p.ParameterName, p => p.ParameterValue);
                 break;
             default:
                 return null;

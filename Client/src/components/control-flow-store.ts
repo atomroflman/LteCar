@@ -6,7 +6,7 @@ export type ControlFlowNode = {
   nodeId: number;
   representingId?: number;
   label: string;
-  metadata: any;
+  metadata?: FunctionMetadata;
   type: string;
   data: any;
   position: { x: number; y: number };
@@ -15,6 +15,10 @@ export type ControlFlowNode = {
   params: Record<string, any>; // explizit als Objekt
   inputPorts?: number; // Anzahl Eingänge
   outputPorts?: number; // Anzahl Ausgänge
+};
+
+export type FunctionMetadata = {
+  functionName: string;
 };
 
 export type ControlFlowEdge = {
@@ -39,6 +43,7 @@ export type ControlFlowState = {
   setNodes: (nodes: ControlFlowNode[]) => void;
   setEdges: (edges: ControlFlowEdge[]) => void;
   updateNode: (node: ControlFlowNode) => void;
+  updateNodeParams(nodeId: number, params: Record<string, any>): Promise<void>;
   reset: () => void;
   registerInput: (dbInputId: number ) => void;
   registerOutput: (dbOutputId: number) => void;
@@ -46,13 +51,13 @@ export type ControlFlowState = {
   deleteNode: (nodeId: number) => void;
   sendOutput: (channelId: number, value: number) => Promise<void>;
   startConnection: (carId: string, carKey: string | undefined) => Promise<void>;
-  stopConnection: (carId: string, session: string | undefined) => Promise<void>;
+  stopConnection: () => Promise<void>;
   handleInputUpdate: (inputDbId: number, value: number) => void;
   connection: any;
   carId: string | undefined;
   userSetupId: number | undefined;
   setConnection: (connection: any) => void;
-  setCarId: (carId: string) => void;
+  setCarId: (carId: string | undefined) => void;
   setCarSession: (carSession: string) => void;
   carSession: string | undefined;
 };
@@ -77,6 +82,8 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
       if (!flowRes.ok)      
         throw new Error('Loading flow failed...');
       const flowData = await flowRes.json() as {nodes: ControlFlowNode[], edges: ControlFlowEdge[]};
+      console.log("Loaded flow data", flowData);
+      
       set({
         nodes: flowData.nodes || [],
         edges: flowData.edges || [],
@@ -99,11 +106,13 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
     set(state => ({
       nodes: state.nodes.map(n => n.nodeId === node.nodeId ? { ...n, ...node, params: { ...node.params ?? n.params } } : n),
     }));
-    if (node.params) {
-      await fetch(`/api/flow/${node.nodeId}/params`, {
+  },
+  async updateNodeParams(nodeId: number, params: Record<string, any>) {
+    if (params) {
+      await fetch(`/api/flow/${nodeId}/params`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(node.params),
+        body: JSON.stringify(params),
       });
     }
   },
@@ -294,12 +303,12 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
     const carSession = await connection.invoke("AquireCarControl", carId, carKey);
     set({ connection, carId, carSession });
   },
-  async stopConnection(carId: string, session: string | undefined) {
+  async stopConnection() {
     const { connection } = get();
-    if (connection && carId && session) {
-      await connection.invoke("ReleaseCarControl", carId, session)
+    if (connection && connection.carId && connection.session) {
+      await connection.invoke("ReleaseCarControl", connection.carId, connection.session)
       connection.stop();
-      set({ connection: undefined, carId: undefined, carSession: undefined });
+      set({ connection: undefined, carSession: undefined });
     } 
   },  
   handleInputUpdate(inputDbId: number, value: number) {
@@ -401,6 +410,6 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
   connection: undefined,
   carSession: undefined,
   setConnection: (connection: any) => set({ connection }),
-  setCarId: (carId: string) => set({ carId }),
+  setCarId: (carId: string | undefined) => set({ carId }),
   setCarSession: (carSession: string) => set({ carSession }),
 }));
