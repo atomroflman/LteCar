@@ -43,7 +43,12 @@ namespace LteCar.Server.Controllers
                 _context.SaveChanges();
             }
 
-            return Ok(setup);
+            return Ok(new
+            {
+                id = setup.Id,
+                carId = car.CarId,
+                userId = user.Id,
+            });
         }
 
         // Gibt alle verfügbaren Filtertypen zurück

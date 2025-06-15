@@ -20,7 +20,7 @@ export default function CarControlFlowPage() {
       id: input.nodeId.toString(),
       data: {
         ...input,
-        label: `${input.nodeId}: ${input.label} (${flowControl.nodeLatestValues[input.nodeId]?.toFixed(6)})`,
+        label: `${input.nodeId}: ${input.label} (${(typeof(flowControl.nodeLatestValues[input.nodeId]) == "number" ? flowControl.nodeLatestValues[input.nodeId] : 0).toFixed(6)})`,
       },
       position: input.position,
       type: "custom"

@@ -2,7 +2,6 @@ import React from "react";
 import { Handle, Position, NodeProps } from "reactflow";
 import { filterFunctionRegistry } from "./filters/filter-function-registry";
 import { useControlFlowStore } from "./control-flow-store";
-import { stringify } from "querystring";
 
 export default function CustomFlowNode(props: NodeProps) {
   const id = props.data.nodeId;
@@ -15,9 +14,18 @@ export default function CustomFlowNode(props: NodeProps) {
 
   // Parameter-Änderung
   const handleParamChange = (key: string, value: any) => {
-    if (!data) return;
+    if (!flowControl.nodes) 
+      return;
+    console.log(props.data.nodeId, key, value,  flowControl.nodes);
+    const data = flowControl.nodes.find(n => n.nodeId == props.data.nodeId);
+    if (!data) 
+      return;
     const newParams = { ...data.params, [key]: value };
-    flowControl.updateNode({ ...data, params: newParams });
+    const updatedNode = { ...data, params: newParams };
+    flowControl.updateNodeParams(props.data.nodeId, newParams);
+    const updatedNodes = flowControl.nodes.map(n => n.nodeId === props.data.nodeId ? updatedNode : n);
+    setData(updatedNode);
+    flowControl.setNodes(updatedNodes);
   };
 
   let inputs = [] as string[];
@@ -29,7 +37,7 @@ export default function CustomFlowNode(props: NodeProps) {
     inputs.push("in");
   } else {
     if (!data?.metadata?.functionName) {
-      return (<>unddefined!</>);
+      return (<>undefined!</>);
     }
     const definition = filterFunctionRegistry[data?.metadata?.functionName as keyof typeof filterFunctionRegistry];
     if (!definition) {
@@ -37,8 +45,7 @@ export default function CustomFlowNode(props: NodeProps) {
     }
     inputs = definition.inputLabels.map(e => e);
     outputs = definition.outputLabels.map(e => e);
-    params = definition.params.map(p => ({ name: p.name, value: data?.params ? data?.params[p.name] || p.default : p.default }));
-    
+    params = definition.params.map(p => ({ name: p.name, value: (data.params ?? [])[p.name] || p.default }));
     // for (let i = 0; i < (data?.outputPorts || 1); i++) {
     //   (outputHandles as React.ReactNode[]).push(
     //     <div key={"outwrap" + i} style={{ position: "absolute", left: `${10 + i * 30}px`, bottom: "-8px", display: "flex", flexDirection: "column", alignItems: "center" }}>
@@ -98,10 +105,10 @@ export default function CustomFlowNode(props: NodeProps) {
       {params && (
         <div className="flex flex-col gap-1 mt-1">
           {params.map((e) => (
-            <div key={e.name} className="flex gap-1 items-center">
-              <span className="text-zinc-400 text-xs">{e.name}:</span>
+            <div key={e.name} className="flex flex-row items-center justify-between gap-1">
+              <span className="text-zinc-400 text-xs text-left flex-1">{e.name}:</span>
               <input
-                className="bg-zinc-900 border border-zinc-700 rounded px-1 text-xs w-16"
+                className="bg-zinc-900 border border-zinc-700 rounded px-1 text-xs w-16 text-right"
                 value={e.value}
                 onChange={event => handleParamChange(e.name, event.target.value)}
               />
