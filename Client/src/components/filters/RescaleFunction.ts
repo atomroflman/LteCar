@@ -14,12 +14,12 @@ export class RescaleFunction implements FilterFunctionDef<readonly ["input"]> {
 
   apply(inputs: InputMap<readonly ["input"]>, params: Record<string, any>) {
     const input = inputs.input ?? 0;
-    const inMin = typeof params?.inMin === 'number' ? params.inMin : -1;
-    const inMax = typeof params?.inMax === 'number' ? params.inMax : 1;
-    const outMin = typeof params?.outMin === 'number' ? params.outMin : 0;
-    const outMax = typeof params?.outMax === 'number' ? params.outMax : 1;
+    const inMin = params.inMin ?? -1;
+    const inMax = params.inMax ?? 1; 
+    const outMin = params.outMin ?? 0; 
+    const outMax = params.outMax ?? 1;
 
-    if (inMax === inMin) return [outMin]; // Vermeidung von Division durch 0
+    if (inMax === inMin) return [outMin];
 
     const ratio = (input - inMin) / (inMax - inMin);
     const scaled = outMin + ratio * (outMax - outMin);

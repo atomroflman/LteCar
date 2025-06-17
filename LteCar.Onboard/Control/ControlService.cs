@@ -34,9 +34,10 @@ public class ControlService : ICarControlClient, IHubConnectionObserver
         ServerConnectionService = serverConnectionService;
     }
 
-    public void Initialize() 
+    public void Initialize()
     {
         Control.Initialize();
+        Control.ReleaseControl();
     }
 
     public async Task ConnectToServer()
@@ -49,7 +50,7 @@ public class ControlService : ICarControlClient, IHubConnectionObserver
         var carId = Configuration.GetValue<string>("carId");
         await _server.RegisterForControl(carId);
         Logger.LogInformation("Connected to server.");
-        TelemetryService.UpdateTelemetry("Control Server", "Connected");
+        await TelemetryService.UpdateTelemetry("Control Server", "Connected");
     }
 
     public async Task TestControlsAsync() {

@@ -19,7 +19,11 @@ export default function GamepadAxisView({
 }) {
   const controlFlow = useControlFlowStore();
   function onRegisterInputChannelValue() {
-    if (!controlFlow || !dbId) return;
+    if (!controlFlow || !dbId) 
+    {
+      console.error("Control flow or dbId is not defined", controlFlow, dbId);
+      return;
+    } 
     controlFlow.registerInput(dbId as number);
   }
 
