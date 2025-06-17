@@ -23,13 +23,8 @@
     }
   },
   "telemetryChannels": {
-    "speed": {
-      "telemetryType": "SpeedSensor",
-      "physicalGpio": 40
-    },
-    "temperature": {
-      "telemetryType": "TempSensor",
-      "physicalGpio": 41
+    "lifetime": {
+      "telemetryType": "LteCar.Onboard.Telemetry.ApplicationLifetimeReader"
     }
   }
 }
