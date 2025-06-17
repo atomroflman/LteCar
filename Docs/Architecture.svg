@@ -1,0 +1,68 @@
+<!--
+  Architekturdiagramm für das LteCar-System
+  Fokus: Anwendungen und deren Kommunikation (max. 1 Knick pro Pfeil, rechtwinklig)
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="600" viewBox="0 0 1100 600">
+  <style>
+    .app { fill: #e3eaff; stroke: #3b82f6; stroke-width: 2; }
+    .label { font: bold 16px sans-serif; fill: #1e293b; }
+    .arrow { stroke: #64748b; stroke-width: 2; marker-end: url(#arrowhead); fill: none; }
+    .desc { font: 13px sans-serif; fill: #334155; }
+  </style>
+  <defs>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="10" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#64748b" />
+    </marker>
+  </defs>
+
+  <!-- Anwendungen -->
+  <!-- Client (Next.js) links oben -->
+  <rect class="app" x="100" y="100" width="200" height="80" rx="15" />
+  <text class="label" x="200" y="130" text-anchor="middle">Client</text>
+  <text class="desc" x="200" y="150" text-anchor="middle">(Next.js, React)</text>
+
+  <!-- Server (ASP.NET Core) zentral oben -->
+  <rect class="app" x="450" y="100" width="200" height="80" rx="15" />
+  <text class="label" x="550" y="130" text-anchor="middle">Server</text>
+  <text class="desc" x="550" y="150" text-anchor="middle">(ASP.NET Core, SignalR)</text>
+
+  <!-- Onboard (Car) rechts oben -->
+  <rect class="app" x="800" y="100" width="200" height="80" rx="15" />
+  <text class="label" x="900" y="130" text-anchor="middle">Onboard</text>
+  <text class="desc" x="900" y="150" text-anchor="middle">(Hardware, .NET, SignalR)</text>
+
+  <!-- Janus (Video Gateway) mittig unten -->
+  <rect class="app" x="450" y="400" width="200" height="80" rx="15" />
+  <text class="label" x="550" y="430" text-anchor="middle">Janus</text>
+  <text class="desc" x="550" y="450" text-anchor="middle">(Video Gateway)</text>
+
+  <!-- Pfeile und Datenströme (max. 1 Knick, rechtwinklig) -->
+  <!-- Client → Server: Auth, Steuerung, UI-Anfragen -->
+  <line class="arrow" x1="300" y1="140" x2="450" y2="140" />
+  <text class="desc" x="375" y="130" text-anchor="middle">Auth, Steuerung</text>
+
+  <!-- Server → Client: Telemetrie, Status -->
+  <line class="arrow" x1="450" y1="160" x2="300" y2="160" />
+  <text class="desc" x="375" y="180" text-anchor="middle">Telemetrie, Status</text>
+
+  <!-- Server → Onboard: Steuerung, Video-Anfrage -->
+  <line class="arrow" x1="650" y1="140" x2="800" y2="140" />
+  <text class="desc" x="725" y="130" text-anchor="middle">Auth, Steuerung</text>
+
+  <!-- Onboard → Server: Telemetrie -->
+  <line class="arrow" x1="800" y1="160" x2="650" y2="160" />
+  <text class="desc" x="725" y="180" text-anchor="middle">Telemetrie</text>
+
+  <!-- Onboard → Janus: Video-Stream (horizontal, dann runter) -->
+  <polyline class="arrow" points="900,180 900,440 650,440" />
+  <text class="desc" x="800" y="430" text-anchor="middle">Video-Stream</text>
+
+  <!-- Janus → Client: Video (horizontal, dann hoch) -->
+  <polyline class="arrow" points="450,440 200,440 200,180" />
+  <text class="desc" x="300" y="430" text-anchor="middle">Video-Stream</text>
+
+  <!-- Server → Janus: kontrolliert (mittig) -->
+  <line class="arrow" x1="550" y1="180" x2="550" y2="400" />
+  <text class="desc" x="570" y="300" text-anchor="start">kontrolliert</text>
+
+</svg>
