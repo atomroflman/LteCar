@@ -45,8 +45,12 @@ builder.Services.AddAuthentication("cookie")
 
 var app = builder.Build();
 var configuration = app.Configuration;
-var dbContext = app.Services.GetRequiredService<LteCarContext>();
-dbContext.Database.Migrate();
+using (var scope = app.Services.CreateScope())
+{
+    var dbContext = scope.ServiceProvider.GetRequiredService<LteCarContext>();
+    dbContext.Database.EnsureCreated();
+    dbContext.Database.Migrate();
+}
 
 var logger = app.Services.GetRequiredService<ILogger<Program>>();
 

@@ -70,6 +70,7 @@ var connectionService = serviceProvider.GetRequiredService<ServerConnectionServi
 var carControlService = serviceProvider.GetRequiredService<ControlService>();
 logger.LogInformation("Initializing car control...");
 carControlService.Initialize();
+
 if (configuration.GetValue<bool>("EnableChannelTest")) 
 {
     logger.LogInformation("Running channel test...");
