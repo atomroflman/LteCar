@@ -1,4 +1,10 @@
 {
+  "pinManagers": {
+    "Pca9685": {
+      "type": "Pca9685PinManager",
+      "i2cAddress": 0
+    }
+  },
   "controlChannels": {
     "steer": {
       "physicalGpio": 32,

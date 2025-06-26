@@ -13,17 +13,20 @@ export class RescaleFunction implements FilterFunctionDef<readonly ["input"]> {
   outputLabels = ['output'];
 
   apply(inputs: InputMap<readonly ["input"]>, params: Record<string, any>) {
-    const input = inputs.input ?? 0;
-    const inMin = params.inMin ?? -1;
-    const inMax = params.inMax ?? 1; 
-    const outMin = params.outMin ?? 0; 
-    const outMax = params.outMax ?? 1;
+    // Explicitly convert all inputs and params to numbers for type safety
+    const input = Number(inputs.input ?? 0);
+    const inMin = Number(params.inMin ?? -1);
+    const inMax = Number(params.inMax ?? 1); 
+    const outMin = Number(params.outMin ?? 0); 
+    const outMax = Number(params.outMax ?? 1);
 
-    if (inMax === inMin) return [outMin];
+    if (inMax === inMin) 
+      return [outMin];
 
     const ratio = (input - inMin) / (inMax - inMin);
     const scaled = outMin + ratio * (outMax - outMin);
-
+    
+    console.log(ratio, scaled, input, inMin, inMax, outMin, outMax, (inMax - inMin));
     return [scaled];
   }
 }
