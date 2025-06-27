@@ -1,13 +1,15 @@
+using System;
 using System.Diagnostics;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace LteCar.Onboard.Hardware;
 
-public class PwmPin : BasePin
+public class PwmPin : BasePin, IPwmModule
 {
     private Process? _bash;
-    private ILogger<PwmPin> _logger;
+    private readonly ILogger<PwmPin> _logger;
+    private float _lastValue = 0;
 
     public PwmPin(int pinNumber, IServiceProvider serviceProvider) : base(pinNumber, serviceProvider)
     {
@@ -26,13 +28,19 @@ public class PwmPin : BasePin
         WriteBash("gpio pwmr 2000");
     }
 
-    public void SetPwmValue(int value)
+    public void SetPwmValue(float value)
     {
-        WriteBash($"gpio -g pwm {PinNumber} {value}");
+        if (value < 0f) value = 0f;
+        if (value > 1f) value = 1f;
+        _lastValue = value;
+        int pwmValue = (int)Math.Round(50 + value * (250 - 50)); // 50 = aus, 250 = voll an
+        WriteBash($"gpio -g pwm {PinNumber} {pwmValue}");
     }
 
+    public float GetPwmValue() => _lastValue;
+
     private void WriteBash(string cmd) {
-        _logger.LogDebug($"Writing bash {_bash?.Id}: {cmd}");
+        _logger.LogDebug($"Writing bash {{_bash?.Id}}: {cmd}");
         _bash?.StandardInput.WriteLine(cmd);
     }
 }
