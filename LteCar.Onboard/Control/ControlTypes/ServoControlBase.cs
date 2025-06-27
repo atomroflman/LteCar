@@ -26,7 +26,7 @@ public abstract class ServoControlBase : ControlTypeBase
     public override void OnControlRecived(decimal newValue)
     {
         Logger.LogDebug($"{this.GetType().Name} rec: {newValue} pwm: {ScaleRangeToPwm(newValue)}");
-        _pinInstance.SetPwmValue(ScaleRangeToPwm(newValue));
+        _pinInstance.SetPwmValue((float)ScaleRangeToPwm(newValue));
     }
 
     protected override async Task RunTestInternalAsync()
@@ -49,16 +49,13 @@ public abstract class ServoControlBase : ControlTypeBase
     }
     
     /// <summary>
-    /// Scales a value in the range of -1 to 1 to a PWM value (e.g., 1000-2000 µs).
+    /// Scales a value in the range of -1 to 1 to a normalized PWM value (0-1).
     /// </summary>
     /// <param name="scaledValue">The value to scale, in the range of -1 to 1.</param>
-    /// <param name="minPwm">The minimum PWM value (e.g., 1000).</param>
-    /// <param name="maxPwm">The maximum PWM value (e.g., 2000).</param>
-    /// <returns>The corresponding PWM value.</returns>
-    public int ScaleRangeToPwm(decimal scaledValue, decimal minPwm = 50, decimal maxPwm = 250)
+    /// <returns>The corresponding normalized PWM value (0-1).</returns>
+    public float ScaleRangeToPwm(decimal scaledValue)
     {
-        decimal midPwm = (minPwm + maxPwm) / 2;
-        decimal range = (maxPwm - minPwm) / 2;
-        return (int)Math.Round(scaledValue * range + midPwm, 0);
+        // -1 -> 0, 0 -> 0.5, 1 -> 1
+        return (float)((scaledValue + 1m) / 2m);
     }
 }
