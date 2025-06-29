@@ -5,9 +5,6 @@ using Microsoft.Extensions.Logging;
 
 namespace LteCar.Onboard.Hardware
 {
-    /// <summary>
-    /// Modul-Manager für PCA9685 PWM-Module über System.Device.I2c
-    /// </summary>
     public class Pca9685GpioModuleManager : IModuleManager, IDisposable
     {
         private readonly I2cDevice _device;
@@ -59,7 +56,6 @@ namespace LteCar.Onboard.Hardware
             _device?.Dispose();
         }
 
-        // Ermöglicht Zugriff für das Modul
         internal void SetPwm(int channel, int on, int off) => SetPwmChannel(channel, on, off);
     }
 
