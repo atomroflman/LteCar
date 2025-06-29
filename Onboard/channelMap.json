@@ -1,8 +1,11 @@
 {
   "pinManagers": {
     "Pca9685": {
-      "type": "Pca9685PinManager",
-      "i2cAddress": 0
+      "type": "Pca9685PwmExtension",
+      "options": {
+        "boardAddress": 0,
+        "i2cBus": 1
+      }
     }
   },
   "controlChannels": {

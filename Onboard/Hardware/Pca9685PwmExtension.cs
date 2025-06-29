@@ -52,9 +52,10 @@ namespace LteCar.Onboard.Hardware
 
             if (I2cBus < 0 || I2cBus > 15)
                 throw new ArgumentOutOfRangeException(nameof(I2cBus), "I2C bus number must be between 0 and 15.");
-
-            await Bash.ExecuteAsync($"i2cset -y {I2cBus} {BoardAddress} 0x00 0x01"); // MODE1 register, restart oscillator
-            await Bash.ExecuteAsync($"i2cset -y {I2cBus} {BoardAddress} 0x01 0x04"); // MODE2 register, totem pole output            
+            await Bash.ExecuteAsync($"i2cset -y {I2cBus} {BoardAddress} 0x00 0x10"); 
+            await Bash.ExecuteAsync($"i2cset -y {I2cBus} {BoardAddress} 0xFE 0x79"); 
+            await Bash.ExecuteAsync($"i2cset -y {I2cBus} {BoardAddress} 0x00 0x20");
+            Logger.LogInformation("PCA9685 initialized on I2C bus {I2cBus} at address 0x{BoardAddress:X2}", I2cBus, BoardAddress);
         }
 
         public T GetModule<T>(int address) where T : class, IModule

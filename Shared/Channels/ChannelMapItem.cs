@@ -5,7 +5,7 @@ namespace LteCar.Shared.Channels;
 public class ChannelMapItem
 {
     [JsonPropertyName("pinManager")]
-    public string PinManager { get; set; } = "default";
+    public string? PinManager { get; set; } = "default";
     [JsonPropertyName("address")]
     public int? Address { get; set; }
     [JsonPropertyName("options")]
