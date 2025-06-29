@@ -9,12 +9,12 @@ public class ThrottleControl : ServoControlBase
 {
     public IGearbox Gearbox { get; }
 
-    public ThrottleControl(ILogger<ThrottleControl> logger, PinManager pinManager, IGearbox gearbox) : base(logger, pinManager)
+    public ThrottleControl(ILogger<ThrottleControl> logger, IGearbox gearbox) : base(logger)
     {
         Gearbox = gearbox;
     }
 
-    public override string ToString() => $"Throttle@{Pin}";
+    public override string ToString() => $"Throttle@{Address}";
 
     public override void OnControlRecived(decimal newValue)
     {

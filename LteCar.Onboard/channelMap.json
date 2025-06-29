@@ -7,11 +7,12 @@
   },
   "controlChannels": {
     "steer": {
-      "physicalGpio": 32,
+      "pinManager": "Pca9685",
+      "address": 32,
       "controlType": "Steering"
     },
     "throttle": {
-      "physicalGpio": 35,
+      "address": 35,
       "controlType": "Throttle",
       "ignoreTest": true
     },

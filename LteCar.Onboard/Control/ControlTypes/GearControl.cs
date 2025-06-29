@@ -14,8 +14,6 @@ public class GearControl : ControlTypeBase
         Logger = logger;
     }
 
-    public override PinFunctionFlags RequiredFunctions => PinFunctionFlags.None;
-
     public ILogger<GearControl> Logger { get; }
 
     public override void Initialize()

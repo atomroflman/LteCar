@@ -5,24 +5,21 @@ namespace LteCar.Onboard.Control.ControlTypes;
 
 public abstract class ServoControlBase : ControlTypeBase
 {
-    PwmPin _pinInstance;
-    public override PinFunctionFlags RequiredFunctions => PinFunctionFlags.PWM;
+    IPwmModule _pinInstance;
 
     public ILogger<ServoControlBase> Logger { get; }
-    public PinManager PinManager { get; }
 
-    public ServoControlBase(ILogger<ServoControlBase> logger, PinManager pinManager)
+    public ServoControlBase(ILogger<ServoControlBase> logger) : base()
     {
         Logger = logger;
-        PinManager = pinManager;
     }
 
     public override void Initialize()
     {
         base.Initialize();
-        _pinInstance = PinManager.AllocatePin<PwmPin>(Pin!.Value);
+        _pinInstance = PinManager.GetModule<IPwmModule>(Address ?? 0);
     }
-    
+
     public override void OnControlRecived(decimal newValue)
     {
         Logger.LogDebug($"{this.GetType().Name} rec: {newValue} pwm: {ScaleRangeToPwm(newValue)}");
@@ -32,7 +29,8 @@ public abstract class ServoControlBase : ControlTypeBase
     protected override async Task RunTestInternalAsync()
     {
         const int DELAY = 1000;
-        for (int i = 0; i<3;i++) {
+        for (int i = 0; i < 3; i++)
+        {
             OnControlRecived(-1);
             await Task.Delay(DELAY);
             OnControlRecived(1);
@@ -47,7 +45,7 @@ public abstract class ServoControlBase : ControlTypeBase
     {
         OnControlRecived(0);
     }
-    
+
     /// <summary>
     /// Scales a value in the range of -1 to 1 to a normalized PWM value (0-1).
     /// </summary>
@@ -55,7 +53,6 @@ public abstract class ServoControlBase : ControlTypeBase
     /// <returns>The corresponding normalized PWM value (0-1).</returns>
     public float ScaleRangeToPwm(decimal scaledValue)
     {
-        // -1 -> 0, 0 -> 0.5, 1 -> 1
         return (float)((scaledValue + 1m) / 2m);
     }
 }

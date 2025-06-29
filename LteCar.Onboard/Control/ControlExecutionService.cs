@@ -3,6 +3,7 @@ using System.Text.Json;
 using LteCar.Onboard.Control.ControlTypes;
 using LteCar.Onboard.Hardware;
 using LteCar.Shared.Channels;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace LteCar.Onboard.Control;
@@ -31,32 +32,20 @@ public class ControlExecutionService
             var control = ServiceProvider.GetService(controlType) as ControlTypeBase;
             if (control == null)
                 throw new Exception($"ControlType '{channel.Value.ControlType}' can not be instantiated");
-            var functions = PinFunctionFlags.None;
-            if (channel.Value.PhysicalGpio != null) {
-                var prop = typeof(RaspberryPiPinMap).GetProperty($"PIN_{channel.Value.PhysicalGpio}");
-                if (prop == null)
-                {
-                    Logger.LogError($"Channel {channel.Key} does not resolve a GPIO-Pin. Skipping channel.");
-                    continue;
-                }
-                functions = prop.GetCustomAttribute<PinFunctionAttribute>()!.Functions;
-                var gpio = prop.GetValue(null) as int?;
-                if (gpio == null)
-                {
-                    Logger.LogError($"Channel {prop.Name} does not resolve a GPIO-Pin. Skipping channel.");
-                    continue;
-                }
-                control.Pin = gpio!.Value;
-            }
-            control.TestDisabled = channel.Value.IgnoreTest;
             
+            var pinManagerName = channel.Value.PinManager;
+            if (string.IsNullOrWhiteSpace(pinManagerName))
+                pinManagerName = "default"; // Default pin manager if not specified
+            var pinManager = ServiceProvider.GetRequiredService<IModuleManagerFactory>().Create(pinManagerName);
+            if (pinManager == null)
+                throw new Exception($"Pin manager '{pinManagerName}' not found in ChannelMap.");
+            control.PinManager = pinManager;
             control.Name = channel.Key;
             control.Options = channel.Value.Options;
-            if (!functions.HasFlag(control.RequiredFunctions))
-                Logger.LogWarning($"Required function: '{control.RequiredFunctions}' not met by Channel {channel.Value.PhysicalGpio} (GPIO: {control.Pin})");
+            control.TestDisabled = channel.Value.TestDisabled;
             control.Initialize();
             _controls.Add(channel.Key, control);
-            Logger.LogInformation($"Initialized Channel: {channel.Key} - {channel.Value.ControlType}@{channel.Value.PhysicalGpio} (GPIO: {control.Pin})");
+            Logger.LogInformation($"Initialized Channel: {channel.Key} - {channel.Value.ControlType}@{pinManagerName}:{channel.Value.Address}");
         }
     }
 
