@@ -17,5 +17,5 @@ public class PinManagerMapItem
     [JsonPropertyName("type")]
     public string? Type { get; set; }
     [JsonPropertyName("options")]
-    public Dictionary<string, string> Options { get; set; } = new();
+    public Dictionary<string, object> Options { get; set; } = new();
 }

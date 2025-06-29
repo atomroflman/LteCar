@@ -18,6 +18,7 @@ namespace LteCar.Onboard.Hardware
         private readonly Bash _bash;
         private readonly IServiceProvider _serviceProvider;
         private readonly ChannelMap _channelMap;
+        private readonly Dictionary<string, IModuleManager> _instances = new();
 
         /// <summary>
         /// Constructor. All dependencies are injected via DI.
@@ -28,6 +29,7 @@ namespace LteCar.Onboard.Hardware
             _bash = bash;
             _serviceProvider = serviceProvider;
             _channelMap = channelMap;
+            _instances.Add("default", new RaspberryPiGpioManager(serviceProvider));
         }
 
         /// <summary>
@@ -35,6 +37,11 @@ namespace LteCar.Onboard.Hardware
         /// </summary>
         public IModuleManager Create(string name)
         {
+            if (_instances.ContainsKey(name))
+            {
+                // Return existing instance if already created
+                return _instances[name];
+            }
             // Find pin manager config by name
             if (!_channelMap.PinManagers.TryGetValue(name, out var managerConfig))
                 throw new ArgumentException($"No pinManager named '{name}' in ChannelMap.");
@@ -78,19 +85,78 @@ namespace LteCar.Onboard.Hardware
                 var pi = type.GetProperty(kv.Key, BindingFlags.Public | BindingFlags.Instance | BindingFlags.IgnoreCase);
                 if (pi != null && pi.CanWrite)
                 {
-                    object? value = null;
-                    if (pi.PropertyType == typeof(int) && int.TryParse(kv.Value, out var intVal))
-                        value = intVal;
-                    else if (pi.PropertyType == typeof(string))
-                        value = kv.Value;
-                    else if (pi.PropertyType == typeof(bool) && bool.TryParse(kv.Value, out var boolVal))
-                        value = boolVal;
-                    // Add more type conversions as needed
-                    if (value != null)
-                        pi.SetValue(instance, value);
+                    if (kv.Value is JsonElement jsonElement && jsonElement.ValueKind == System.Text.Json.JsonValueKind.Null)
+                        continue; // Skip null values
+                    if (kv.Value is JsonElement jsonValue)
+                    {
+                        // Handle JsonElement conversion
+                        if (jsonValue.ValueKind == System.Text.Json.JsonValueKind.String)
+                        {
+                            pi.SetValue(instance, jsonValue.GetString());
+                        }
+                        else if (jsonValue.ValueKind == System.Text.Json.JsonValueKind.Number)
+                        {
+                            if (pi.PropertyType == typeof(int))
+                                pi.SetValue(instance, jsonValue.GetInt32());
+                            else if (pi.PropertyType == typeof(float))
+                                pi.SetValue(instance, jsonValue.GetSingle());
+                            else if (pi.PropertyType == typeof(double))
+                                pi.SetValue(instance, jsonValue.GetDouble());
+                            else if (pi.PropertyType == typeof(long))
+                                pi.SetValue(instance, jsonValue.GetInt64());
+                        }
+                        else if (jsonValue.ValueKind == System.Text.Json.JsonValueKind.True || jsonValue.ValueKind == System.Text.Json.JsonValueKind.False)
+                        {
+                            if (pi.PropertyType == typeof(bool))
+                                pi.SetValue(instance, jsonValue.GetBoolean());
+                        }
+                        else if (jsonValue.ValueKind == System.Text.Json.JsonValueKind.Object || jsonValue.ValueKind == System.Text.Json.JsonValueKind.Array)
+                        {
+                            // Handle complex types (e.g. dictionaries, lists)
+                            var optionsJson = jsonValue.GetRawText();
+                            var optionsType = pi.PropertyType;
+                            if (optionsType.IsGenericType && optionsType.GetGenericTypeDefinition() == typeof(Dictionary<,>))
+                            {
+                                var genericArgs = optionsType.GetGenericArguments();
+                                if (genericArgs.Length == 2 && genericArgs[0] == typeof(string))
+                                {
+                                    // Deserialize to Dictionary<string, object>        
+                                    var dictType = typeof(Dictionary<,>).MakeGenericType(genericArgs);
+                                    var dict = JsonSerializer.Deserialize(optionsJson, dictType);
+                                    pi.SetValue(instance, dict);
+                                }
+                            }
+                            else if (optionsType.IsArray)
+                            {
+                                // Deserialize to array
+                                var elementType = optionsType.GetElementType();
+                                if (elementType != null)
+                                {
+                                    var array = JsonSerializer.Deserialize(optionsJson, optionsType);
+                                    pi.SetValue(instance, array);
+                                }
+                            }
+                        }
+                    }
+                    else
+                    {
+                        // Handle primitive types directly
+                        if (pi.PropertyType == typeof(string))
+                            pi.SetValue(instance, kv.Value.ToString());
+                        else if (pi.PropertyType == typeof(int))
+                            pi.SetValue(instance, Convert.ToInt32(kv.Value));
+                        else if (pi.PropertyType == typeof(float))
+                            pi.SetValue(instance, Convert.ToSingle(kv.Value));
+                        else if (pi.PropertyType == typeof(double))
+                            pi.SetValue(instance, Convert.ToDouble(kv.Value));
+                        else if (pi.PropertyType == typeof(bool))
+                            pi.SetValue(instance, Convert.ToBoolean(kv.Value));
+                    }
                 }
             }
-            return instance as IModuleManager ?? throw new InvalidCastException($"{typeName} does not implement IModuleManager");
+            var res = instance as IModuleManager ?? throw new InvalidCastException($"{typeName} does not implement IModuleManager");
+            _instances.Add(name, res);
+            return res;
         }
     }
 }

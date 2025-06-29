@@ -16,8 +16,8 @@ public abstract class ServoControlBase : ControlTypeBase
 
     public override void Initialize()
     {
-        base.Initialize();
         _pinInstance = PinManager.GetModule<IPwmModule>(Address ?? 0);
+        base.Initialize();
     }
 
     public override void OnControlRecived(decimal newValue)

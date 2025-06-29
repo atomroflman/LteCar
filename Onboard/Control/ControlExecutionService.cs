@@ -62,6 +62,7 @@ public class ControlExecutionService
         if (!_controls.ContainsKey(channel))
         {
             Logger.LogError($"Channel not configured: {channel}");
+            return;
         }
         var control = _controls[channel];
         Logger.LogDebug($"New Channel Value: {channel}: {value} => PIN: {control}");

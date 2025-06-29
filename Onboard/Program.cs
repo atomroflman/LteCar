@@ -49,6 +49,7 @@ serviceCollection.AddSingleton<ControlExecutionService>();
 serviceCollection.AddSingleton<IGearbox, VirtualAutomaticGearbox>();
 serviceCollection.AddSingleton<TelemetryService>();
 serviceCollection.AddSingleton<Bash>();
+serviceCollection.AddSingleton<IModuleManagerFactory, ModuleManagerFactory>();
 serviceCollection.AddAllTransient(typeof(ControlTypeBase));
 serviceCollection.AddLogging(c => {
     c.AddConsole(); 
