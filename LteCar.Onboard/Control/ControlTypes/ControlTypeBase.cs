@@ -1,14 +1,17 @@
+using LteCar.Onboard.Hardware;
+
 namespace LteCar.Onboard.Control.ControlTypes;
 
 public abstract class ControlTypeBase
 {
-    public abstract PinFunctionFlags RequiredFunctions { get; }
-    public int? Pin { get; set; }
+    public int? Address { get; set; }
     public string Name { get; set; } = string.Empty;
-    public bool TestDisabled {get;set;} = false;
-    public Dictionary<string, object> Options {get;set;} = new Dictionary<string, object>();
-    public virtual void Initialize() {}
-    public async Task RunTestAsync() 
+    public bool TestDisabled { get; set; } = false;
+    public Dictionary<string, object> Options { get; set; } = new Dictionary<string, object>();
+    public IModuleManager PinManager { get; set; }
+
+    public virtual void Initialize() { }
+    public async Task RunTestAsync()
     {
         if (!TestDisabled)
             await RunTestInternalAsync();

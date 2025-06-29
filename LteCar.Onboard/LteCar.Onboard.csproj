@@ -17,6 +17,7 @@
       <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="9.0.3" />
       <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="9.0.3" />
       <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.3" />
+      <PackageReference Include="System.Device.Gpio" Version="4.0.1" />
       <PackageReference Include="TypedSignalR.Client" Version="3.6.0">
         <PrivateAssets>all</PrivateAssets>
         <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>

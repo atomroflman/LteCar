@@ -4,8 +4,10 @@ namespace LteCar.Shared.Channels;
 
 public class ChannelMapItem
 {
-    [JsonPropertyName("physicalGpio")]
-    public int? PhysicalGpio { get; set; }
+    [JsonPropertyName("pinManager")]
+    public string PinManager { get; set; } = "default";
+    [JsonPropertyName("address")]
+    public int? Address { get; set; }
     [JsonPropertyName("options")]
     public Dictionary<string, object> Options { get; set; } = new();
 }
@@ -14,8 +16,8 @@ public class ControlChannelMapItem : ChannelMapItem
 {
     [JsonPropertyName("controlType")]
     public string ControlType { get; set; }
-    [JsonPropertyName("ignoreTest")]
-    public bool IgnoreTest { get; set; }
+    [JsonPropertyName("testDisabled")]
+    public bool TestDisabled { get; set; }
 }
 
 public class TelemetryChannelMapItem : ChannelMapItem

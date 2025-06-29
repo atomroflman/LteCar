@@ -48,7 +48,6 @@ serviceCollection.AddSingleton<ControlService>();
 serviceCollection.AddSingleton<ControlExecutionService>();
 serviceCollection.AddSingleton<IGearbox, VirtualAutomaticGearbox>();
 serviceCollection.AddSingleton<TelemetryService>();
-serviceCollection.AddSingleton<PinManager>();
 serviceCollection.AddSingleton<Bash>();
 serviceCollection.AddAllTransient(typeof(ControlTypeBase));
 serviceCollection.AddLogging(c => {
