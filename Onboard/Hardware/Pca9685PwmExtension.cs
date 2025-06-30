@@ -62,6 +62,8 @@ namespace LteCar.Onboard.Hardware
         {
             if (!typeof(T).IsAssignableTo(typeof(IPwmModule)))
                 throw new InvalidOperationException($"Module type {typeof(T).Name} is not a PWM module. Only IPwmModule is supported.");
+            if (address < 0 || address > 15)
+                throw new ArgumentOutOfRangeException(nameof(address), "Address must be between 0 and 15.");
             return new Pca9685PwmExtensionPwmModule(this, address) as T;
         }
     }
