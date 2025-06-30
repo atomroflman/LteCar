@@ -23,6 +23,11 @@ public abstract class ServoControlBase : ControlTypeBase
 
     public override void OnControlRecived(decimal newValue)
     {
+        if (_pinInstance == null)
+        {
+            Logger.LogError("Pin instance is not initialized. Cannot set PWM value.");
+            return;
+        }
         Logger.LogDebug($"{this.GetType().Name} rec: {newValue} pwm: {ScaleRangeToPwm((float)newValue)}");
         _pinInstance.SetPwmValue(ScaleRangeToPwm((float)newValue));
     }

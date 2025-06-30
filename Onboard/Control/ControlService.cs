@@ -42,7 +42,6 @@ public class ControlService : ICarControlClient, IHubConnectionObserver
 
     public async Task ConnectToServer()
     {
-        // TODO: Send the setup to the server
         _connection = ServerConnectionService.ConnectToHub(HubPaths.CarControlHub);
         _connection.Register<ICarControlClient>(this);
         await _connection.StartAsync();
