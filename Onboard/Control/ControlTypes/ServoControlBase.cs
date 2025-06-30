@@ -17,13 +17,14 @@ public abstract class ServoControlBase : ControlTypeBase
     public override void Initialize()
     {
         _pinInstance = PinManager.GetModule<IPwmModule>(Address ?? 0);
+        Logger.LogDebug($"Init: {_pinInstance} Address: {Address}");
         base.Initialize();
     }
 
     public override void OnControlRecived(decimal newValue)
     {
-        Logger.LogDebug($"{this.GetType().Name} rec: {newValue} pwm: {ScaleRangeToPwm(newValue)}");
-        _pinInstance.SetPwmValue((float)ScaleRangeToPwm(newValue));
+        Logger.LogDebug($"{this.GetType().Name} rec: {newValue} pwm: {ScaleRangeToPwm((float)newValue)}");
+        _pinInstance.SetPwmValue(ScaleRangeToPwm((float)newValue));
     }
 
     protected override async Task RunTestInternalAsync()
@@ -51,8 +52,8 @@ public abstract class ServoControlBase : ControlTypeBase
     /// </summary>
     /// <param name="scaledValue">The value to scale, in the range of -1 to 1.</param>
     /// <returns>The corresponding normalized PWM value (0-1).</returns>
-    public float ScaleRangeToPwm(decimal scaledValue)
+    public float ScaleRangeToPwm(float scaledValue)
     {
-        return (float)((scaledValue + 1m) / 2m);
+        return (scaledValue + 1f) / 2f;
     }
 }
