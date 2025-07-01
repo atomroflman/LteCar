@@ -11,7 +11,7 @@
   "controlChannels": {
     "steer": {
       "pinManager": "Pca9685",
-      "address": 32,
+      "address": 15,
       "controlType": "Steering"
     },
     "throttle": {

@@ -43,6 +43,7 @@ public class ControlExecutionService
             control.Name = channel.Key;
             control.Options = channel.Value.Options;
             control.TestDisabled = channel.Value.TestDisabled;
+            control.Address = channel.Value.Address;
             control.Initialize();
             _controls.Add(channel.Key, control);
             Logger.LogInformation($"Initialized Channel: {channel.Key} - {channel.Value.ControlType}@{pinManagerName}:{channel.Value.Address}");

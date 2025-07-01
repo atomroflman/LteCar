@@ -31,19 +31,28 @@ public class RaspberryPiPwmPin : IPwmModule
         await Bash.ExecuteAsync("gpio pwm-ms");
         await Bash.ExecuteAsync("gpio pwmc 192");
         await Bash.ExecuteAsync("gpio pwmr 2000");
-        await SetPwmValue(0f); // Set initial value to 0
+        await SetPwmCyclePercentage(0f); // Set initial value to 0
     }
 
-    public async Task SetPwmValue(float value)
+    public async Task SetPwmCyclePercentage(float value)
     {
         if (!_initialized)
             await InitializePin(PinNumber);
-        if (value < 0f) value = 0f;
-        if (value > 1f) value = 1f;
+        value = Math.Clamp(value, 0f, 1f);
         _lastValue = value;
-        int pwmValue = (int)Math.Round(50 + value * (250 - 50));
+        int pwmValue = (int)Math.Round(value * 2000); // Scale to 0-2000 for 50Hz PWM
         await Bash.ExecuteAsync($"gpio -g pwm {PinNumber} {pwmValue}");
     }
 
     public Task<float> GetPwmValue() => Task.FromResult(_lastValue);
+
+    public async Task SetServoPosition(float position)
+    {
+        if (!_initialized)
+            await InitializePin(PinNumber);
+        position = Math.Clamp(position, -1f, 1f);
+        _lastValue = position;
+        int pwmValue = (int)Math.Round(50 + position * (250 - 50));
+        await Bash.ExecuteAsync($"gpio -g pwm {PinNumber} {pwmValue}");
+    }
 }
