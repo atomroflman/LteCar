@@ -51,6 +51,8 @@ serviceCollection.AddSingleton<TelemetryService>();
 serviceCollection.AddSingleton<Bash>();
 serviceCollection.AddSingleton<IModuleManagerFactory, ModuleManagerFactory>();
 serviceCollection.AddAllTransient(typeof(ControlTypeBase));
+serviceCollection.AddAllTransient(typeof(IPwmModule));
+serviceCollection.AddAllTransient(typeof(IGpioModule));
 serviceCollection.AddLogging(c => {
     c.AddConsole(); 
     c.AddConfiguration(configuration.GetSection("Logging"));
