@@ -2,6 +2,7 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   /* config options here */
+  distDir: 'out', // Ordnername für den Build
   reactStrictMode: true,
   output: 'standalone',
   async rewrites() {
