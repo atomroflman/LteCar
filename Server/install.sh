@@ -18,8 +18,9 @@ apt install -y nodejs npm
 
 cd "$SCRIPT_DIR/../Client"
 npm i
-mkdir -p "$SCRIPT_DIR/../Client/out"
 npm run build
+echo "nmp build completed"
+ls "$SCRIPT_DIR/../Client/.next"
 #cp -r ./out/* ../LteCar.Server/wwwroot
 
 # build server
