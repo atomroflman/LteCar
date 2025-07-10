@@ -19,7 +19,7 @@ apt install -y nodejs npm
 cd "$SCRIPT_DIR/../Client"
 npm i
 mkdir -p "$SCRIPT_DIR/../Client/out"
-npm run build -o "$SCRIPT_DIR/../Client/out"
+npm run build
 #cp -r ./out/* ../LteCar.Server/wwwroot
 
 # build server
