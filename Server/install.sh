@@ -29,10 +29,11 @@ read -p "Do you want to install the .NET and Node applications as services? (y/n
 if [[ "$install_service" =~ ^[Yy]$ ]]; then
     # .NET Service
     DOTNET_SERVICE_NAME=LteCarServer
-    echo "Installing $DOTNET_SERVICE_NAME as a service..."
-    echo "Dotnet executable: $(dirname "$0")/bin/Release/net8.0/LteCar.Server"
+    echo "Installing '$DOTNET_SERVICE_NAME' as a service..."
     DOTNET_SCRIPT_PATH="$(dirname "$0")/bin/Release/net8.0/LteCar.Server"
+    echo "Dotnet executable: '$DOTNET_SCRIPT_PATH'"
     DOTNET_SERVICE_FILE=/etc/systemd/system/$DOTNET_SERVICE_NAME.service
+    echo "Service file will be created at: '$DOTNET_SERVICE_FILE'"
 
     echo "Creating systemd service: $DOTNET_SERVICE_NAME"
     if [ ! -f "$DOTNET_SCRIPT_PATH" ]; then
@@ -56,8 +57,11 @@ EOF
 
     # Node Service
     NODE_SERVICE_NAME=LteCarClient
+    echo "Installing '$NODE_SERVICE_NAME' as a service..."
     NODE_SCRIPT_PATH="$(dirname \"$0\")/../Client/out"
+    echo "Node script path: '$NODE_SCRIPT_PATH'"
     NODE_SERVICE_FILE=/etc/systemd/system/$NODE_SERVICE_NAME.service
+    echo "Service file will be created at: '$NODE_SERVICE_FILE'"
 
     if [ ! -f "$NODE_SCRIPT_PATH" ]; then
         echo "Error: $NODE_SCRIPT_PATH does not exist!"
