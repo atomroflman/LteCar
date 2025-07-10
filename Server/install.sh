@@ -1,6 +1,7 @@
 #!/bin/bash
 
 # Set current directory to the directory where the script is located
+echo "changing directory to script location... ($(dirname "$0"))"
 cd "$(dirname "$0")"
 bash ./bash/install-janus.sh
 
@@ -28,6 +29,8 @@ read -p "Do you want to install the .NET and Node applications as services? (y/n
 if [[ "$install_service" =~ ^[Yy]$ ]]; then
     # .NET Service
     DOTNET_SERVICE_NAME=LteCarServer
+    echo "Installing $DOTNET_SERVICE_NAME as a service..."
+    echo "Dotnet executable: $(dirname "$0")/bin/Release/net8.0/LteCar.Server"
     DOTNET_SCRIPT_PATH="$(dirname "$0")/bin/Release/net8.0/LteCar.Server"
     DOTNET_SERVICE_FILE=/etc/systemd/system/$DOTNET_SERVICE_NAME.service
 
