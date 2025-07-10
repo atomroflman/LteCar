@@ -16,9 +16,9 @@ source ~/.bashrc
 apt install -y nodejs npm
 # build client
 
-cd ../Client
+cd "$SCRIPT_DIR/../Client"
 npm i
-npm run build
+npm run build -o "$SCRIPT_DIR/../Client/out"
 #cp -r ./out/* ../LteCar.Server/wwwroot
 
 # build server
