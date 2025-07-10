@@ -16,4 +16,4 @@ else
 fi
 
 bash pi-install-base.sh
-bash ./LteCar.Server/install.sh
+bash ./Server/install.sh
