@@ -50,9 +50,10 @@ Description=LteCar .NET Server
 After=network.target
 
 [Service]
-ExecStart=/usr/bin/dotnet $DOTNET_SCRIPT_PATH
+ExecStart=$DOTNET_SCRIPT_PATH
 Restart=on-failure
 User=root
+WorkingDirectory=$SCRIPT_DIR
 
 [Install]
 WantedBy=multi-user.target
