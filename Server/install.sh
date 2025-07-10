@@ -1,8 +1,9 @@
 #!/bin/bash
 
 # Set current directory to the directory where the script is located
-echo "changing directory to script location... ($(dirname "$0"))"
-cd "$(dirname "$0")"
+SCRIPT_DIR="$(realpath "$(dirname "$0")")"
+echo "changing directory to script location... ($SCRIPT_DIR)"
+cd "$SCRIPT_DIR"
 bash ./bash/install-janus.sh
 
 curl -sSL https://dot.net/v1/dotnet-install.sh >> ./bash/dotnet-install.sh
@@ -21,7 +22,7 @@ npm run build
 #cp -r ./out/* ../LteCar.Server/wwwroot
 
 # build server
-cd "$(dirname "$0")"
+cd "$SCRIPT_DIR"
 dotnet build -c=Release
 cp -R ./wwwroot/* ./bin/Release/net8.0/wwwroot
 
@@ -30,7 +31,7 @@ if [[ "$install_service" =~ ^[Yy]$ ]]; then
     # .NET Service
     DOTNET_SERVICE_NAME=LteCarServer
     echo "Installing '$DOTNET_SERVICE_NAME' as a service..."
-    DOTNET_SCRIPT_PATH="$(dirname "$0")/bin/Release/net8.0/LteCar.Server"
+    DOTNET_SCRIPT_PATH="$SCRIPT_DIR/bin/Release/net8.0/LteCar.Server"
     echo "Dotnet executable: '$DOTNET_SCRIPT_PATH'"
     DOTNET_SERVICE_FILE=/etc/systemd/system/$DOTNET_SERVICE_NAME.service
     echo "Service file will be created at: '$DOTNET_SERVICE_FILE'"
@@ -58,7 +59,7 @@ EOF
     # Node Service
     NODE_SERVICE_NAME=LteCarClient
     echo "Installing '$NODE_SERVICE_NAME' as a service..."
-    NODE_SCRIPT_PATH="$(dirname \"$0\")/../Client/out"
+    NODE_SCRIPT_PATH="$SCRIPT_DIR/../Client/out"
     echo "Node script path: '$NODE_SCRIPT_PATH'"
     NODE_SERVICE_FILE=/etc/systemd/system/$NODE_SERVICE_NAME.service
     echo "Service file will be created at: '$NODE_SERVICE_FILE'"
