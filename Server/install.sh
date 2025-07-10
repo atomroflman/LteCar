@@ -60,7 +60,7 @@ EOF
     # Node Service
     NODE_SERVICE_NAME=LteCarClient
     echo "Installing '$NODE_SERVICE_NAME' as a service..."
-    NODE_SCRIPT_PATH="$SCRIPT_DIR/../Client/out"
+    NODE_SCRIPT_PATH="$SCRIPT_DIR/../Client/.next/standalone/server.js"
     echo "Node script path: '$NODE_SCRIPT_PATH'"
     NODE_SERVICE_FILE=/etc/systemd/system/$NODE_SERVICE_NAME.service
     echo "Service file will be created at: '$NODE_SERVICE_FILE'"
