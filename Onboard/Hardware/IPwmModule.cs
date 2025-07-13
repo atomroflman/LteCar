@@ -20,5 +20,14 @@ namespace LteCar.Onboard.Hardware
         /// <param name="position">The position to set, typically between -1 and 1.</param>
         /// <returns>A task representing the asynchronous operation.</returns>
         Task SetServoPosition(float position);
+
+        /// <summary>
+        /// Sets the pulse width in milliseconds for a PWM channel.
+        /// The period is determined by the frequency (e.g., 20ms at 50Hz).
+        /// </summary>
+        /// <param name="pulseWidthMs">Pulse width in milliseconds (e.g., 1.5 for 1.5ms)</param>
+        /// <returns>A task representing the asynchronous operation.</returns>
+        /// <exception cref="ArgumentOutOfRangeException">Thrown if the pulse width is out of range.</exception>
+        public Task SetPulseWidthMilliseconds(float pulseWidthMs);
     }
 }

@@ -71,6 +71,7 @@ configService.OnConfigurationChanged += () =>
 var videoStreamService = serviceProvider.GetRequiredService<VideoStreamService>();
 var connectionService = serviceProvider.GetRequiredService<ServerConnectionService>();
 var carControlService = serviceProvider.GetRequiredService<ControlService>();
+
 logger.LogInformation("Initializing car control...");
 carControlService.Initialize();
 
