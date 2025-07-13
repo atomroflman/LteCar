@@ -19,7 +19,7 @@ export default function VideoStream() {
       dependencies: window.Janus.useDefaultDependencies(),
       callback: () => {
         const janus = new window.Janus({
-          server: ['http://192.168.3.149:8088/janus', 'ws://192.168.3.149:8188/'],
+          server: [`/janus`, `/janus-ws`],
           success: () => {
             let pluginHandle: any;
     

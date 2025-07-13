@@ -1,11 +1,30 @@
 import type { NextConfig } from "next";
-import { webpack } from "next/dist/compiled/webpack/webpack";
 
 const nextConfig: NextConfig = {
   /* config options here */
+  distDir: 'out', // Ordnername für den Build
   reactStrictMode: true,
-  output: 'export',
-  allowedDevOrigins: ["http://ubuntu:5000", "http://ubuntu:8188", "192.168.3.149"]
+  output: 'standalone',
+  async rewrites() {
+    return [
+      {
+        source: '/api/:path*',
+        destination: 'http://localhost:5000/api/:path*', // Proxy API-Anfragen an den .NET Webservice
+      },
+      {
+        source: '/hubs/:path*',
+        destination: 'http://localhost:5000/hubs/:path*', // Proxy WebSocket/SingalR
+      },
+      {
+        source: '/janus/:path*',
+        destination: 'http://localhost:8088/janus/:path*',
+      },
+      {
+        source: '/janus-ws/:path*',
+        destination: 'http://localhost:8188/janus/:path*',
+      },
+    ];
+  }
 };
 
 export default nextConfig;

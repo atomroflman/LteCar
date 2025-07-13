@@ -1,0 +1,73 @@
+{
+  "pinManagers": {
+    "Pca9685": {
+      "type": "Pca9685PwmExtension",
+      "options": {
+        "boardAddress": 0,
+        "i2cBus": 1
+      }
+    }
+  },
+  "controlChannels": {
+    "steer": {
+      "pinManager": "Pca9685",
+      "testDisabled": true,
+      "address": 14,
+      "controlType": "Steering"
+    },
+    "throttle": {
+      "pinManager": "Pca9685",
+      "address": 1,
+      "controlType": "Throttle",
+      "testDisabled": true
+    },
+    "gearDown": {
+      "controlType": "GearShift",
+      "testDisabled": true,
+      "options": {
+        "shiftDirection": "down"
+      }
+    },
+    "gearUp": {
+      "controlType": "GearShift",
+      "testDisabled": true,
+      "options": {
+        "shiftDirection": "up"
+      }
+    },
+    "headWarningLight": {
+      "controlType": "RotaryLight",
+      "pinManager": "Pca9685",
+      "address": 15
+    },
+    "rightTurnLight": {
+      "controlType": "PwmBlinker",
+      "pinManager": "Pca9685",
+      "address": 11,
+      "options": {
+        "blinkCycleMs": 500
+      }
+    },
+    "leftTurnLight": {
+      "controlType": "PwmBlinker",
+      "pinManager": "Pca9685",
+      "address": 10,
+      "options": {
+        "blinkCycleMs": 500
+      }
+    }
+  },
+  "telemetryChannels": {
+    "lifetime": {
+      "telemetryType": "LteCar.Onboard.Telemetry.ApplicationLifetimeReader"
+    },
+    "battery": {
+      "telemetryType": "LteCar.Onboard.Telemetry.JbdBmsTelemetryReader",
+      "readIntervalTicks": 50,
+      "options": {
+        "jbdToolPath": "~/ltecar/bin/jbdtools",
+        "channel": "A5:C2:37:55:36:B6"
+      }
+    }
+  }
+}
