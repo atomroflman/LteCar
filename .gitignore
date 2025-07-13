@@ -14,3 +14,5 @@ LteCar.Server/CarConfigStore/**/*
 LteCar.Server/wwwroot/**/*
 LteCar.Server/bash/dotnet-install.sh
 LteCar.Server/janus/janus-gateway/**/*
+/.vs/**
+LteCar.Server/configuration.db*
