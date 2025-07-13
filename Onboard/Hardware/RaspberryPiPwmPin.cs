@@ -55,4 +55,18 @@ public class RaspberryPiPwmPin : IPwmModule
         int pwmValue = (int)Math.Round(50 + position * (250 - 50));
         await Bash.ExecuteAsync($"gpio -g pwm {PinNumber} {pwmValue}");
     }
+
+    public Task SetPulseWidthMilliseconds(float pulseWidthMs)
+    {
+        if (!_initialized)
+            InitializePin(PinNumber).Wait();
+        
+        if (pulseWidthMs < 0 || pulseWidthMs > 20)
+            throw new ArgumentOutOfRangeException(nameof(pulseWidthMs), "Pulse width must be between 0 and 20 milliseconds.");
+
+        // Convert milliseconds to PWM value (2000 for 50Hz)
+        int pwmValue = (int)Math.Round((pulseWidthMs / 20) * 2000);
+        _lastValue = pwmValue / 2000f; // Update last value as percentage
+        return Bash.ExecuteAsync($"gpio -g pwm {PinNumber} {pwmValue}");        
+    }
 }

@@ -86,6 +86,7 @@ namespace LteCar.Onboard.Hardware
         // TODO: Add otions to configure servo pulse width limits
         private const int SERVO_MIN_PULSE = 105; // Minimum pulse width in microseconds
         private const int SERVO_MAX_PULSE = 550; // Maximum pulse width in microseconds
+        private const int PWM_FREQUENCY = 50; // PWM frequency in Hz
 
         private readonly Pca9685PwmExtension _extension;
         private readonly int _channel;
@@ -114,13 +115,29 @@ namespace LteCar.Onboard.Hardware
             int pwmValue = (int)(value * 4095);
             await SendPwmUpdate(pwmValue);
         }
+        
+        /// <summary>
+        /// Setzt die Pulsbreite (High-Zeit) in Millisekunden für einen PWM-Kanal.
+        /// Die Periode ist durch die Frequenz (z.B. 20ms bei 50Hz) festgelegt.
+        /// </summary>
+        /// <param name="pulseWidthMs">Pulsbreite in Millisekunden (z.B. 1.5 für 1,5ms)</param>
+        public async Task SetPulseWidthMilliseconds(float pulseWidthMs)
+        {
+            // PCA9685 arbeitet mit 4096 Steps pro Periode
+            // Periode = 1000ms / Frequenz (z.B. 20ms bei 50Hz)
+            float periodMs = 1000f / PWM_FREQUENCY;
+            if (pulseWidthMs < 0 || pulseWidthMs > periodMs)
+                throw new ArgumentOutOfRangeException(nameof(pulseWidthMs), $"Pulse width must be between 0 and {periodMs} ms.");
+            int pwmValue = (int)Math.Round(4095 * (pulseWidthMs / periodMs));
+            await SendPwmUpdate(pwmValue);
+        }
 
         private async Task SendPwmUpdate(int pwmValue)
-        {   
-             _extension.Logger?.LogDebug(
-                "Setting channel {Channel} to PWM {PWM} (Input={Input}) on Register 0x{Reg:X2}",
-                _channel, pwmValue, pwmValue, _regBase
-            );
+        {
+            _extension.Logger?.LogDebug(
+               "Setting channel {Channel} to PWM {PWM} (Input={Input}) on Register 0x{Reg:X2}",
+               _channel, pwmValue, pwmValue, _regBase
+           );
             // ON time is always 0 (start of cycle), OFF time sets pulse width
             int onLow = 0x00;
             int onHigh = 0x00;

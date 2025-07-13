@@ -53,6 +53,11 @@ public class ControlExecutionService
     public async Task RunControlTestsAsync() 
     {
         foreach (var c in _controls) {
+            if (c.Value.TestDisabled)
+            {
+                Logger.LogInformation($"Skipping test for {c.Key} as it is disabled.");
+                continue;
+            }
             Logger.LogInformation($"Testing: {c.Key}");
             await c.Value.RunTestAsync();
         }
