@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using LteCar.Shared;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
 namespace LteCar.Onboard;
@@ -13,11 +14,13 @@ public class VideoStreamService : IDisposable
     private JanusConfiguration _janusConfiguration;
     public ILogger<VideoStreamService> Logger { get; }
     public CarConfigurationService ConfigService { get; }
+    public CameraProcessParameterBuilder CameraProcessParameterBuilder { get; }
 
-    public VideoStreamService(ILogger<VideoStreamService> logger, CarConfigurationService configService)
+    public VideoStreamService(ILogger<VideoStreamService> logger, CarConfigurationService configService, CameraProcessParameterBuilder cameraProcessParameterBuilder)
     {
         Logger = logger;
         ConfigService = configService;
+        CameraProcessParameterBuilder = cameraProcessParameterBuilder;
         ConfigService.OnConfigurationChanged += () =>
         {
             var config = ConfigService.Configuration;
@@ -66,14 +69,9 @@ public class VideoStreamService : IDisposable
         }
 
         var process = new Process();
-        var parameters = $"libcamera-vid -t 0 --inline --framerate {_videoSettings.Framerate} --width {_videoSettings.Width} --height {_videoSettings.Height}"
-        + $" --codec yuv420 --nopreview -o - | gst-launch-1.0 fdsrc ! videoparse format=i420 width={_videoSettings.Width} height={_videoSettings.Height} framerate={_videoSettings.Framerate}/1" 
-        + $" ! vp8enc deadline=1 ! rtpvp8pay pt=100 ! udpsink host={_janusConfiguration.JanusServerHost} port={_janusConfiguration.JanusUdpPort}";
 
-//         var parameters = $@"libcamera-vid -t 0 --inline --width {_videoSettings.Width} --height {_videoSettings.Height} --framerate {_videoSettings.Framerate} \
-//   --codec h264 --profile high \
-//   -o - | gst-launch-1.0 -v fdsrc ! h264parse ! rtph264pay config-interval=1 pt=96 ! \
-//   udpsink host={_janusConfiguration.JanusServerHost} port={_janusConfiguration.JanusUdpPort}";
+        var parameters = CameraProcessParameterBuilder.BuildParameters(_videoSettings)
+            + CameraProcessParameterBuilder.AppendJanusConfig(_janusConfiguration);
         process.StartInfo.FileName = "bash";
         process.StartInfo.Arguments = $"-c \"{parameters}\"";
         process.StartInfo.UseShellExecute = false;
@@ -119,5 +117,43 @@ public class VideoStreamService : IDisposable
             Logger.LogInformation("Kill LibCamera Process...");
             _libcameraProcess.Kill();
         }
+    }
+}
+
+public class CameraProcessParameterBuilder {
+    IConfiguration _configuration;
+    public CameraProcessParameterBuilder(IConfiguration configuration)
+    {
+        _configuration = configuration;
+    }
+
+    public string BuildParameters(VideoSettings videoSettings) {
+        var camOption = _configuration.GetSection("CameraOptions:CameraOptions").Get<string>();
+        switch (camOption) {
+            case "libcamera-vid":
+                return BuildLibcameraParameters(videoSettings);
+            case "rpicam-vid":
+                return BuildRaspividParameters(videoSettings);
+            default:
+                throw new NotSupportedException($"Camera option '{camOption}' is not supported.");
+        }
+    }
+
+    private string BuildRaspividParameters(VideoSettings videoSettings)
+    {
+        return $"rpicam-vid -t 0 --inline --framerate {videoSettings.Framerate} --width {videoSettings.Width} --height {videoSettings.Height}"
+        + $" --codec yuv420 --nopreview -o";
+    }
+
+    private string BuildLibcameraParameters(VideoSettings videoSettings)
+    {
+        return $"libcamera-vid -t 0 --inline --framerate {videoSettings.Framerate} --width {videoSettings.Width} --height {videoSettings.Height}"
+        + $" --codec yuv420 --nopreview -o";
+    }
+
+    public string AppendJanusConfig(JanusConfiguration janusConfiguration)
+    {
+        return " - | gst-launch-1.0 fdsrc ! videoparse format=i420 width={videoSettings.Width} height={videoSettings.Height} framerate={videoSettings.Framerate}/1"
+        + $" ! vp8enc deadline=1 ! rtpvp8pay pt=100 ! udpsink host={janusConfiguration.JanusServerHost} port={janusConfiguration.JanusUdpPort}";
     }
 }
