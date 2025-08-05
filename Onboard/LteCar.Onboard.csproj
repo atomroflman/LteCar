@@ -17,6 +17,7 @@
       <PackageReference Include="Microsoft.Extensions.Configuration.Binder" Version="9.0.3" />
       <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="9.0.3" />
       <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.3" />
+      <PackageReference Include="Spectre.Console" Version="0.50.0" />
       <PackageReference Include="System.Device.Gpio" Version="4.0.1" />
       <PackageReference Include="TypedSignalR.Client" Version="3.6.0">
         <PrivateAssets>all</PrivateAssets>
@@ -39,6 +40,18 @@
       <None Update="appSettings.json">
         <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       </None>
+    </ItemGroup>
+    
+    <ItemGroup>
+      <EmbeddedResource Update="Setup/Resources.resx">
+        <Generator>ResXFileCodeGenerator</Generator>
+        <LastGenOutput>Resources.Designer.cs</LastGenOutput>
+      </EmbeddedResource>
+      <Compile Update="Setup/Resources.Designer.cs">
+        <DesignTime>True</DesignTime>
+        <AutoGen>True</AutoGen>
+        <DependentUpon>Resources.resx</DependentUpon>
+      </Compile>
     </ItemGroup>
 
 </Project>

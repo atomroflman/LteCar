@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<root>
+  <data name="title" xml:space="preserve">
+    <value>LteCar Onboard Setup Tool</value>
+  </data>
+  <data name="load_config" xml:space="preserve">
+    <value>Bestehende Konfiguration geladen.</value>
+  </data>
+  <data name="no_config" xml:space="preserve">
+    <value>Keine Konfiguration gefunden. Neue wird erstellt.</value>
+  </data>
+  <data name="main_menu" xml:space="preserve">
+    <value>Hauptmenü</value>
+  </data>
+  <data name="set_carname" xml:space="preserve">
+    <value>Auto-Namen ändern</value>
+  </data>
+  <data name="set_enabletest" xml:space="preserve">
+    <value>Channel-Test beim Start umschalten</value>
+  </data>
+  <data name="save_exit" xml:space="preserve">
+    <value>Speichern &amp; Beenden</value>
+  </data>
+  <data name="exit" xml:space="preserve">
+    <value>Beenden ohne Speichern</value>
+  </data>
+  <data name="carname_prompt" xml:space="preserve">
+    <value>Wie soll das Auto heißen?</value>
+  </data>
+  <data name="enabletest_prompt" xml:space="preserve">
+    <value>Channel-Test beim Start aktivieren?</value>
+  </data>
+  <data name="saved" xml:space="preserve">
+    <value>Konfiguration gespeichert!</value>
+  </data>
+  <data name="current_value" xml:space="preserve">
+    <value>(aktuell: {0})</value>
+  </data>
+</root>

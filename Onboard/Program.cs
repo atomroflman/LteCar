@@ -1,4 +1,5 @@
 ﻿using System.Text.Json;
+using Spectre.Console;
 using LteCar.Onboard;
 using LteCar.Onboard.Control;
 using LteCar.Onboard.Control.ControlTypes;
@@ -10,6 +11,14 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Configuration;
+
+
+// Setup-Modus prüfen
+if (args.Length > 0 && args[0].Equals("setup", StringComparison.OrdinalIgnoreCase))
+{
+    Setup.ConfigTool.Run();
+    return;
+}
 
 var carId = Guid.NewGuid().ToString();
 var startupTime = DateTime.Now;
