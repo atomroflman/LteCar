@@ -50,6 +50,7 @@ serviceCollection.AddSingleton<IGearbox, VirtualAutomaticGearbox>();
 serviceCollection.AddSingleton<TelemetryService>();
 serviceCollection.AddSingleton<Bash>();
 serviceCollection.AddSingleton<IModuleManagerFactory, ModuleManagerFactory>();
+serviceCollection.AddSingleton<CameraProcessParameterBuilder>();
 serviceCollection.AddAllTransient(typeof(ControlTypeBase));
 serviceCollection.AddAllTransient(typeof(IPwmModule));
 serviceCollection.AddAllTransient(typeof(IGpioModule));
