@@ -1,0 +1,58 @@
+﻿{
+  "pinManagers": {
+    "Pca9685": {
+      "type": "Pca9685PwmExtension",
+      "options": {
+        "boardAddress": 0,
+        "i2cBus": 1
+      }
+    }
+  },
+  "controlChannels": {
+    "steer": {
+      "address": 12,
+      "controlType": "Steering"
+    },
+    "throttle": {
+      "address": 33,
+      "controlType": "Throttle",
+      "testDisabled": true
+    },
+    "gear": {
+      "pinManager": "Pca9685",
+      "address": 1,
+      "controlType": "OnOffServo",
+    },
+    "rearLock": {
+      "pinManager": "Pca9685",
+      "address": 2,
+      "controlType": "OnOffServo",
+      "testDisabled": true
+    },
+    "frontLock": {
+      "pinManager": "Pca9685",
+      "address": 3,
+      "controlType": "OnOffServo",
+      "testDisabled": true
+    }
+  },
+  "telemetryChannels": {
+    "lifetime": {
+      "telemetryType": "LteCar.Onboard.Telemetry.ApplicationLifetimeReader"
+    },
+    "battery": {
+      "telemetryType": "LteCar.Onboard.Telemetry.JbdBmsTelemetryReader",
+      "readIntervalTicks": 50,
+      "options": {
+        "jbdToolPath": "~/ltecar/bin/jbdtools",
+        "channel": "A5:C2:37:55:36:B6"
+      }
+    },
+    "lte": {
+      "telemetryType": "LteCar.Onboard.Telemetry.JbdBmsTelemetryReader"
+    },
+    "gps": {
+      "telemetryType": "LteCar.Onboard.Telemetry.JbdBmsTelemetryReader"
+    }
+  }
+}

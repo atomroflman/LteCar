@@ -48,7 +48,6 @@ var configuration = app.Configuration;
 using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<LteCarContext>();
-    dbContext.Database.EnsureCreated();
     dbContext.Database.Migrate();
 }
 

@@ -1,43 +1,115 @@
 using Spectre.Console;
-using System;
-using System.IO;
-using Microsoft.Extensions.Configuration;
 using System.Text.Json;
 using System.Globalization;
-using Setup;
+using LteCar.Onboard.Setup;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Setup
 {
+    public interface IPage
+    {
+        public string Title { get; }
+        /// <summary>
+        /// Renders the page and returns the next page to navigate to.
+        /// </summary>
+        IPage? Render();
+    }
+
+    public abstract class NavigationPageBase : IPage
+    {
+        private readonly IPage _parent;
+
+        public virtual bool IsRoot => _parent == null;
+        public virtual string Title => "Navigation Page: " + GetType().Name;
+
+        protected abstract Dictionary<string, Type> GetSelectablePages();
+        public NavigationPageBase(IPage parent)
+        {
+            this._parent=parent;
+        }
+
+        public IPage? Render()
+        {
+            var pages = GetSelectablePages();
+            AnsiConsole.MarkupLine($"[yellow]{Title}[/]");
+            var selection = AnsiConsole.Prompt<string>(new SelectionPrompt<string>()
+                .AddChoices<string>(pages.Keys.Concat(IsRoot ? Array.Empty<string>() : new[] { "Back" }).ToArray()));
+
+            switch (selection)
+            {
+                case "Back":
+                    return _parent;
+                default:
+                    return pages[selection];
+            }
+        }
+    }
+
+    public class MainPage : NavigationPageBase
+    {
+        public MainPage() : base(null)
+        {
+        }
+
+        protected override Dictionary<string, IPage> GetSelectablePages()
+            => new Dictionary<string, IPage> {
+                { "Set Template", new LoadTemplatePage() }
+            };
+
+    }
+
+    public class LoadTemplatePage : IPage
+    {
+        public string Title => throw new NotImplementedException();
+
+        public IPage? Render()
+        {
+            throw new NotImplementedException();
+        }
+    }
+    public class SaveTemplatePage : IPage
+    {
+        public string Title => throw new NotImplementedException();
+
+        public IPage? Render()
+        {
+            throw new NotImplementedException();
+        }
+    }
+
     public static class ConfigTool
     {
-        public static void Run()
+        public static IServiceProvider ServiceProvider { get; private set; }
+
+        public static void Run(IServiceProvider serviceProvider)
         {
+            ServiceProvider = serviceProvider;
             // Detect or set culture (default: system, fallback: en)
             var culture = CultureInfo.CurrentUICulture;
-            if (Environment.GetEnvironmentVariable("LC_ALL") == "de_DE" 
-                || Environment.GetEnvironmentVariable("LANG") == "de_DE" 
+            if (Environment.GetEnvironmentVariable("LC_ALL") == "de_DE"
+                || Environment.GetEnvironmentVariable("LANG") == "de_DE"
                 || Environment.GetEnvironmentVariable("LANG") == "de_DE.UTF-8")
                 culture = new CultureInfo("de");
             // Optionally: allow override by env var or argument
 
-            // Set culture for resources
-            Resources.Culture = culture;
+            // Set culture for SetupTexts
+            SetupTexts.Culture = culture;
 
-            AnsiConsole.MarkupLine($"[bold yellow]{Resources.Title}[/]");
+            AnsiConsole.MarkupLine($"[bold yellow]{SetupTexts.Title}[/]");
             var configFile = "appSettings.json";
             dynamic? config = null;
             if (File.Exists(configFile))
             {
                 var json = File.ReadAllText(configFile);
                 config = JsonSerializer.Deserialize<dynamic>(json);
-                AnsiConsole.MarkupLine($"[green]{Resources.Load_Config}");
+                AnsiConsole.MarkupLine($"[green]{SetupTexts.LoadConfig}[/]");
             }
             else
             {
                 config = new System.Dynamic.ExpandoObject();
                 config.CarName = culture.TwoLetterISOLanguageName == "de" ? "MeinAuto" : "MyCar";
                 config.EnableChannelTest = false;
-                AnsiConsole.MarkupLine($"[red]{Resources.No_Config}");
+                AnsiConsole.MarkupLine($"[red]{SetupTexts.NoConfig}");
             }
 
             bool running = true;
@@ -47,26 +119,26 @@ namespace Setup
                 var carName = config.CarName ?? (culture.TwoLetterISOLanguageName == "de" ? "MeinAuto" : "MyCar");
                 var enableTest = config.EnableChannelTest ?? false;
                 var menu = new[] {
-                    $"{Resources.Set_Carname} {string.Format(Resources.Current_Value, carName)}",
-                    $"{Resources.Set_Enabletest} {string.Format(Resources.Current_Value, enableTest)}",
+                    $"{SetupTexts.SetCarName} {string.Format(SetupTexts.CurrentValue, carName)}",
+                    $"{SetupTexts.SetEnabletest} {string.Format(SetupTexts.CurrentValue, enableTest)}",
                     "[root] appSettings.json bearbeiten",
-                    Resources.Save_Exit,
-                    Resources.Exit,
+                    SetupTexts.SaveExit,
+                    SetupTexts.ExitWithoutSaving,
                 };
                 var choice = AnsiConsole.Prompt(
                     new SelectionPrompt<string>()
-                        .Title($"[bold]{Resources.Main_Menu}[/]")
+                        .Title($"[bold]{SetupTexts.MainMenu}[/]")
                         .AddChoices(menu)
                 );
 
-                if (choice.StartsWith(Resources.Set_Carname))
+                if (choice.StartsWith(SetupTexts.SetCarName))
                 {
-                    var newName = AnsiConsole.Ask<string>(Resources.Carname_Prompt, carName);
+                    var newName = AnsiConsole.Ask<string>(SetupTexts.CarnamePrompt, carName);
                     if (newName != carName) { config.CarName = newName; dirty = true; }
                 }
-                else if (choice.StartsWith(Resources.Set_Enabletest))
+                else if (choice.StartsWith(SetupTexts.SetEnabletest))
                 {
-                    var newVal = AnsiConsole.Confirm(Resources.Enabletest_Prompt, enableTest);
+                    var newVal = AnsiConsole.Confirm(SetupTexts.EnabletestPrompt, enableTest);
                     if (newVal != enableTest) { config.EnableChannelTest = newVal; dirty = true; }
                 }
                 else if (choice.StartsWith("[root]"))
@@ -90,23 +162,23 @@ namespace Setup
                             object val = ((IDictionary<string, object>)config).ContainsKey(prop) ? ((IDictionary<string, object>)config)[prop] : null;
                             subMenu.Add($"{prop} = {val}");
                         }
-                        subMenu.Add(Resources.Save_Exit);
-                        subMenu.Add(Resources.Exit);
+                        subMenu.Add(SetupTexts.SaveExit);
+                        subMenu.Add(SetupTexts.ExitWithoutSaving);
                         var subChoice = AnsiConsole.Prompt(
                             new SelectionPrompt<string>()
                                 .Title("[bold]appSettings.json root bearbeiten[/]")
                                 .AddChoices(subMenu)
                         );
-                        if (subChoice == Resources.Save_Exit)
+                        if (subChoice == SetupTexts.SaveExit)
                         {
                             var options = new JsonSerializerOptions { WriteIndented = true };
                             var jsonOut = JsonSerializer.Serialize(config, options);
                             File.WriteAllText(configFile, jsonOut);
-                            AnsiConsole.MarkupLine($"[green]{Resources.Saved}[/]");
+                            AnsiConsole.MarkupLine($"[green]{SetupTexts.Saved}[/]");
                             dirty = false;
                             subRunning = false;
                         }
-                        else if (subChoice == Resources.Exit)
+                        else if (subChoice == SetupTexts.ExitWithoutSaving)
                         {
                             subRunning = false;
                         }
@@ -136,15 +208,15 @@ namespace Setup
                         }
                     }
                 }
-                else if (choice == Resources.Save_Exit)
+                else if (choice == SetupTexts.SaveExit)
                 {
                     var options = new JsonSerializerOptions { WriteIndented = true };
                     var jsonOut = JsonSerializer.Serialize(config, options);
                     File.WriteAllText(configFile, jsonOut);
-                    AnsiConsole.MarkupLine($"[green]{Resources.Saved}[/]");
+                    AnsiConsole.MarkupLine($"[green]{SetupTexts.Saved}[/]");
                     running = false;
                 }
-                else if (choice == Resources.Exit)
+                else if (choice == SetupTexts.ExitWithoutSaving)
                 {
                     running = false;
                 }

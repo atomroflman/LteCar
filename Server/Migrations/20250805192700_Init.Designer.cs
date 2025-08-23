@@ -11,8 +11,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace LteCar.Server.Migrations
 {
     [DbContext(typeof(LteCarContext))]
-    [Migration("20250609133333_AddSourceAndTargetPortToUserSetupLink")]
-    partial class AddSourceAndTargetPortToUserSetupLink
+    [Migration("20250805192700_Init")]
+    partial class Init
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -40,10 +40,6 @@ namespace LteCar.Server.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Name")
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("SeesionId")
                         .HasMaxLength(64)
                         .HasColumnType("TEXT");
 
@@ -154,7 +150,7 @@ namespace LteCar.Server.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("SessionToken")
-                        .HasMaxLength(64)
+                        .HasMaxLength(32)
                         .HasColumnType("TEXT");
 
                     b.HasKey("Id");
@@ -192,6 +188,64 @@ namespace LteCar.Server.Migrations
                     b.ToTable("UserSetups");
                 });
 
+            modelBuilder.Entity("LteCar.Server.Data.UserChannel", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("Accuracy")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<float?>("CalibrationMax")
+                        .HasColumnType("REAL");
+
+                    b.Property<float?>("CalibrationMin")
+                        .HasColumnType("REAL");
+
+                    b.Property<int>("ChannelId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<bool>("IsAxis")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("Name")
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("UserChannelDeviceId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserChannelDeviceId", "IsAxis", "ChannelId")
+                        .IsUnique();
+
+                    b.ToTable("UserChannel");
+                });
+
+            modelBuilder.Entity("LteCar.Server.Data.UserChannelDevice", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("DeviceName")
+                        .IsRequired()
+                        .HasMaxLength(512)
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("UserId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "DeviceName")
+                        .IsUnique();
+
+                    b.ToTable("UserChannelDevice");
+                });
+
             modelBuilder.Entity("LteCar.Server.Data.UserSetupFlowNodeBase", b =>
                 {
                     b.Property<int>("Id")
@@ -200,7 +254,7 @@ namespace LteCar.Server.Migrations
 
                     b.Property<string>("NodeType")
                         .IsRequired()
-                        .HasMaxLength(21)
+                        .HasMaxLength(34)
                         .HasColumnType("TEXT");
 
                     b.Property<float>("PositionX")
@@ -214,13 +268,37 @@ namespace LteCar.Server.Migrations
 
                     b.HasKey("Id");
 
-                    b.HasIndex("UserSetupId");
-
                     b.ToTable("UserSetupFlowNodes", (string)null);
 
                     b.HasDiscriminator<string>("NodeType").HasValue("UserSetupFlowNodeBase");
 
                     b.UseTphMappingStrategy();
+                });
+
+            modelBuilder.Entity("LteCar.Server.Data.UserSetupFunctionNodeParameter", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("NodeId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ParameterName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ParameterValue")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("NodeId", "ParameterName")
+                        .IsUnique();
+
+                    b.ToTable("UserSetupFunctionNodeParameter");
                 });
 
             modelBuilder.Entity("LteCar.Server.Data.UserSetupLink", b =>
@@ -277,64 +355,6 @@ namespace LteCar.Server.Migrations
                     b.ToTable("UserSetupTelemetries");
                 });
 
-            modelBuilder.Entity("UserChannel", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("Accuracy")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<float?>("CalibrationMax")
-                        .HasColumnType("REAL");
-
-                    b.Property<float?>("CalibrationMin")
-                        .HasColumnType("REAL");
-
-                    b.Property<int>("ChannelId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<bool>("IsAxis")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Name")
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("UserChannelDeviceId")
-                        .HasColumnType("INTEGER");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserChannelDeviceId", "IsAxis", "ChannelId")
-                        .IsUnique();
-
-                    b.ToTable("UserChannel");
-                });
-
-            modelBuilder.Entity("UserChannelDevice", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("DeviceName")
-                        .IsRequired()
-                        .HasMaxLength(512)
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("UserId")
-                        .HasColumnType("INTEGER");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("UserId", "DeviceName")
-                        .IsUnique();
-
-                    b.ToTable("UserChannelDevice");
-                });
-
             modelBuilder.Entity("LteCar.Server.Data.UserSetupCarChannelNode", b =>
                 {
                     b.HasBaseType("LteCar.Server.Data.UserSetupFlowNodeBase");
@@ -343,6 +363,8 @@ namespace LteCar.Server.Migrations
                         .HasColumnType("INTEGER");
 
                     b.HasIndex("CarChannelId");
+
+                    b.HasIndex("UserSetupId");
 
                     b.HasDiscriminator().HasValue("C");
                 });
@@ -353,9 +375,26 @@ namespace LteCar.Server.Migrations
 
                     b.Property<string>("SetupFunctionName")
                         .IsRequired()
+                        .HasMaxLength(100)
                         .HasColumnType("TEXT");
 
+                    b.HasIndex("UserSetupId");
+
                     b.HasDiscriminator().HasValue("F");
+                });
+
+            modelBuilder.Entity("LteCar.Server.Data.UserSetupTelemetryNode", b =>
+                {
+                    b.HasBaseType("LteCar.Server.Data.UserSetupFlowNodeBase");
+
+                    b.Property<int>("TelemetryId")
+                        .HasColumnType("INTEGER");
+
+                    b.HasIndex("TelemetryId");
+
+                    b.HasIndex("UserSetupId");
+
+                    b.HasDiscriminator().HasValue("UserSetupTelemetryNode");
                 });
 
             modelBuilder.Entity("LteCar.Server.Data.UserSetupUserChannelNode", b =>
@@ -366,6 +405,8 @@ namespace LteCar.Server.Migrations
                         .HasColumnType("INTEGER");
 
                     b.HasIndex("UserChannelId");
+
+                    b.HasIndex("UserSetupId");
 
                     b.HasDiscriminator().HasValue("U");
                 });
@@ -443,13 +484,13 @@ namespace LteCar.Server.Migrations
             modelBuilder.Entity("LteCar.Server.Data.UserCarSetup", b =>
                 {
                     b.HasOne("LteCar.Server.Data.Car", "Car")
-                        .WithMany()
+                        .WithMany("UserCarSetups")
                         .HasForeignKey("CarId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.HasOne("LteCar.Server.Data.User", "User")
-                        .WithMany()
+                        .WithMany("CarSetups")
                         .HasForeignKey("UserId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -459,15 +500,37 @@ namespace LteCar.Server.Migrations
                     b.Navigation("User");
                 });
 
-            modelBuilder.Entity("LteCar.Server.Data.UserSetupFlowNodeBase", b =>
+            modelBuilder.Entity("LteCar.Server.Data.UserChannel", b =>
                 {
-                    b.HasOne("LteCar.Server.Data.UserCarSetup", "UserSetup")
-                        .WithMany()
-                        .HasForeignKey("UserSetupId")
+                    b.HasOne("LteCar.Server.Data.UserChannelDevice", "UserChannelDevice")
+                        .WithMany("Channels")
+                        .HasForeignKey("UserChannelDeviceId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
-                    b.Navigation("UserSetup");
+                    b.Navigation("UserChannelDevice");
+                });
+
+            modelBuilder.Entity("LteCar.Server.Data.UserChannelDevice", b =>
+                {
+                    b.HasOne("LteCar.Server.Data.User", "User")
+                        .WithMany("UserChannelDevices")
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("LteCar.Server.Data.UserSetupFunctionNodeParameter", b =>
+                {
+                    b.HasOne("LteCar.Server.Data.UserSetupFunctionNode", "Node")
+                        .WithMany("Parameters")
+                        .HasForeignKey("NodeId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Node");
                 });
 
             modelBuilder.Entity("LteCar.Server.Data.UserSetupLink", b =>
@@ -508,63 +571,111 @@ namespace LteCar.Server.Migrations
                     b.Navigation("UserSetup");
                 });
 
-            modelBuilder.Entity("UserChannel", b =>
-                {
-                    b.HasOne("UserChannelDevice", "UserChannelDevice")
-                        .WithMany("Channels")
-                        .HasForeignKey("UserChannelDeviceId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("UserChannelDevice");
-                });
-
-            modelBuilder.Entity("UserChannelDevice", b =>
-                {
-                    b.HasOne("LteCar.Server.Data.User", "User")
-                        .WithMany("UserChannelDevices")
-                        .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("User");
-                });
-
             modelBuilder.Entity("LteCar.Server.Data.UserSetupCarChannelNode", b =>
                 {
                     b.HasOne("LteCar.Server.Data.CarChannel", "CarChannel")
-                        .WithMany()
+                        .WithMany("SetupNodes")
                         .HasForeignKey("CarChannelId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("LteCar.Server.Data.UserCarSetup", "UserSetup")
+                        .WithMany()
+                        .HasForeignKey("UserSetupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.Navigation("CarChannel");
+
+                    b.Navigation("UserSetup");
+                });
+
+            modelBuilder.Entity("LteCar.Server.Data.UserSetupFunctionNode", b =>
+                {
+                    b.HasOne("LteCar.Server.Data.UserCarSetup", "UserSetup")
+                        .WithMany()
+                        .HasForeignKey("UserSetupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("UserSetup");
+                });
+
+            modelBuilder.Entity("LteCar.Server.Data.UserSetupTelemetryNode", b =>
+                {
+                    b.HasOne("LteCar.Server.Data.CarTelemetry", "Telemetry")
+                        .WithMany()
+                        .HasForeignKey("TelemetryId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("LteCar.Server.Data.UserCarSetup", "UserSetup")
+                        .WithMany("TelemetryNodes")
+                        .HasForeignKey("UserSetupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Telemetry");
+
+                    b.Navigation("UserSetup");
                 });
 
             modelBuilder.Entity("LteCar.Server.Data.UserSetupUserChannelNode", b =>
                 {
-                    b.HasOne("UserChannel", "UserChannel")
-                        .WithMany()
+                    b.HasOne("LteCar.Server.Data.UserChannel", "UserChannel")
+                        .WithMany("SetupNodes")
                         .HasForeignKey("UserChannelId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
+                    b.HasOne("LteCar.Server.Data.UserCarSetup", "UserSetup")
+                        .WithMany()
+                        .HasForeignKey("UserSetupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
                     b.Navigation("UserChannel");
+
+                    b.Navigation("UserSetup");
                 });
 
             modelBuilder.Entity("LteCar.Server.Data.Car", b =>
                 {
                     b.Navigation("Functions");
+
+                    b.Navigation("UserCarSetups");
+                });
+
+            modelBuilder.Entity("LteCar.Server.Data.CarChannel", b =>
+                {
+                    b.Navigation("SetupNodes");
                 });
 
             modelBuilder.Entity("LteCar.Server.Data.User", b =>
                 {
+                    b.Navigation("CarSetups");
+
                     b.Navigation("UserChannelDevices");
                 });
 
-            modelBuilder.Entity("UserChannelDevice", b =>
+            modelBuilder.Entity("LteCar.Server.Data.UserCarSetup", b =>
+                {
+                    b.Navigation("TelemetryNodes");
+                });
+
+            modelBuilder.Entity("LteCar.Server.Data.UserChannel", b =>
+                {
+                    b.Navigation("SetupNodes");
+                });
+
+            modelBuilder.Entity("LteCar.Server.Data.UserChannelDevice", b =>
                 {
                     b.Navigation("Channels");
+                });
+
+            modelBuilder.Entity("LteCar.Server.Data.UserSetupFunctionNode", b =>
+                {
+                    b.Navigation("Parameters");
                 });
 #pragma warning restore 612, 618
         }
