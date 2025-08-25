@@ -8,10 +8,6 @@
     </PropertyGroup>
 
     <ItemGroup>
-      <EmbeddedResource Remove="Setup\SetupTexts.de.resx" />
-    </ItemGroup>
-
-    <ItemGroup>
       <PackageReference Include="CSharpVitamins.ShortGuid" Version="2.0.0" />
       <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="9.0.3" />
       <PackageReference Include="Microsoft.AspNetCore.SignalR.Client.Core" Version="9.0.3" />
@@ -38,10 +34,6 @@
     </ItemGroup>
 
     <ItemGroup>
-      <Resource Include="Setup\SetupTexts.de.resx" />
-    </ItemGroup>
-
-    <ItemGroup>
       <None Update="channelMap.json">
         <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       </None>      
@@ -51,22 +43,7 @@
     </ItemGroup>
     
     <ItemGroup>
-      <Compile Update="Setup/Resources.Designer.cs">
-        <DesignTime>True</DesignTime>
-        <AutoGen>True</AutoGen>
-        <DependentUpon>Resources.resx</DependentUpon>
-      </Compile>
-      <Compile Update="Setup\SetupTexts.Designer.cs">
-        <DesignTime>True</DesignTime>
-        <AutoGen>True</AutoGen>
-        <DependentUpon>SetupTexts.resx</DependentUpon>
-      </Compile>
-    </ItemGroup>
-    
-    <ItemGroup>
-      <EmbeddedResource Update="Setup\SetupTexts.resx">
-        <Generator>ResXFileCodeGenerator</Generator>
-        <LastGenOutput>SetupTexts.Designer.cs</LastGenOutput>
+      <EmbeddedResource Update="Setup/translations.json">
       </EmbeddedResource>
     </ItemGroup>
 
