@@ -1,6 +1,7 @@
 ﻿using LteCar.Server;
 using LteCar.Server.Data;
 using LteCar.Server.Hubs;
+using LteCar.Server.Services;
 using LteCar.Shared;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
@@ -14,6 +15,9 @@ builder.Logging.AddConsole()
     .AddConfiguration(builder.Configuration.GetSection("Logging"));
 
 builder.Services.AddSingleton<VideoStreamRecieverService>();
+builder.Services.AddSingleton<UDPVideoStreamService>();
+builder.Services.AddHostedService<UDPVideoStreamService>(provider => 
+    provider.GetRequiredService<UDPVideoStreamService>());
 builder.Services.AddSingleton<CarConnectionStore>();
 builder.Services.AddDbContext<LteCarContext>(options =>
 {
