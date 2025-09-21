@@ -81,24 +81,4 @@ public class VideoStreamController : Microsoft.AspNetCore.Mvc.ControllerBase
             Message = "UDP Video Stream Service is operational"
         });
     }
-
-    /// <summary>
-    /// Test endpoint to verify video stream controller is working
-    /// </summary>
-    /// <returns>Test response</returns>
-    [HttpGet("test")]
-    public IActionResult TestVideoStream()
-    {
-        return Ok(new
-        {
-            Message = "Video Stream Controller is working",
-            Endpoints = new[]
-            {
-                "/api/videostream/video - MJPEG Video Stream",
-                "/api/videostream/status - Stream Status",
-                "/api/videostream/test - This test endpoint"
-            },
-            Timestamp = DateTime.UtcNow
-        });
-    }
 }
