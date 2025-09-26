@@ -12,6 +12,7 @@ namespace LteCar.Server.Data
         public DbSet<User> Users { get; set; }
         public DbSet<CarChannel> CarChannels { get; set; }
         public DbSet<CarTelemetry> CarTelemetry { get; set; }
+        public DbSet<CarVideoStream> CarVideoStreams { get; set; }
         public DbSet<UserCarSetup> UserSetups { get; set; }
         public DbSet<UserSetupTelemetry> UserSetupTelemetries { get; set; }
         public DbSet<SetupFilterType> SetupFilterTypes { get; set; }
