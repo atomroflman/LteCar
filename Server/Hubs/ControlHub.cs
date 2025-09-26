@@ -1,4 +1,5 @@
 using System.Text.Json;
+using LteCar.Server.Configuration;
 using LteCar.Server.Data;
 using LteCar.Server.Services;
 using LteCar.Shared.HubClients;
@@ -8,14 +9,14 @@ namespace LteCar.Server.Hubs;
 
 public class CarControlHub : Hub<ICarControlClient>, ICarControlServer
 {
-    public IConfiguration Configuration { get; }
     public ILogger<CarControlHub> Logger { get; }
+    private readonly IConfigurationService _configService;
 
     private static BiDictionary<string, string> _connectionMap = new BiDictionary<string, string>();
 
-    public CarControlHub(IConfiguration configuration, ILogger<CarControlHub> logger)
+    public CarControlHub(IConfigurationService configService, ILogger<CarControlHub> logger)
     {
-        Configuration = configuration;
+        _configService = configService;
         Logger = logger;
     }
 

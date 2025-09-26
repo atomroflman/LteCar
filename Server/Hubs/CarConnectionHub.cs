@@ -2,6 +2,7 @@ using System.Text;
 using System.Text.Json;
 using LteCar.Onboard;
 using LteCar.Server;
+using LteCar.Server.Configuration;
 using LteCar.Server.Data;
 using LteCar.Server.Services;
 using LteCar.Shared;
@@ -13,17 +14,19 @@ namespace LteCar.Server.Hubs;
 public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
 {
     public IHubContext<CarUiHub, ICarUiClient> UiHub { get; }
-    public IConfiguration Configuration { get; }
     public ILogger<CarConnectionHub> Logger { get; }
+    private readonly VideoStreamRecieverService _streamService;
+    private readonly IConfigurationService _configService;
 
-    protected int JanusUdpPortMin => Configuration.GetSection("JanusConfiguration").GetValue<int?>("UdpPortRangeStart") ?? 10000;
-    protected int JanusUdpPortMax => Configuration.GetSection("JanusConfiguration").GetValue<int?>("UdpPortRangeEnd") ?? 10200;
+    protected int JanusUdpPortMin => _configService.Janus.UdpPortRangeStart;
+    protected int JanusUdpPortMax => _configService.Janus.UdpPortRangeEnd;
     
-    public CarConnectionHub(IHubContext<CarUiHub, ICarUiClient> uiHub, IConfiguration configuration, ILogger<CarConnectionHub> logger)
+    public CarConnectionHub(IHubContext<CarUiHub, ICarUiClient> uiHub, IConfigurationService configService, ILogger<CarConnectionHub> logger, VideoStreamRecieverService streamService)
     {
-        Configuration = configuration;
         UiHub = uiHub;
         Logger = logger;
+        _streamService = streamService;
+        _configService = configService;
     }
     
     public async Task<CarConfiguration> OpenCarConnection(string carId, string channelMapHash)
@@ -38,17 +41,27 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
             car.ChannelMapHash = new Guid().ToString();
         }
         car.LastSeen = DateTime.Now;
-        var janusServerHost = Configuration.GetSection("JanusConfiguration").GetValue<string>("HostName");
+        var janusServerHost = _configService.Janus.HostName;
         if (string.IsNullOrEmpty(janusServerHost))
         {
             janusServerHost = System.Net.Dns.GetHostName();
             Logger.LogWarning($"Janus server host is not configured. Using default: {janusServerHost}");
         }
 
+        // Stream für das Fahrzeug erstellen oder bestehenden verwenden
+        var streamInfo = await EnsureCarStreamExists(carId, car);
+        var streamPort = streamInfo?.Port ?? car.VideoStreamPort ?? GetNextAvailablePort();
+        
+        // Port in der Datenbank aktualisieren
+        if (car.VideoStreamPort != streamPort)
+        {
+            car.VideoStreamPort = streamPort;
+        }
+
         CarConfiguration carConfig = new CarConfiguration();
-        carConfig.JanusConfiguration = new JanusConfiguration() {
+        carConfig.JanusConfiguration = new LteCar.Shared.JanusConfiguration() {
             JanusServerHost = janusServerHost,
-            JanusUdpPort = car.VideoStreamPort ?? GetNextAvailablePort(),
+            JanusUdpPort = streamPort,
         };
         carConfig.VideoSettings = car.VideoSettings;
         carConfig.RequiresChannelMapUpdate = car.ChannelMapHash != channelMapHash;
@@ -163,5 +176,37 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
         }
         await dbContext.SaveChangesAsync();
         Logger.LogInformation($"Channel map updated for car {carId}. Channel map hash: {car.ChannelMapHash}");
+    }
+
+    private async Task<StreamInfo?> EnsureCarStreamExists(string carId, Car car)
+    {
+        try
+        {
+            // Prüfen ob bereits ein aktiver Stream für das Fahrzeug existiert
+            var existingStream = _streamService.GetActiveStreamByCar(carId);
+            if (existingStream != null)
+            {
+                Logger.LogDebug($"Found existing stream for car '{carId}': {existingStream.Id} on port {existingStream.Port}");
+                return existingStream;
+            }
+
+            // Neuen UDP-Stream erstellen (Standard für Janus)
+            var streamInfo = await _streamService.StartNewStream(StreamProtocol.UDP, carId, $"car-{carId}", "video");
+            if (streamInfo != null)
+            {
+                Logger.LogInformation($"Created new UDP stream for car '{carId}': {streamInfo.Id} on port {streamInfo.Port}");
+            }
+            else
+            {
+                Logger.LogWarning($"Failed to create stream for car '{carId}'");
+            }
+
+            return streamInfo;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, $"Error ensuring stream exists for car '{carId}'");
+            return null;
+        }
     }
 }

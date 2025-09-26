@@ -1,6 +1,9 @@
 ﻿using LteCar.Server;
+using LteCar.Server.Configuration;
 using LteCar.Server.Data;
+using LteCar.Server.Extensions;
 using LteCar.Server.Hubs;
+using LteCar.Server.Services;
 using LteCar.Shared;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
@@ -13,11 +16,15 @@ builder.Configuration.AddJsonFile("appSettings.json");
 builder.Logging.AddConsole()
     .AddConfiguration(builder.Configuration.GetSection("Logging"));
 
+// Configure application configuration
+builder.Services.AddApplicationConfiguration(builder.Configuration);
+
 builder.Services.AddSingleton<VideoStreamRecieverService>();
 builder.Services.AddSingleton<CarConnectionStore>();
-builder.Services.AddDbContext<LteCarContext>(options =>
+builder.Services.AddDbContext<LteCarContext>((serviceProvider, options) =>
 {
-    options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection"));
+    var configService = serviceProvider.GetRequiredService<IConfigurationService>();
+    options.UseSqlite(configService.DefaultConnectionString);
 });
 
 builder.Services.AddControllers().AddJsonOptions(options =>
@@ -56,10 +63,10 @@ var logger = app.Services.GetRequiredService<ILogger<Program>>();
 logger.LogInformation("Database migrations applied successfully.");
 var vss = app.Services.GetRequiredService<VideoStreamRecieverService>();
 
-if (configuration.GetValue<bool?>("RunJanusServer") ?? true)
+var configService = app.Services.GetRequiredService<IConfigurationService>();
+if (configService.Application.RunJanusServer)
 {
-    logger.LogInformation("Starting Janus service...");
-    vss.RunVideoStreamServer();
+    app.Services.GetRequiredService<VideoStreamRecieverService>().RunVideoStreamServer();
 }
 else
 {
@@ -101,5 +108,8 @@ app.MapHub<CarConnectionHub>(HubPaths.CarConnectionHub);
 app.MapHub<CarControlHub>(HubPaths.CarControlHub);
 app.MapHub<TelemetryHub>(HubPaths.TelemetryHub);
 app.MapHub<CarUiHub>(HubPaths.CarUiHub);
+
+// Validate configuration during startup
+app.Services.ValidateConfiguration();
 
 app.Run();
