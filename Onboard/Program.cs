@@ -44,7 +44,6 @@ serviceCollection.AddSingleton<ChannelMap>(channelMap);
 serviceCollection.AddSingleton<IConfiguration>(configuration);
 serviceCollection.AddSingleton<ServerConnectionService>();
 serviceCollection.AddSingleton<VideoStreamService>();
-serviceCollection.AddSingleton<GStreamerVideoService>();
 serviceCollection.AddSingleton<CarConfigurationService>();
 serviceCollection.AddSingleton<ControlService>();
 serviceCollection.AddSingleton<ControlExecutionService>();
@@ -71,8 +70,7 @@ configService.OnConfigurationChanged += () =>
     var config = configService.Configuration;
     logger.LogInformation($"Configuration changed to: {JsonSerializer.Serialize(config)}");
 };
-//var videoStreamService = serviceProvider.GetRequiredService<VideoStreamService>();
-var gstreamerVideoService = serviceProvider.GetRequiredService<GStreamerVideoService>();
+var videoStreamService = serviceProvider.GetRequiredService<VideoStreamService>();
 var connectionService = serviceProvider.GetRequiredService<ServerConnectionService>();
 var carControlService = serviceProvider.GetRequiredService<ControlService>();
 
@@ -87,10 +85,6 @@ if (configuration.GetValue<bool>("EnableChannelTest"))
 
 await connectionService.ConnectToServer(carId);
 await carControlService.ConnectToServer();
-
-// Starte GStreamer Video Service
-logger.LogInformation("Starting GStreamer video service...");
-await gstreamerVideoService.StartAsync();
 
 logger.LogInformation($"Car Engine Started...");
 

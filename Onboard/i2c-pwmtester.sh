@@ -2,7 +2,7 @@
 
 ADDR=0x40
 PRESCALE=0x79  # Für 50 Hz
-rundum_channel=15
+rundum_channel=9
 
 # Anzahl der verfügbaren Modi (z.B. 8 für 8 Effekte)
 modi_count=10
@@ -21,6 +21,12 @@ set_rundum_pwm() {
   lsb=$(printf "0x%02X" $((pulse & 0xFF)))
   msb=$(printf "0x%02X" $((pulse >> 8)))
   echo "Setze PWM: $pulse Ticks auf Kanal $rundum_channel"
+  
+  echo "i2cset -y 1 $ADDR $on_l 0x00"
+  echo "i2cset -y 1 $ADDR $on_h 0x00"
+  echo "i2cset -y 1 $ADDR $off_l $lsb"
+  echo "i2cset -y 1 $ADDR $off_h $msb"
+
   i2cset -y 1 $ADDR $on_l 0x00
   i2cset -y 1 $ADDR $on_h 0x00
   i2cset -y 1 $ADDR $off_l $lsb
