@@ -103,60 +103,7 @@ namespace LteCar.Server.Migrations
 
                     b.HasIndex("CarId");
 
-                    b.ToTable("CarTelemetry");
-                });
-
-            modelBuilder.Entity("LteCar.Server.Data.CarVideoStream", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("CarId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateTime?>("EndTime")
-                        .HasColumnType("TEXT");
-
-                    b.Property<bool>("IsActive")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER")
-                        .HasDefaultValue(true);
-
-                    b.Property<int>("Port")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("ProcessArguments")
-                        .HasMaxLength(500)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Protocol")
-                        .IsRequired()
-                        .HasMaxLength(10)
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime>("StartTime")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("StreamId")
-                        .IsRequired()
-                        .HasMaxLength(50)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("StreamPurpose")
-                        .HasMaxLength(100)
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Port");
-
-                    b.HasIndex("StreamId")
-                        .IsUnique();
-
-                    b.HasIndex("CarId", "IsActive");
-
-                    b.ToTable("CarVideoStreams", (string)null);
+                    b.ToTable("CarTelemetry", (string)null);
                 });
 
             modelBuilder.Entity("LteCar.Server.Data.SetupFilterType", b =>
