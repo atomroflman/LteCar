@@ -8,6 +8,10 @@
     </PropertyGroup>
 
     <ItemGroup>
+      <EmbeddedResource Remove="Setup\SetupTexts.de.resx" />
+    </ItemGroup>
+
+    <ItemGroup>
       <PackageReference Include="CSharpVitamins.ShortGuid" Version="2.0.0" />
       <PackageReference Include="Microsoft.AspNetCore.SignalR.Client" Version="9.0.3" />
       <PackageReference Include="Microsoft.AspNetCore.SignalR.Client.Core" Version="9.0.3" />
@@ -31,6 +35,10 @@
 
     <ItemGroup>
       <ProjectReference Include="..\Shared\LteCar.Shared.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Resource Include="Setup\SetupTexts.de.resx" />
     </ItemGroup>
 
     <ItemGroup>
