@@ -11,8 +11,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace LteCar.Server.Migrations
 {
     [DbContext(typeof(LteCarContext))]
-    [Migration("20250805192700_Init")]
-    partial class Init
+    [Migration("20250927235242_CascadeCarRelationsTillEnd")]
+    partial class CascadeCarRelationsTillEnd
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -107,6 +107,59 @@ namespace LteCar.Server.Migrations
                     b.HasIndex("CarId");
 
                     b.ToTable("CarTelemetry");
+                });
+
+            modelBuilder.Entity("LteCar.Server.Data.CarVideoStream", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER");
+
+                    b.Property<int>("CarId")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("EndTime")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("INTEGER")
+                        .HasDefaultValue(true);
+
+                    b.Property<int>("Port")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<string>("ProcessArguments")
+                        .HasMaxLength(500)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Protocol")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("StartTime")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("StreamId")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("StreamPurpose")
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Port");
+
+                    b.HasIndex("StreamId")
+                        .IsUnique();
+
+                    b.HasIndex("CarId", "IsActive");
+
+                    b.ToTable("CarVideoStreams", (string)null);
                 });
 
             modelBuilder.Entity("LteCar.Server.Data.SetupFilterType", b =>
@@ -472,6 +525,17 @@ namespace LteCar.Server.Migrations
                     b.Navigation("Car");
                 });
 
+            modelBuilder.Entity("LteCar.Server.Data.CarVideoStream", b =>
+                {
+                    b.HasOne("LteCar.Server.Data.Car", "Car")
+                        .WithMany()
+                        .HasForeignKey("CarId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Car");
+                });
+
             modelBuilder.Entity("LteCar.Server.Data.User", b =>
                 {
                     b.HasOne("LteCar.Server.Data.Car", "ActiveVehicle")
@@ -505,7 +569,7 @@ namespace LteCar.Server.Migrations
                     b.HasOne("LteCar.Server.Data.UserChannelDevice", "UserChannelDevice")
                         .WithMany("Channels")
                         .HasForeignKey("UserChannelDeviceId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.ClientCascade)
                         .IsRequired();
 
                     b.Navigation("UserChannelDevice");
@@ -516,7 +580,7 @@ namespace LteCar.Server.Migrations
                     b.HasOne("LteCar.Server.Data.User", "User")
                         .WithMany("UserChannelDevices")
                         .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.ClientCascade)
                         .IsRequired();
 
                     b.Navigation("User");
@@ -538,13 +602,13 @@ namespace LteCar.Server.Migrations
                     b.HasOne("LteCar.Server.Data.UserSetupFlowNodeBase", "UserSetupFromNode")
                         .WithMany()
                         .HasForeignKey("UserSetupFromNodeId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.HasOne("LteCar.Server.Data.UserSetupFlowNodeBase", "UserSetupToNode")
                         .WithMany()
                         .HasForeignKey("UserSetupToNodeId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("UserSetupFromNode");

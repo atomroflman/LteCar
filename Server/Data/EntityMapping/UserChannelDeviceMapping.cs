@@ -11,10 +11,12 @@ public class UserChannelDeviceMapping : IEntityTypeConfiguration<UserChannelDevi
         builder.Property(x => x.DeviceName).HasMaxLength(512);
         builder.HasOne(d => d.User)
             .WithMany(u => u.UserChannelDevices)
-            .HasForeignKey(d => d.UserId);
+            .HasForeignKey(d => d.UserId)
+            .OnDelete(DeleteBehavior.Cascade);
         builder.HasMany(d => d.Channels)
             .WithOne(c => c.UserChannelDevice)
-            .HasForeignKey(c => c.UserChannelDeviceId);
+            .HasForeignKey(c => c.UserChannelDeviceId)
+            .OnDelete(DeleteBehavior.Cascade);
         builder.HasIndex(d => new { d.UserId, d.DeviceName }).IsUnique();
     }
 }

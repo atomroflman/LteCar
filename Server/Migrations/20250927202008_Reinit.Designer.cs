@@ -3,6 +3,7 @@ using System;
 using LteCar.Server.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace LteCar.Server.Migrations
 {
     [DbContext(typeof(LteCarContext))]
-    partial class LteCarContextModelSnapshot : ModelSnapshot
+    [Migration("20250927202008_Reinit")]
+    partial class Reinit
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.4");
@@ -566,7 +569,7 @@ namespace LteCar.Server.Migrations
                     b.HasOne("LteCar.Server.Data.UserChannelDevice", "UserChannelDevice")
                         .WithMany("Channels")
                         .HasForeignKey("UserChannelDeviceId")
-                        .OnDelete(DeleteBehavior.ClientCascade)
+                        .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
 
                     b.Navigation("UserChannelDevice");
@@ -599,13 +602,13 @@ namespace LteCar.Server.Migrations
                     b.HasOne("LteCar.Server.Data.UserSetupFlowNodeBase", "UserSetupFromNode")
                         .WithMany()
                         .HasForeignKey("UserSetupFromNodeId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("LteCar.Server.Data.UserSetupFlowNodeBase", "UserSetupToNode")
                         .WithMany()
                         .HasForeignKey("UserSetupToNodeId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.Navigation("UserSetupFromNode");

@@ -11,7 +11,8 @@ public class UserChannelMapping : IEntityTypeConfiguration<UserChannel>
         builder.Property(x => x.Name).HasMaxLength(64);
         builder.HasOne(c => c.UserChannelDevice)
             .WithMany(d => d.Channels)
-            .HasForeignKey(c => c.UserChannelDeviceId);
+            .HasForeignKey(c => c.UserChannelDeviceId)
+            .OnDelete(DeleteBehavior.ClientCascade);
         builder.HasIndex(c => new { c.UserChannelDeviceId, c.IsAxis, c.ChannelId }).IsUnique();
     }
 }

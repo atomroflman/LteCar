@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.Migrations;
 namespace LteCar.Server.Migrations
 {
     /// <inheritdoc />
-    public partial class Init : Migration
+    public partial class Reinit : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
@@ -87,6 +87,33 @@ namespace LteCar.Server.Migrations
                     table.PrimaryKey("PK_CarTelemetry", x => x.Id);
                     table.ForeignKey(
                         name: "FK_CarTelemetry_Cars_CarId",
+                        column: x => x.CarId,
+                        principalTable: "Cars",
+                        principalColumn: "Id",
+                        onDelete: ReferentialAction.Cascade);
+                });
+
+            migrationBuilder.CreateTable(
+                name: "CarVideoStreams",
+                columns: table => new
+                {
+                    Id = table.Column<int>(type: "INTEGER", nullable: false)
+                        .Annotation("Sqlite:Autoincrement", true),
+                    StreamId = table.Column<string>(type: "TEXT", maxLength: 50, nullable: false),
+                    CarId = table.Column<int>(type: "INTEGER", nullable: false),
+                    Protocol = table.Column<string>(type: "TEXT", maxLength: 10, nullable: false),
+                    Port = table.Column<int>(type: "INTEGER", nullable: false),
+                    StartTime = table.Column<DateTime>(type: "TEXT", nullable: false),
+                    EndTime = table.Column<DateTime>(type: "TEXT", nullable: true),
+                    IsActive = table.Column<bool>(type: "INTEGER", nullable: false, defaultValue: true),
+                    ProcessArguments = table.Column<string>(type: "TEXT", maxLength: 500, nullable: true),
+                    StreamPurpose = table.Column<string>(type: "TEXT", maxLength: 100, nullable: true)
+                },
+                constraints: table =>
+                {
+                    table.PrimaryKey("PK_CarVideoStreams", x => x.Id);
+                    table.ForeignKey(
+                        name: "FK_CarVideoStreams_Cars_CarId",
                         column: x => x.CarId,
                         principalTable: "Cars",
                         principalColumn: "Id",
@@ -318,6 +345,22 @@ namespace LteCar.Server.Migrations
                 column: "CarId");
 
             migrationBuilder.CreateIndex(
+                name: "IX_CarVideoStreams_CarId_IsActive",
+                table: "CarVideoStreams",
+                columns: new[] { "CarId", "IsActive" });
+
+            migrationBuilder.CreateIndex(
+                name: "IX_CarVideoStreams_Port",
+                table: "CarVideoStreams",
+                column: "Port");
+
+            migrationBuilder.CreateIndex(
+                name: "IX_CarVideoStreams_StreamId",
+                table: "CarVideoStreams",
+                column: "StreamId",
+                unique: true);
+
+            migrationBuilder.CreateIndex(
                 name: "IX_UserChannel_UserChannelDeviceId_IsAxis_ChannelId",
                 table: "UserChannel",
                 columns: new[] { "UserChannelDeviceId", "IsAxis", "ChannelId" },
@@ -400,6 +443,9 @@ namespace LteCar.Server.Migrations
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
+            migrationBuilder.DropTable(
+                name: "CarVideoStreams");
+
             migrationBuilder.DropTable(
                 name: "SetupFilterTypes");
 

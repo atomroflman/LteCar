@@ -13,7 +13,8 @@ public class CarMapping : IEntityTypeConfiguration<Car>
         builder.Property(x => x.ChannelMapHash).HasMaxLength(64);
         builder.HasMany(v => v.Functions)
             .WithOne(f => f.Car)
-            .HasForeignKey(f => f.CarId);
+            .HasForeignKey(f => f.CarId)
+            .OnDelete(DeleteBehavior.Cascade);
         builder.OwnsOne(v => v.VideoSettings, b =>
         {
             b.WithOwner();

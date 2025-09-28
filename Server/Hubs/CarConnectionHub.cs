@@ -150,6 +150,10 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
             if (!channelMap.ControlChannels.ContainsKey(channel.ChannelName))
             {
                 Logger.LogWarning($"Channel with ID {channel.ChannelName} not found in the new channel map. Removing it.");
+                dbContext.Set<UserSetupCarChannelNode>().Where(n => n.CarChannelId == channel.Id)
+                    .ToList()
+                    .ForEach(n => dbContext.Set<UserSetupCarChannelNode>().Remove(n));
+
                 dbContext.CarChannels.Remove(channel);
             }
         }
