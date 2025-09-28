@@ -57,6 +57,24 @@
       }
     }
   },
+  "videoStreams": {
+    "mainCamera": {
+      "name": "Main Camera",
+      "description": "Primary vehicle camera for navigation and monitoring",
+      "type": "camera",
+      "location": "front",
+      "enabled": true,
+      "priority": 1
+    },
+    "rearCamera": {
+      "name": "Rear Camera",
+      "description": "Rear view camera for backing assistance",
+      "type": "camera",
+      "location": "rear",
+      "enabled": false,
+      "priority": 2
+    }
+  },
   "telemetryChannels": {
     "lifetime": {
       "telemetryType": "LteCar.Onboard.Telemetry.ApplicationLifetimeReader"

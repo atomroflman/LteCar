@@ -10,6 +10,8 @@ public class ChannelMap
     public Dictionary<string, ControlChannelMapItem> ControlChannels { get; set; } = new();
     [JsonPropertyName("telemetryChannels")]
     public Dictionary<string, TelemetryChannelMapItem> TelemetryChannels { get; set; } = new();
+    [JsonPropertyName("videoStreams")]
+    public Dictionary<string, VideoStreamMapItem> VideoStreams { get; set; } = new();
 }
 
 public class PinManagerMapItem
