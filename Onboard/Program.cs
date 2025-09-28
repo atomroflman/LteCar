@@ -4,6 +4,7 @@ using LteCar.Onboard;
 using LteCar.Onboard.Control;
 using LteCar.Onboard.Control.ControlTypes;
 using LteCar.Onboard.Hardware;
+using LteCar.Onboard.Setup;
 using LteCar.Onboard.Telemetry;
 using LteCar.Onboard.Vehicle;
 using LteCar.Onboard.Video;
@@ -17,7 +18,7 @@ using Microsoft.Extensions.Logging.Configuration;
 // Setup-Modus prüfen
 if (args.Length > 0 && args[0].Equals("setup", StringComparison.OrdinalIgnoreCase))
 {
-    Setup.ConfigTool.Run();
+    LteCar.Onboard.Setup.VehicleSetupTool.Run();
     return;
 }
 
@@ -53,7 +54,7 @@ serviceCollection.AddSingleton<ChannelMap>(channelMap);
 serviceCollection.AddSingleton<IConfiguration>(configuration);
 serviceCollection.AddSingleton<ServerConnectionService>();
 serviceCollection.AddSingleton<VideoStreamService>();
-serviceCollection.AddSingleton<GStreamerVideoService>();
+serviceCollection.AddSingleton<VideoStreamService>();
 serviceCollection.AddSingleton<CarConfigurationService>();
 serviceCollection.AddSingleton<ControlService>();
 serviceCollection.AddSingleton<ControlExecutionService>();
@@ -81,7 +82,7 @@ configService.OnConfigurationChanged += () =>
     logger.LogInformation($"Configuration changed to: {JsonSerializer.Serialize(config)}");
 };
 //var videoStreamService = serviceProvider.GetRequiredService<VideoStreamService>();
-var gstreamerVideoService = serviceProvider.GetRequiredService<GStreamerVideoService>();
+var videoStreamService = serviceProvider.GetRequiredService<VideoStreamService>();
 var connectionService = serviceProvider.GetRequiredService<ServerConnectionService>();
 var carControlService = serviceProvider.GetRequiredService<ControlService>();
 
@@ -99,7 +100,7 @@ await carControlService.ConnectToServer();
 
 // Starte GStreamer Video Service
 logger.LogInformation("Starting GStreamer video service...");
-await gstreamerVideoService.StartAsync();
+videoStreamService.StartLibcameraProcess();
 
 logger.LogInformation($"Car Engine Started...");
 
