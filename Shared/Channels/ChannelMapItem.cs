@@ -28,3 +28,26 @@ public class TelemetryChannelMapItem : ChannelMapItem
     public string TelemetryType { get; set; }
 }
 
+public class VideoStreamMapItem
+{
+    [JsonPropertyName("name")]
+    public string? Name { get; set; }
+    
+    [JsonPropertyName("description")]
+    public string? Description { get; set; }
+    
+    [JsonPropertyName("type")]
+    public string? Type { get; set; }
+    
+    [JsonPropertyName("location")]
+    public string? Location { get; set; }
+    
+    [JsonPropertyName("enabled")]
+    public bool Enabled { get; set; }
+    
+    [JsonPropertyName("priority")]
+    public int Priority { get; set; }
+}
+
+
+
