@@ -9,6 +9,7 @@ public class UserSetupCarChannelNodeMapping : IEntityTypeConfiguration<UserSetup
     {
         builder.HasOne(f => f.CarChannel)
             .WithMany(v => v.SetupNodes)
-            .HasForeignKey(f => f.CarChannelId);
+            .HasForeignKey(f => f.CarChannelId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }
