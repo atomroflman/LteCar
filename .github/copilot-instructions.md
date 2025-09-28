@@ -23,6 +23,14 @@
 - Prefix private fields with underscore (`_fieldName`)
 - Use UPPER_SNAKE_CASE for constants
 
+### Communication
+- Use `Task` for methods that do not return a value
+- Use `Task<T>` for methods that return a value
+- Use `IEnumerable<T>` for collections that are not modified
+- Use `IList<T>` or `List<T>` for collections that are modified
+- Send messages using SignalR 
+- Use Typed Clients for SignalR communication
+
 ### Naming Conventions
 - Use meaningful names that clearly indicate purpose
 - Use nouns for classes and interfaces (prefix interfaces with 'I')

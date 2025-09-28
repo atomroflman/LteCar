@@ -4,14 +4,14 @@ using LteCar.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 
-namespace LteCar.Onboard;
+namespace LteCar.Onboard.Video;
 
 public class VideoStreamService : IDisposable
 {
-    private VideoSettings _videoSettings;
-    private Process _libcameraProcess;
-    private CancellationTokenSource _libcameraToken;
-    private JanusConfiguration _janusConfiguration;
+    private VideoSettings? _videoSettings;
+    private Process? _libcameraProcess;
+    private CancellationTokenSource? _libcameraToken;
+    private JanusConfiguration? _janusConfiguration;
     public ILogger<VideoStreamService> Logger { get; }
     public CarConfigurationService ConfigService { get; }
     public CameraProcessParameterBuilder CameraProcessParameterBuilder { get; }
@@ -61,7 +61,7 @@ public class VideoStreamService : IDisposable
         // Kill the existing process if it's running
         if (_libcameraProcess != null && !_libcameraProcess.HasExited)
         {
-            _libcameraToken.Cancel();
+            _libcameraToken?.Cancel();
             _libcameraProcess.Kill();
             _libcameraProcess.Dispose();
             _libcameraProcess = null;

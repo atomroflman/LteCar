@@ -15,13 +15,13 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
 {
     public IHubContext<CarUiHub, ICarUiClient> UiHub { get; }
     public ILogger<CarConnectionHub> Logger { get; }
-    private readonly VideoStreamRecieverService _streamService;
+    private readonly VideoStreamReceiverService _streamService;
     private readonly IConfigurationService _configService;
 
     protected int JanusUdpPortMin => _configService.Janus.UdpPortRangeStart;
     protected int JanusUdpPortMax => _configService.Janus.UdpPortRangeEnd;
     
-    public CarConnectionHub(IHubContext<CarUiHub, ICarUiClient> uiHub, IConfigurationService configService, ILogger<CarConnectionHub> logger, VideoStreamRecieverService streamService)
+    public CarConnectionHub(IHubContext<CarUiHub, ICarUiClient> uiHub, IConfigurationService configService, ILogger<CarConnectionHub> logger, VideoStreamReceiverService streamService)
     {
         UiHub = uiHub;
         Logger = logger;
