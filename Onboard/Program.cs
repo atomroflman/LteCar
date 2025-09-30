@@ -97,6 +97,13 @@ if (configuration.GetValue<bool>("EnableChannelTest"))
 }
 
 await connectionService.ConnectToServer(carId);
+// Try load previous sync (contains server IDs) before optional sync
+var hadPreviousSync = connectionService.TryLoadPreviousSync();
+if (!hadPreviousSync)
+{
+    await connectionService.SyncChannelMapAsync(carId);
+}
+// Connect control (will trigger sync if server hash mismatch)
 await carControlService.ConnectToServer();
 
 // Start video streams from channel map

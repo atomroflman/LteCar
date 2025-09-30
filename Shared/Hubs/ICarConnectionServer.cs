@@ -5,4 +5,5 @@ public interface ICarConnectionServer
 {
     Task<CarConfiguration> OpenCarConnection(string carId, string channelMapHash);
     Task UpdateChannelMap(string carId, ChannelMap channelMap);
+    Task<ChannelMapSyncResponse> SyncChannelMap(ChannelMapSyncRequest request);
 }
