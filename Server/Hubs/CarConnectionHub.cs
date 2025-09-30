@@ -1,3 +1,4 @@
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using LteCar.Onboard;
@@ -13,6 +14,13 @@ namespace LteCar.Server.Hubs;
 
 public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
 {
+    // Handshake Overview:
+    // 1. Car connects and (optionally) calls SyncChannelMap first sending full ChannelMap.
+    // 2. Server upserts channels/video streams, assigns compact numeric IDs and returns:
+    //      - Hash (SHA256 of canonical map) stored on both sides
+    //      - Normalized ChannelMap + dictionaries name->int id for bandwidth-efficient future messages
+    // 3. OpenCarConnection now only needs the hash to determine if a legacy update is required.
+    // This reduces startup round trips and prepares for ID-based messaging.
     public IHubContext<CarUiHub, ICarUiClient> UiHub { get; }
     public ILogger<CarConnectionHub> Logger { get; }
     private readonly VideoStreamReceiverService _streamService;
@@ -249,5 +257,141 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
             Logger.LogError(ex, $"Error ensuring stream exists for car '{carId}'");
             return null;
         }
+    }
+
+    public async Task<ChannelMapSyncResponse> SyncChannelMap(ChannelMapSyncRequest request)
+    {
+        Logger.LogInformation("SyncChannelMap invoked for car {CarId}", request.CarId);
+        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
+        var car = dbContext.Cars.FirstOrDefault(c => c.CarId == request.CarId);
+        if (car == null)
+        {
+            car = new Car() { CarId = request.CarId, LastSeen = DateTime.Now };
+            dbContext.Cars.Add(car);
+            await dbContext.SaveChangesAsync();
+        }
+
+        var map = request.ChannelMap ?? new ChannelMap();
+
+        // Ensure DB entries and build numeric ID maps
+        var controlIds = new Dictionary<string,int>();
+        foreach (var kv in map.ControlChannels)
+        {
+            var db = dbContext.CarChannels.FirstOrDefault(c => c.ChannelName == kv.Key && c.CarId == car.Id);
+            if (db == null)
+            {
+                db = new CarChannel { ChannelName = kv.Key, CarId = car.Id };
+                dbContext.CarChannels.Add(db);
+                await dbContext.SaveChangesAsync();
+            }
+            controlIds[kv.Key] = db.Id; // numeric id from DB identity
+        }
+        // Remove stale
+        foreach (var stale in dbContext.CarChannels.Where(c => c.CarId == car.Id).ToList())
+        {
+            if (!map.ControlChannels.ContainsKey(stale.ChannelName))
+            {
+                dbContext.CarChannels.Remove(stale);
+            }
+        }
+
+        var telemetryIds = new Dictionary<string,int>();
+        foreach (var kv in map.TelemetryChannels)
+        {
+            var db = dbContext.CarTelemetry.FirstOrDefault(c => c.ChannelName == kv.Key && c.CarId == car.Id);
+            if (db == null)
+            {
+                db = new CarTelemetry { ChannelName = kv.Key, CarId = car.Id };
+                dbContext.CarTelemetry.Add(db);
+                await dbContext.SaveChangesAsync();
+            }
+            db.TelemetryType = kv.Value.TelemetryType;
+            db.ReadIntervalTicks = kv.Value.ReadIntervalTicks;
+            telemetryIds[kv.Key] = db.Id;
+        }
+        foreach (var stale in dbContext.CarTelemetry.Where(c => c.CarId == car.Id).ToList())
+        {
+            if (!map.TelemetryChannels.ContainsKey(stale.ChannelName))
+            {
+                dbContext.CarTelemetry.Remove(stale);
+            }
+        }
+
+        var videoIds = new Dictionary<string,int>();
+        foreach (var kv in map.VideoStreams)
+        {
+            var value = kv.Value;
+            var db = dbContext.CarVideoStreams.FirstOrDefault(s => s.StreamId == value.StreamId && s.CarId == car.Id);
+            if (db == null)
+            {
+                db = new CarVideoStream { StreamId = value.StreamId, CarId = car.Id, StartTime = DateTime.Now };
+                dbContext.CarVideoStreams.Add(db);
+                await dbContext.SaveChangesAsync();
+            }
+            db.IsActive = value.Enabled;
+            db.StreamPurpose = value.Purpose;
+            db.Protocol = value.Protocol;
+            db.ProcessArguments = JsonSerializer.Serialize(value);
+            videoIds[value.StreamId] = db.Id;
+        }
+        foreach (var stale in dbContext.CarVideoStreams.Where(s => s.CarId == car.Id).ToList())
+        {
+            if (!map.VideoStreams.Values.Any(v => v.StreamId == stale.StreamId))
+            {
+                dbContext.CarVideoStreams.Remove(stale);
+            }
+        }
+
+        await dbContext.SaveChangesAsync();
+
+
+        // Compute hash (canonical JSON with sorted keys)
+        string hash;
+        {
+            var options = new JsonSerializerOptions { WriteIndented = false };
+            var canonical = JsonSerializer.Serialize(map, options);
+            using var sha = SHA256.Create();
+            var bytes = sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(canonical));
+            hash = Convert.ToHexString(bytes);
+        }
+        car.ChannelMapHash = hash;
+        car.LastSeen = DateTime.Now;
+        await dbContext.SaveChangesAsync();
+
+        var response = new ChannelMapSyncResponse
+        {
+            Hash = hash,
+            ChannelMap = map,
+            ControlIds = controlIds,
+            TelemetryIds = telemetryIds,
+            VideoIds = videoIds,
+            GeneratedAtUtc = DateTime.UtcNow
+        };
+
+        // Annotate map items with their server ids for persistence on the client side
+        foreach (var kv in map.ControlChannels)
+        {
+            if (controlIds.TryGetValue(kv.Key, out var id))
+            {
+                kv.Value.ServerId = id;
+            }
+        }
+        foreach (var kv in map.TelemetryChannels)
+        {
+            if (telemetryIds.TryGetValue(kv.Key, out var id))
+            {
+                kv.Value.ServerId = id;
+            }
+        }
+        foreach (var kv in map.VideoStreams)
+        {
+            if (videoIds.TryGetValue(kv.Value.StreamId, out var id))
+            {
+                kv.Value.ServerId = id;
+            }
+        }
+
+        Logger.LogInformation("ChannelMap sync complete for {CarId} hash {Hash}", request.CarId, hash);
+        return response;
     }
 }

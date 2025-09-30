@@ -1,3 +1,56 @@
+# Project Overview
+This project is a C# LTE powered RC Car platform with a modular architecture, allowing easy integration of various hardware components and features.
+
+## Architecture
+The project is structured into several key components, that are organized in folders:
+```
+LteCar/
+├── Onboard/                # Main application running on the car
+│   ├── Control/            # Control channel implementations (Steering, Throttle, etc.)
+│   ├── Hardware/           # Hardware abstraction layer and drivers
+│   ├── Telemetry/          # Telemetry channel implementations (GPS, IMU, etc.)
+│   ├── Video/              # Video streaming and camera handling
+│   ├── Setup/              # Interactive setup tool for configuring the car
+│   ├── appSettings.json    # Application settings and configuration
+│   └── channelMap.json     # Hardware and channel mapping configuration
+├── VehicleTemplates/       # Predefined vehicle templates
+│   ├── [TemplateName]/     # Example vehicle template with documentation
+│   │   ├── docs/           # Documentation for the Vehicle
+│   │   ├── models/         # 3D models and CAD files
+│   │   ├── scripts/        # Custom Scripts for additional features
+│   │   └── config.json     # Vehicle configuration file
+│   └── README.md           # Overview of available vehicle templates
+├── Shared/                 # Shared utilities and extensions
+├── Server/                 # Server-side components and APIs
+│   ├── Hubs/               # SignalR hubs for real-time communication
+│   ├── Services/           # Business logic and services
+│   ├── Data/               # Database context and migrations
+│   ├── appsettings.json    # Server application settings
+│   └── Program.cs          # Server entry point
+├── docs/                   # General documentation
+│   ├── Server/             # Server documentation
+│   ├── Onboard/            # Onboard documentation
+│   └── VehicleTemplates/   # VehicleTemplates documentation
+└── README.md               # Project overview and documentation
+```
+
+The Server component handles user authentication, vehicle management, and real-time communication using SignalR. 
+The Onboard application runs on the RC car, managing hardware interactions, control channels, telemetry, and video streaming. 
+The Client is running in the Browser but served from the same machine than the API / Server.
+
+## General considerations
+The communication will be channeled over the server.
+The transport shall be done with SignalR.
+The transport between Car and Server shall be done with MessagePack.
+The transport between Car and Server shall be optimized for low bandwidth and high latency (LTE).
+Keep the bandwith requirement as small as possible.
+Cache and reference data to avoid multiple sends.
+The transport between Client and Server shall be done with JSON.
+
+## Copilot Instructions
+Keep your findings in mind when writing code.
+Store them in `.github/copilot-memories.md` for future reference.
+
 ## Language
 - Write clear and concise code
 - Write comments only when necessary, except for public APIs

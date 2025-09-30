@@ -4,6 +4,7 @@ using System.Text.Json.Serialization;
 using System.Threading.Channels;
 using LteCar.Shared;
 using LteCar.Shared.Channels;
+using System.Security.Cryptography;
 using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Configuration;
@@ -15,13 +16,20 @@ namespace LteCar.Onboard;
 
 public class ServerConnectionService
 {
+    // Initialization sequence (new handshake):
+    // 1. Establish SignalR hub connection.
+    // 2. Call SyncChannelMapAsync (preferred) to push full ChannelMap & receive numeric ID mapping + hash.
+    // 3. Call OpenCarConnection using the server-provided hash to avoid redundant UpdateChannelMap traffic.
+    // 4. If server indicates mismatch (legacy cases or server side reset) we trigger a fresh SyncChannelMap.
+    // Persisted artifacts: channelMap.server.json (server-normalized map + ids) & channelMap.hash.
     public IServiceProvider ServiceProvider { get; }
     public ILogger<ServerConnectionService> Logger { get; }
 
     private readonly ChannelMap _channelMap;
     private readonly IConfiguration _configuration;
     private HubConnection _connection;
-    
+    private ChannelMapSyncResponse? _lastSync;
+
     public ServerConnectionService(ChannelMap channelMap, IConfiguration configuration, IServiceProvider serviceProvider, ILogger<ServerConnectionService> logger)
     {
         ServiceProvider = serviceProvider;
@@ -76,18 +84,21 @@ public class ServerConnectionService
         Logger.LogDebug($"Tested... Open connection with carId: {carId}");
         // var config = await _connection.InvokeAsync<CarConfiguration>("OpenCarConnection", carId);
         // Logger.LogDebug("invoked manually...");
-        var connectionServer = _connection.CreateHubProxy<ICarConnectionServer>();
-        Logger.LogDebug("Proxy created...");
-        var channelMapHash = ChannelMapHashProvider.GenerateHash(_channelMap);
-        var config = await connectionServer.OpenCarConnection(carId, channelMapHash);
+    var connectionServer = _connection.CreateHubProxy<ICarConnectionServer>();
+    Logger.LogDebug("Proxy created...");
+    // Prefer hash from last SyncChannelMap (if sync already performed before OpenCarConnection is called)
+    var channelMapHash = _lastSync?.Hash ?? ChannelMapHashProvider.GenerateHash(_channelMap);
+    var config = await connectionServer.OpenCarConnection(carId, channelMapHash);
         if (config == null)
         {
             Logger.LogError("Failed to open car connection.");
             return;
         }
-        if (config.RequiresChannelMapUpdate) {
-            Logger.LogInformation("Channel map update required.");
-            await connectionServer.UpdateChannelMap(carId, _channelMap);
+        // If server still requests channel map update (e.g., initial legacy path or mismatch), perform sync now
+        if (config.RequiresChannelMapUpdate)
+        {
+            Logger.LogInformation("Server indicates channel map mismatch. Triggering SyncChannelMap now.");
+            await SyncChannelMapAsync(carId);
         }
         Logger.LogDebug($"OpenCarConnection called: {JsonSerializer.Serialize(config)}");
         if (config == null)
@@ -97,5 +108,71 @@ public class ServerConnectionService
         }
         var configService = ServiceProvider.GetRequiredService<CarConfigurationService>();
         configService.UpdateConfiguration(config);
+    }
+
+    public async Task<ChannelMapSyncResponse?> SyncChannelMapAsync(string carId)
+    {
+        if (_connection == null)
+        {
+            Logger.LogError("Cannot sync channel map. Connection not established.");
+            return null;
+        }
+        var proxy = _connection.CreateHubProxy<ICarConnectionServer>();
+        var request = new ChannelMapSyncRequest { CarId = carId, ChannelMap = _channelMap };
+        Logger.LogInformation("Sending ChannelMapSyncRequest with {Control} control, {Telemetry} telemetry, {Video} video streams", _channelMap.ControlChannels.Count, _channelMap.TelemetryChannels.Count, _channelMap.VideoStreams.Count);
+        var response = await _connection.InvokeAsync<ChannelMapSyncResponse>("SyncChannelMap", request);
+        _lastSync = response;
+        try
+        {
+            await File.WriteAllTextAsync("channelMap.server.json", JsonSerializer.Serialize(response, new JsonSerializerOptions { WriteIndented = true }));
+            await File.WriteAllTextAsync("channelMap.hash", response.Hash);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to persist channel map sync response");
+        }
+        Logger.LogInformation("Channel map synced. Hash {Hash}", response.Hash);
+        return response;
+    }
+
+    public bool TryLoadPreviousSync()
+    {
+        try
+        {
+            if (!File.Exists("channelMap.server.json")) return false;
+            var json = File.ReadAllText("channelMap.server.json");
+            var stored = JsonSerializer.Deserialize<ChannelMapSyncResponse>(json);
+            if (stored == null || stored.ChannelMap == null) return false;
+            // Copy serverIds into current in-memory map if matching keys exist
+            foreach (var kv in stored.ChannelMap.ControlChannels)
+            {
+                if (_channelMap.ControlChannels.TryGetValue(kv.Key, out var current))
+                {
+                    current.ServerId = kv.Value.ServerId;
+                }
+            }
+            foreach (var kv in stored.ChannelMap.TelemetryChannels)
+            {
+                if (_channelMap.TelemetryChannels.TryGetValue(kv.Key, out var current))
+                {
+                    current.ServerId = kv.Value.ServerId;
+                }
+            }
+            foreach (var kv in stored.ChannelMap.VideoStreams)
+            {
+                if (_channelMap.VideoStreams.TryGetValue(kv.Key, out var current))
+                {
+                    current.ServerId = kv.Value.ServerId;
+                }
+            }
+            _lastSync = stored;
+            Logger.LogInformation("Loaded previous channel map sync with hash {Hash}", stored.Hash);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to load previous channel map sync");
+            return false;
+        }
     }
 }
