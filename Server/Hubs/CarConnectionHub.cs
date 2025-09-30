@@ -178,6 +178,43 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
                 dbContext.CarTelemetry.Remove(channel);
             }
         }
+
+        // Handle video streams
+        foreach (var stream in channelMap.VideoStreams)
+        {
+            var streamDb = dbContext.CarVideoStreams.FirstOrDefault(s => s.StreamId == stream.Value.StreamId && s.CarId == car.Id);
+            if (streamDb == null)
+            {
+                Logger.LogInformation($"Video stream with ID {stream.Value.StreamId} not found. Creating a new one.");
+                streamDb = new CarVideoStream() 
+                { 
+                    StreamId = stream.Value.StreamId, 
+                    CarId = car.Id,
+                    StartTime = DateTime.Now
+                };
+                dbContext.CarVideoStreams.Add(streamDb);
+            }
+            
+            // Update stream properties
+            streamDb.Protocol = stream.Value.Protocol;
+            streamDb.StreamPurpose = stream.Value.Purpose;
+            streamDb.IsActive = stream.Value.Enabled;
+            
+            // Store stream configuration as JSON for later use
+            var streamConfigJson = System.Text.Json.JsonSerializer.Serialize(stream.Value);
+            streamDb.ProcessArguments = streamConfigJson;
+        }
+
+        // Remove video streams that are no longer in the channel map
+        foreach (var stream in dbContext.CarVideoStreams.Where(s => s.CarId == car.Id))
+        {
+            if (!channelMap.VideoStreams.Values.Any(vs => vs.StreamId == stream.StreamId))
+            {
+                Logger.LogWarning($"Video stream with ID {stream.StreamId} not found in the new channel map. Removing it.");
+                dbContext.CarVideoStreams.Remove(stream);
+            }
+        }
+
         await dbContext.SaveChangesAsync();
         Logger.LogInformation($"Channel map updated for car {carId}. Channel map hash: {car.ChannelMapHash}");
     }

@@ -69,5 +69,61 @@
         "channel": "A5:C2:37:55:36:B6"
       }
     }
+  },
+  "videoStreams": {
+    "main": {
+      "streamId": "main",
+      "enabled": true,
+      "videoSettings": {
+        "width": 1280,
+        "height": 720,
+        "framerate": 30,
+        "bitrate": 2500000,
+        "brightness": 0
+      },
+      "protocol": "UDP",
+      "purpose": "main_camera",
+      "codec": "vp8",
+      "options": {
+        "cameraDevice": "/dev/video0",
+        "cameraType": "libcamera-vid"
+      }
+    },
+    "secondary": {
+      "streamId": "secondary",
+      "enabled": false,
+      "videoSettings": {
+        "width": 640,
+        "height": 480,
+        "framerate": 22,
+        "bitrate": 1500000,
+        "brightness": 0
+      },
+      "protocol": "UDP",
+      "purpose": "rear_camera",
+      "codec": "vp8",
+      "options": {
+        "cameraDevice": "/dev/video1",
+        "cameraType": "libcamera-vid"
+      }
+    },
+    "low_res": {
+      "streamId": "low_res",
+      "enabled": true,
+      "videoSettings": {
+        "width": 320,
+        "height": 240,
+        "framerate": 15,
+        "bitrate": 500000,
+        "brightness": 0
+      },
+      "protocol": "UDP",
+      "purpose": "telemetry_overlay",
+      "codec": "vp8",
+      "options": {
+        "cameraDevice": "/dev/video0",
+        "cameraType": "libcamera-vid"
+      }
+    }
   }
 }

@@ -37,7 +37,7 @@ public class CarVideoStreamMapping : IEntityTypeConfiguration<CarVideoStream>
 
         // Foreign Key zu Car
         builder.HasOne(x => x.Car)
-            .WithMany()
+            .WithMany(c => c.VideoStreams)
             .HasForeignKey(x => x.CarId)
             .OnDelete(DeleteBehavior.Cascade);
 
