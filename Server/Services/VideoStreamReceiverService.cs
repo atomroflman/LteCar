@@ -35,7 +35,7 @@ public class StreamConfiguration
     public int TcpPortRangeEnd { get; set; } = 11200;
 }
 
-public class VideoStreamRecieverService
+public class VideoStreamReceiverService
 {
     private Process? _janusProcess;
     private Process? _ffmpegProcess;
@@ -43,7 +43,7 @@ public class VideoStreamRecieverService
     private readonly StreamConfiguration _streamConfig;
     private readonly IServiceProvider _serviceProvider;
 
-    public VideoStreamRecieverService(ILogger<VideoStreamRecieverService> logger, IOptions<StreamConfiguration> streamConfig, IServiceProvider serviceProvider)
+    public VideoStreamReceiverService(ILogger<VideoStreamReceiverService> logger, IOptions<StreamConfiguration> streamConfig, IServiceProvider serviceProvider)
     {
         Logger = logger;
         _streamConfig = streamConfig.Value;
@@ -53,7 +53,7 @@ public class VideoStreamRecieverService
         _ = Task.Run(LoadActiveStreamsFromDatabase);
     }
 
-    public ILogger<VideoStreamRecieverService> Logger { get; }
+    public ILogger<VideoStreamReceiverService> Logger { get; }
 
     public async Task<StreamInfo?> StartNewStream(StreamProtocol protocol, string? carId = null, string? streamId = null, string? streamPurpose = null)
     {

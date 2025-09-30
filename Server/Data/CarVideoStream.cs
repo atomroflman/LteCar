@@ -1,5 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Text.Json;
 
 namespace LteCar.Server.Data;
 
@@ -15,6 +16,7 @@ public class CarVideoStream : EntityBase
     [ForeignKey(nameof(CarId))]
     public Car Car { get; set; } = null!;
 
+    // Transport details (existing)
     [Required]
     [MaxLength(10)]
     public string Protocol { get; set; } = string.Empty; // TCP, UDP
@@ -36,6 +38,29 @@ public class CarVideoStream : EntityBase
     [MaxLength(100)]
     public string? StreamPurpose { get; set; } // "video", "telemetry", "control", etc.
 
+    // Metadata fields (new)
+    [Required]
+    [MaxLength(100)]
+    public string Name { get; set; } = string.Empty;
+
+    [MaxLength(500)]
+    public string? Description { get; set; }
+
+    [Required]
+    [MaxLength(50)]
+    public string Type { get; set; } = string.Empty; // "camera", "sensor", "diagnostic"
+
+    [MaxLength(50)]
+    public string? Location { get; set; } // "front", "rear", "left", "right", "interior"
+
+    [Required]
+    public int Priority { get; set; } = 1;
+
+    [Required]
+    public bool Enabled { get; set; } = true;
+
+    public DateTime LastStatusUpdate { get; set; } = DateTime.UtcNow;
+
     [NotMapped]
-    public bool IsRunning => IsActive && EndTime == null;
+    public bool IsRunning => IsActive && Enabled && EndTime == null;
 }
