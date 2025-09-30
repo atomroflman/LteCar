@@ -4,6 +4,7 @@ using LteCar.Onboard;
 using LteCar.Onboard.Control;
 using LteCar.Onboard.Control.ControlTypes;
 using LteCar.Onboard.Hardware;
+using LteCar.Onboard.Setup;
 using LteCar.Onboard.Telemetry;
 using LteCar.Onboard.Vehicle;
 using LteCar.Onboard.Video;
@@ -18,8 +19,7 @@ using LteCar.Onboard.Setup;
 // Setup-Modus prüfen
 if (args.Length > 0 && args[0].Equals("setup", StringComparison.OrdinalIgnoreCase))
 {
-    // ConfigTool.Run(); // Currently disabled
-    Console.WriteLine("Setup mode is currently disabled.");
+    LteCar.Onboard.Setup.VehicleSetupTool.Run();
     return;
 }
 

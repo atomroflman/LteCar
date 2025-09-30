@@ -19,7 +19,7 @@ builder.Logging.AddConsole()
 // Configure application configuration
 builder.Services.AddApplicationConfiguration(builder.Configuration);
 
-builder.Services.AddSingleton<VideoStreamRecieverService>();
+builder.Services.AddSingleton<VideoStreamReceiverService>();
 builder.Services.AddSingleton<CarConnectionStore>();
 builder.Services.AddDbContext<LteCarContext>((serviceProvider, options) =>
 {
@@ -61,12 +61,12 @@ using (var scope = app.Services.CreateScope())
 var logger = app.Services.GetRequiredService<ILogger<Program>>();
 
 logger.LogInformation("Database migrations applied successfully.");
-var vss = app.Services.GetRequiredService<VideoStreamRecieverService>();
+var vss = app.Services.GetRequiredService<VideoStreamReceiverService>();
 
 var configService = app.Services.GetRequiredService<IConfigurationService>();
 if (configService.Application.RunJanusServer)
 {
-    app.Services.GetRequiredService<VideoStreamRecieverService>().RunVideoStreamServer();
+    app.Services.GetRequiredService<VideoStreamReceiverService>().RunVideoStreamServer();
 }
 else
 {
