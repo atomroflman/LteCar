@@ -1,5 +1,11 @@
 import { AddFunction } from "./AddFunction";
 import { ClampFunction } from "./ClampFunction";
+import { DivideFunction } from "./DivideFunction";
+import { FloatValueFunction } from "./FloatValueFunction";
+import { GearboxFunction } from "./GearboxFunction";
+import { LogFunction } from "./LogFunction";
+import { ModuloFunction } from "./ModuloFunction";
+import { PowerFunction } from "./PowerFunction";
 import { RescaleFunction } from "./RescaleFunction";
 import { ReverseFunction } from "./ReverseFunction";
 import { ScaleFunction } from "./ScaleFunction";
@@ -23,7 +29,8 @@ export type FilterFunctionDef<TInputs extends ReadonlyArray<string>> = {
   params: FilterFunctionParam[];
   inputLabels: TInputs; // readonly string[]
   outputLabels: string[];
-  apply: (inputs: InputMap<TInputs>, params: Record<string, any>, nodeId?: number) => number[];
+  init?: () => void;
+  apply: (inputs: InputMap<TInputs>, params: Record<string, any>, nodeId?: number) => (number | string)[];
 };
 
 export const filterFunctionRegistry = {
@@ -31,8 +38,14 @@ export const filterFunctionRegistry = {
   Scale: new ScaleFunction(),
   Reverse: new ReverseFunction(),
   Add: new AddFunction(),
+  Divide: new DivideFunction(),
+  Modulo: new ModuloFunction(),
+  Power: new PowerFunction(),
+  Log: new LogFunction(),
   Toggle: new ToggleFunction(),
   TurnSignal: new TurnSignal(),
   Rescale: new RescaleFunction(),
+  Gearbox: new GearboxFunction(),
+  FloatValue: new FloatValueFunction(),
 };
 

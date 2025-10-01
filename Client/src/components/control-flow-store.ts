@@ -114,6 +114,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(params),
       });
+      get().handleInputUpdate(nodeId, params.input ?? 0);
     }
   },
   async addEdge(params: Connection) {
@@ -313,25 +314,25 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
   },  
   handleInputUpdate(inputDbId: number, value: number) {
     const state = get();
-    let queue: {nodeId: number, inputValues: Record<string, number>}[] = [];
+    let queue: {nodeId: number, inputValues: Record<string, number | string>}[] = [];
     state.nodes.forEach(node => {
       if (node.type === "input" && node.representingId === inputDbId) {
         queue.push({ nodeId: node.nodeId, inputValues: { input: value } });
       }
     });
     const visited = new Set<number>();
-    function executeNode(nodeId: number, inputValues: Record<string, number>): number[] {
+    function executeNode(nodeId: number, inputValues: Record<string, number | string>): (number | string)[] {
       const node = state.nodes.find(n => n.nodeId === nodeId);
       if (!node) return [];
       if (node.nodeTypeName === "UserSetupUserChannelNode") {
-        return [inputValues.input ?? 0];
+        return [inputValues.input ?? 0] as (number[] | string[]);
       }
       if (node.nodeTypeName === "UserSetupFunctionNode") {
         const fnName: string | undefined = node.metadata?.functionName;
         if (!fnName) return [];
         const fnDef = filterFunctionRegistry[fnName as keyof typeof filterFunctionRegistry];
         if (!fnDef) return [];
-        const mappedInputs: Record<string, number> = {};
+        const mappedInputs: Record<string, number | string> = {};
         (fnDef.inputLabels as readonly string[]).forEach((label: string) => {
           let val = inputValues[label];
           if (val === undefined) {
@@ -358,13 +359,17 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
               }
             }
           }
-          mappedInputs[label] = val ?? 0;
+          mappedInputs[label] = val ?? 0 as number | string;
         });
         return fnDef.apply(mappedInputs as any, node.params || {}, node.nodeId);
       }
       if (node.nodeTypeName === "UserSetupCarChannelNode") {
-        state.sendOutput(node.representingId!, inputValues.input ?? 0);
-        return [inputValues.input ?? 0];
+        const inputValue = inputValues.input ?? 0 as number | string;
+        if (typeof inputValue === "string") {
+          throw new Error("Car channel input value is a string");
+        }
+        state.sendOutput(node.representingId!, (inputValues.input ?? 0) as number);
+        return [inputValues.input ?? 0 as number | string];
       }
       return [];
     }
@@ -375,11 +380,11 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
       visited.add(next.nodeId);
       const node = state.nodes.find(n => n.nodeId === next.nodeId);
       if (!node) continue;
-      let calculatedValue: number[] = executeNode(node.nodeId, next.inputValues);
+      let calculatedValue: (number | string)[] = executeNode(node.nodeId, next.inputValues);
       if (calculatedValue[0] === state.nodeLatestValues[node.nodeId]) 
         continue;
-      state.nodeLatestValues[node.nodeId] = calculatedValue[0];
-      node.latestValue = calculatedValue[0];
+      state.nodeLatestValues[node.nodeId] = calculatedValue[0] as number;
+      node.latestValue = calculatedValue[0] as number;
       const nextEdges = state.edges.filter(e => e.source === node.nodeId);
       if (nextEdges.length === 0) 
         continue;
@@ -389,12 +394,12 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
           return;
         const targetFnName: string | undefined = targetNode.metadata?.functionName;
         const targetFn = targetFnName ? filterFunctionRegistry[targetFnName as keyof typeof filterFunctionRegistry] : undefined;
-        const targetInputs: Record<string, number> = {};
+        const targetInputs: Record<string, number | string> = {};
         if (targetFn) {
           (targetFn.inputLabels as readonly string[]).forEach((label: string, i: number) => {
             const incoming = state.edges.find(e => e.target === targetNode.nodeId && e.targetPort === label);
             if (incoming && incoming.source === node.nodeId) {
-              targetInputs[label] = calculatedValue[idx] ?? calculatedValue[0];
+              targetInputs[label] = calculatedValue[idx] ?? calculatedValue[0] as number | string;
             } else {
               targetInputs[label] = state.nodeLatestValues[incoming?.source ?? 0] ?? 0;
             }
