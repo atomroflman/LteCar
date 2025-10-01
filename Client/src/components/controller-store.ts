@@ -59,13 +59,13 @@ export type GamepadStoreState = {
     loadInitialGamepads: () => Promise<void>;
     pollGamepads: () => void;
     stopPolling: () => void;
-    onChannelChange?: (gamepadId: string, channelType: "axis" | "button", channelIndex: number, value: number, dbId: number) => void;
-    setOnChannelChange: (cb: (gamepadId: string, channelType: "axis" | "button", channelIndex: number, value: number, dbId: number) => void) => void;
+    onChannelChange?: (gamepadId: string, channelType: "axis" | "button" | "key", channelIndex: number, value: number, dbId: number) => void;
+    setOnChannelChange: (cb: (gamepadId: string, channelType: "axis" | "button" | "key", channelIndex: number, value: number, dbId: number) => void) => void;
 };
 
 export const useGamepadStore = create<GamepadStoreState>((set, get) => {
     let pollReference: number | undefined;
-    function channelUpdated(gamepadId: string, channelType: "axis" | "button", channelIndex: number, value: number, dbId: number): void {
+    function channelUpdated(gamepadId: string, channelType: "axis" | "button" | "key", channelIndex: number, value: number, dbId: number): void {
         const store = get();
         const known = store.knownGamepads[gamepadId];
         if (!known) return;

@@ -2,8 +2,20 @@ import React from "react";
 import { Handle, Position, NodeProps } from "reactflow";
 import { filterFunctionRegistry } from "./filters/filter-function-registry";
 import { useControlFlowStore } from "./control-flow-store";
+import FloatValueFlowNode from "./float-value-flow-node";
+import GearboxFlowNode from "./gearbox-flow-node";
+
+export type CustomFlowNodeProps = NodeProps & {
+  data: any;
+  handleParamChange: (key: string, value: any) => void;
+};
 
 export default function CustomFlowNode(props: NodeProps) {
+  if (!props || !props.data) {
+    console.warn('CustomFlowNode: props oder props.data ist null/undefined', { props });
+    return <div className="bg-zinc-800 border border-zinc-700 rounded p-2">Loading...</div>;
+  }
+
   const id = props.data.nodeId;
   const flowControl = useControlFlowStore();
   const [data, setData] = React.useState<any>();
@@ -28,9 +40,34 @@ export default function CustomFlowNode(props: NodeProps) {
     flowControl.setNodes(updatedNodes);
   };
 
+  function removeButton() {
+    return (
+    <button
+          className="ml-2 px-1 py-0.5 bg-red-900 hover:bg-red-800 text-red-100 rounded text-[10px] border border-red-800 transition-colors duration-150"
+          onClick={() => flowControl.deleteNode(Number(id))}
+          title="Node löschen"
+        >
+          ✕
+        </button>
+    );
+  }
+
+  // Resolve known function names with their respective components
+  if (data?.metadata?.functionName) {
+    const functionName = data.metadata.functionName;
+    
+    if (functionName === 'FloatValue') {
+      return <FloatValueFlowNode {...props} handleParamChange={handleParamChange} data={data} />;
+    }
+    if (functionName === 'Gearbox') {
+      return <GearboxFlowNode {...props} handleParamChange={handleParamChange} data={data} />;
+    }
+  }
+
   let inputs = [] as string[];
   let outputs = [] as string[];
   let params = [] as { name: string; value: string | number }[];
+  
   if (data?.type === "input") {
     outputs.push("out");
   } else if (data?.type === "output") {
@@ -39,23 +76,14 @@ export default function CustomFlowNode(props: NodeProps) {
     if (!data?.metadata?.functionName) {
       return (<>undefined!</>);
     }
+    
     const definition = filterFunctionRegistry[data?.metadata?.functionName as keyof typeof filterFunctionRegistry];
     if (!definition) {
-      return (<>Function not found!</>);
+      return (<>Function not found! {removeButton()}</>);
     }
     inputs = definition.inputLabels.map(e => e);
     outputs = definition.outputLabels.map(e => e);
     params = definition.params.map(p => ({ name: p.name, value: (data.params ?? [])[p.name] || p.default }));
-    // for (let i = 0; i < (data?.outputPorts || 1); i++) {
-    //   (outputHandles as React.ReactNode[]).push(
-    //     <div key={"outwrap" + i} style={{ position: "absolute", left: `${10 + i * 30}px`, bottom: "-8px", display: "flex", flexDirection: "column", alignItems: "center" }}>
-    //       <Handle type="source" position={Position.Bottom} id={"out" + i} />
-    //       <span className="text-[10px] text-blue-300 font-mono" style={{ marginTop: 2 }}>
-    //         {outputLabels[i] || `out${i}`}: {outputValues[i] !== undefined ? Number(outputValues[i]).toFixed(3) : ''}
-    //       </span>
-    //     </div>
-    //   );
-    // }
   }
   const outputValues = Array.isArray(data?.latestValue) ? data.latestValue : [data?.latestValue];
   const inputHandles = inputs.map((label, index) => (
@@ -93,13 +121,7 @@ export default function CustomFlowNode(props: NodeProps) {
             ? data.latestValue.map((v: number) => Number(v).toFixed(3)).join(", ")
             : Number(data?.latestValue ?? '').toFixed(3)}
         </span>
-        <button
-          className="ml-2 px-1 py-0.5 bg-red-900 hover:bg-red-800 text-red-100 rounded text-[10px] border border-red-800 transition-colors duration-150"
-          onClick={() => flowControl.deleteNode(Number(id))}
-          title="Node löschen"
-        >
-          ✕
-        </button>
+        {removeButton()}
       </div>
       
       {params && (
