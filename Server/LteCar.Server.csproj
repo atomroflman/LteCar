@@ -8,6 +8,7 @@
       <EnvironmentVariables>
         <ASPNETCORE_URLS>http://0.0.0.0:5000</ASPNETCORE_URLS>
       </EnvironmentVariables>
+    <UserSecretsId>9438bb7f-c377-4c4f-ab9e-079a2e162e85</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
