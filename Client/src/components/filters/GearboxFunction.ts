@@ -28,7 +28,7 @@ export class GearboxFunction implements FilterFunctionDef<readonly ["shiftUp", "
       default: 'R,N,1,2,3,4,5', // Reverse, Neutral, 1-5
     }
   ];
-  inputLabels = ["shiftUp", "shiftDown"] as const;
+  inputLabels = ["shiftUp", "shiftDown"];
   outputLabels = ['currentGear', 'gearValue', 'gearName'];
 
   apply(inputs: InputMap<readonly ["shiftUp", "shiftDown"]>, params: Record<string, any>, nodeId?: number) {
