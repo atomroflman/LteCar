@@ -4,7 +4,7 @@ export class AddFunction implements FilterFunctionDef<readonly ["a", "b"]> {
   name = 'Add';
   label = 'Add (Addition)';
   params: FilterFunctionParam[] = [];
-  inputLabels = ["a", "b"] as const;
+  inputLabels = ["a", "b"];
   outputLabels = ['sum'];
   apply(inputs: InputMap<readonly ["a", "b"]>) {
     return [inputs.a + inputs.b];

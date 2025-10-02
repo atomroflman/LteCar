@@ -10,6 +10,7 @@ import { PowerFunction } from "./PowerFunction";
 import { RescaleFunction } from "./RescaleFunction";
 import { ReverseFunction } from "./ReverseFunction";
 import { ScaleFunction } from "./ScaleFunction";
+import { SmoothFunction } from "./SmoothFunction";
 import { ToggleFunction } from "./ToggleFunction";
 import { TurnSignal } from "./TurnSignal";
 
@@ -49,5 +50,6 @@ export const filterFunctionRegistry = {
   Rescale: new RescaleFunction(),
   Gearbox: new GearboxFunction(),
   FloatValue: new FloatValueFunction(),
+  Smooth: new SmoothFunction(),
 };
 

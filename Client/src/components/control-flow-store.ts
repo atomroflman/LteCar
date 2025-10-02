@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 import { filterFunctionRegistry } from './filters/filter-function-registry';
+import { SmoothFunction } from './filters/SmoothFunction';
 import { Connection } from 'reactflow';
 
 export type ControlFlowNode = {
@@ -45,6 +46,7 @@ export type ControlFlowState = {
   updateNode: (node: ControlFlowNode) => void;
   updateNodeParams(nodeId: number, params: Record<string, any>): Promise<void>;
   recalculateNode: (nodeId: number) => void;
+  triggerNodeOutput: (nodeId: number, outputValues?: number[]) => void;
   reset: () => void;
   registerInput: (dbInputId: number ) => void;
   registerOutput: (dbOutputId: number) => void;
@@ -221,6 +223,39 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
       // Update the state to trigger re-renders
       set({ nodeLatestValues: state.nodeLatestValues, nodes: [...state.nodes], frame: state.frame + 1 });
     }
+  },
+  triggerNodeOutput: (nodeId: number, outputValues?: number[]) => {
+    const state = get();
+    const node = state.nodes.find(n => n.nodeId === nodeId);
+    if (!node) return;
+
+    let calculatedValue: number[];
+    
+    if (outputValues) {
+      // Use provided output values
+      calculatedValue = outputValues;
+    } else {
+      // Use current latest value
+      calculatedValue = [state.nodeLatestValues[nodeId] ?? 0];
+    }
+
+    // Update the node's latest value
+    state.nodeLatestValues[nodeId] = calculatedValue[0];
+    node.latestValue = calculatedValue[0];
+
+    // Propagate changes to downstream nodes
+    const nextEdges = state.edges.filter(e => e.source === nodeId);
+    
+    nextEdges.forEach((edge, idx) => {
+      const targetNode = state.nodes.find(n => n.nodeId === edge.target);
+      if (!targetNode) return;
+      
+      // Trigger recalculation of downstream node
+      get().recalculateNode(targetNode.nodeId);
+    });
+
+    // Update the state to trigger re-renders
+    set({ nodeLatestValues: state.nodeLatestValues, nodes: [...state.nodes], frame: state.frame + 1 });
   },
   async addEdge(params: Connection) {
     const newEdgeRes = await fetch(`/api/flow/link`, {
@@ -523,3 +558,8 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
   setCarId: (carId: string | undefined) => set({ carId }),
   setCarSession: (carSession: string) => set({ carSession }),
 }));
+
+// Initialize SmoothFunction with flow control reference
+setTimeout(() => {
+  SmoothFunction.setFlowControl(useControlFlowStore.getState());
+}, 0);
