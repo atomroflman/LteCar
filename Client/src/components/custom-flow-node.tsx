@@ -19,25 +19,24 @@ export default function CustomFlowNode(props: NodeProps) {
 
   const id = props.data.nodeId;
   const flowControl = useControlFlowStore();
-  const [data, setData] = React.useState<any>();
-
-  React.useEffect(() => {
-    setData(flowControl.nodes.find((n) => n.nodeId == id));
-  }, [flowControl.frame, props.data.nodeId]);
+  
+  // Get data directly from store instead of using local state
+  const data = React.useMemo(() => {
+    return flowControl.nodes.find((n) => n.nodeId == id);
+  }, [flowControl.nodes, id]);
 
   // Parameter-Änderung
   const handleParamChange = (key: string, value: any) => {
     if (!flowControl.nodes) 
       return;
     console.log(props.data.nodeId, key, value,  flowControl.nodes);
-    const data = flowControl.nodes.find(n => n.nodeId == props.data.nodeId);
-    if (!data) 
+    const nodeData = flowControl.nodes.find(n => n.nodeId == props.data.nodeId);
+    if (!nodeData) 
       return;
-    const newParams = { ...data.params, [key]: value };
-    const updatedNode = { ...data, params: newParams };
+    const newParams = { ...nodeData.params, [key]: value };
+    const updatedNode = { ...nodeData, params: newParams };
     flowControl.updateNodeParams(props.data.nodeId, newParams);
     const updatedNodes = flowControl.nodes.map(n => n.nodeId === props.data.nodeId ? updatedNode : n);
-    setData(updatedNode);
     flowControl.setNodes(updatedNodes);
   };
 
