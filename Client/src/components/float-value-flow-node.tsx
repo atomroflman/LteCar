@@ -73,18 +73,21 @@ export default function FloatValueFlowNode(props: CustomFlowNodeProps) {
       </div>
 
       {/* Value Controls */}
-      <div className="mb-2">
-        {/* Main value display */}
-        <div className="text-center mb-2">
-          <span className="text-lg font-mono text-cyan-300">
-            {value.toFixed(3)}
-          </span>
-        </div>
-        
-        {/* Button Grid Layout */}
-        <div className="grid grid-cols-4 gap-1 mb-2">          
-          {/* Button row */}
-          <div className="text-center text-xs text-zinc-500 font-mono">min</div>
+      <div className="mb-2">        
+        {/* Button Grid Layout - 2 rows x 5 columns */}
+        <div className="grid grid-cols-5 gap-1 mb-2">
+          {/* First row: min | -step | -0.1 | -0.01 | -0.001 */}
+          <button
+            className="px-2 py-1 bg-red-800 hover:bg-red-700 text-red-200 rounded text-xs font-mono"
+            onClick={(e) => {
+              e.stopPropagation();
+              props.data.params.value = min.toString();
+              flowControl.updateNodeParams(props.data.nodeId, props.data.params);
+            }}
+            title="Set to minimum value"
+          >
+            min
+          </button>
           <button
             className="px-2 py-1 bg-zinc-700 hover:bg-zinc-600 text-zinc-300 rounded text-xs font-mono"
             onClick={(e) => {
@@ -93,6 +96,7 @@ export default function FloatValueFlowNode(props: CustomFlowNodeProps) {
               props.data.params.value = newValue.toString();
               flowControl.updateNodeParams(props.data.nodeId, props.data.params);
             }}
+            title={`Decrease by ${step}`}
           >
             -{step}
           </button>
@@ -104,6 +108,7 @@ export default function FloatValueFlowNode(props: CustomFlowNodeProps) {
               props.data.params.value = newValue.toString();
               flowControl.updateNodeParams(props.data.nodeId, props.data.params);
             }}
+            title="Decrease by 0.1"
           >
             -0.1
           </button>
@@ -115,14 +120,35 @@ export default function FloatValueFlowNode(props: CustomFlowNodeProps) {
               props.data.params.value = newValue.toString();
               flowControl.updateNodeParams(props.data.nodeId, props.data.params);
             }}
+            title="Decrease by 0.01"
           >
             -0.01
           </button>
-        </div>
-        
-        {/* Plus buttons row */}
-        <div className="grid grid-cols-4 gap-1">
-          <div></div> {/* Empty cell for alignment */}
+          <button
+            className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 rounded text-xs font-mono"
+            onClick={(e) => {
+              e.stopPropagation();
+              const newValue = Math.max(min, value - 0.001);
+              props.data.params.value = newValue.toString();
+              flowControl.updateNodeParams(props.data.nodeId, props.data.params);
+            }}
+            title="Decrease by 0.001"
+          >
+            -0.001
+          </button>
+          
+          {/* Second row: max | +step | +0.1 | +0.01 | +0.001 */}
+          <button
+            className="px-2 py-1 bg-green-800 hover:bg-green-700 text-green-200 rounded text-xs font-mono"
+            onClick={(e) => {
+              e.stopPropagation();
+              props.data.params.value = max.toString();
+              flowControl.updateNodeParams(props.data.nodeId, props.data.params);
+            }}
+            title="Set to maximum value"
+          >
+            max
+          </button>
           <button
             className="px-2 py-1 bg-zinc-700 hover:bg-zinc-600 text-zinc-300 rounded text-xs font-mono"
             onClick={(e) => {
@@ -131,6 +157,7 @@ export default function FloatValueFlowNode(props: CustomFlowNodeProps) {
               props.data.params.value = newValue.toString();
               flowControl.updateNodeParams(props.data.nodeId, props.data.params);
             }}
+            title={`Increase by ${step}`}
           >
             +{step}
           </button>
@@ -142,6 +169,7 @@ export default function FloatValueFlowNode(props: CustomFlowNodeProps) {
               props.data.params.value = newValue.toString();
               flowControl.updateNodeParams(props.data.nodeId, props.data.params);
             }}
+            title="Increase by 0.1"
           >
             +0.1
           </button>
@@ -153,8 +181,21 @@ export default function FloatValueFlowNode(props: CustomFlowNodeProps) {
               props.data.params.value = newValue.toString();
               flowControl.updateNodeParams(props.data.nodeId, props.data.params);
             }}
+            title="Increase by 0.01"
           >
             +0.01
+          </button>
+          <button
+            className="px-2 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-400 rounded text-xs font-mono"
+            onClick={(e) => {
+              e.stopPropagation();
+              const newValue = Math.min(max, value + 0.001);
+              props.data.params.value = newValue.toString();
+              flowControl.updateNodeParams(props.data.nodeId, props.data.params);
+            }}
+            title="Increase by 0.001"
+          >
+            +0.001
           </button>
         </div>
         

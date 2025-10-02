@@ -78,7 +78,7 @@ export default function CustomFlowNode(props: NodeProps) {
     inputs.push("in");
   } else {
     if (!data?.metadata?.functionName) {
-      return (<>undefined!</>);
+      return (<>undefined! {removeButton()}</>);
     }
     
     const definition = filterFunctionRegistry[data?.metadata?.functionName as keyof typeof filterFunctionRegistry];

@@ -27,20 +27,30 @@ export class FloatValueFunction implements FilterFunctionDef<readonly []> {
       label: 'Step Size',
       type: 'number',
       default: 0.1,
+    },
+    {
+      name: 'digits',
+      label: 'Digits',
+      type: 'number',
+      default: 6
     }
   ];
   inputLabels = [];
   outputLabels = ['value'];
   
   apply(inputs: InputMap<readonly []>, params: Record<string, any>, nodeId?: number) {
-    const value = typeof params?.value === 'number' ? params.value : 0.0;
-    const min = typeof params?.min === 'number' ? params.min : -1.0;
-    const max = typeof params?.max === 'number' ? params.max : 1.0;
-    
+    const value = params.value * 1;
+    const min = (params.min ?? "-1") * 1;
+    const max = (params.max ?? "1") * 1;
+    const digits = (params.digits ?? 6) * 1;
+
+    if (isNaN(value) || isNaN(min) || isNaN(max)) {
+      return [0];
+    }
     // Clamp value to min/max range
     const clampedValue = Math.max(min, Math.min(max, value));
     
-    return [clampedValue];
+    return [Math.round(clampedValue * 10 ** digits) / 10 ** digits];
   }
 
   // Helper method to get current value

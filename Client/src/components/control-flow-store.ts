@@ -44,6 +44,7 @@ export type ControlFlowState = {
   setEdges: (edges: ControlFlowEdge[]) => void;
   updateNode: (node: ControlFlowNode) => void;
   updateNodeParams(nodeId: number, params: Record<string, any>): Promise<void>;
+  recalculateNode: (nodeId: number) => void;
   reset: () => void;
   registerInput: (dbInputId: number ) => void;
   registerOutput: (dbOutputId: number) => void;
@@ -92,6 +93,25 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
         carId,
         userSetupId: data.id,
       });
+
+      // Initial calculation for all function nodes without incoming edges
+      const state = get();
+      state.nodes.forEach(node => {
+        if (node.nodeTypeName === "UserSetupFunctionNode") {
+          const fnName: string | undefined = node.metadata?.functionName;
+          if (fnName) {
+            const fnDef = filterFunctionRegistry[fnName as keyof typeof filterFunctionRegistry];
+            if (fnDef) {
+              // Check if this node has any incoming edges
+              const hasIncomingEdges = state.edges.some(edge => edge.target === node.nodeId);
+              if (!hasIncomingEdges) {
+                // This node has no incoming connections - calculate initial value
+                state.recalculateNode(node.nodeId);
+              }
+            }
+          }
+        }
+      });
     } catch (e: any) {
       set({ isLoading: false, error: e.message });
     }
@@ -114,7 +134,92 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(params),
       });
-      get().handleInputUpdate(nodeId, params.input ?? 0);
+      // Trigger recalculation for function nodes
+      get().recalculateNode(nodeId);
+    }
+  },
+  recalculateNode: (nodeId: number) => {
+    const state = get();
+    const node = state.nodes.find(n => n.nodeId === nodeId);
+    if (!node) return;
+
+    // For function nodes, we need to recalculate based on current inputs
+    if (node.nodeTypeName === "UserSetupFunctionNode") {
+      const fnName: string | undefined = node.metadata?.functionName;
+      if (!fnName) return;
+      
+      const fnDef = filterFunctionRegistry[fnName as keyof typeof filterFunctionRegistry];
+      if (!fnDef) return;
+
+      // Calculate current input values
+      const inputValues: Record<string, number | string> = {};
+      
+      if (fnDef.inputLabels.length === 0) {
+        // Functions without inputs (like FloatValue, Button) - use empty input map
+        // They rely only on their parameters
+      } else {
+        // Functions with inputs - collect values from connected edges
+        (fnDef.inputLabels as readonly string[]).forEach((label: string) => {
+          const incoming = state.edges.find(e => e.target === nodeId && e.targetPort === label);
+          if (incoming) {
+            inputValues[label] = state.nodeLatestValues[incoming.source] ?? 0;
+          } else {
+            inputValues[label] = 0;
+          }
+        });
+      }
+
+      // Execute the function with current inputs and parameters
+      const calculatedValue = fnDef.apply(inputValues as any, node.params ?? {}, nodeId);
+      
+      // Update the node's latest value
+      state.nodeLatestValues[nodeId] = calculatedValue[0] as number;
+      node.latestValue = calculatedValue[0] as number;
+
+      // Propagate changes to downstream nodes
+      const nextEdges = state.edges.filter(e => e.source === nodeId);
+      const queue: {nodeId: number, inputValues: Record<string, number | string>}[] = [];
+      
+      nextEdges.forEach((edge, idx) => {
+        const targetNode = state.nodes.find(n => n.nodeId === edge.target);
+        if (!targetNode) return;
+        
+        const targetFnName: string | undefined = targetNode.metadata?.functionName;
+        const targetFn = targetFnName ? filterFunctionRegistry[targetFnName as keyof typeof filterFunctionRegistry] : undefined;
+        const targetInputs: Record<string, number | string> = {};
+        
+        if (targetFn) {
+          (targetFn.inputLabels as readonly string[]).forEach((label: string) => {
+            const incoming = state.edges.find(e => e.target === targetNode.nodeId && e.targetPort === label);
+            if (incoming && incoming.source === nodeId) {
+              targetInputs[label] = calculatedValue[idx] ?? calculatedValue[0] as number | string;
+            } else {
+              targetInputs[label] = state.nodeLatestValues[incoming?.source ?? 0] ?? 0;
+            }
+          });
+        } else {
+          targetInputs.input = calculatedValue[idx] ?? calculatedValue[0];
+        }
+        queue.push({ nodeId: targetNode.nodeId, inputValues: targetInputs });
+      });
+
+      // Process downstream nodes
+      const visited = new Set<number>();
+      while (queue.length > 0) {
+        const next = queue.shift();
+        if (!next?.nodeId) continue;
+        if (visited.has(next.nodeId)) continue;
+        visited.add(next.nodeId);
+        
+        const targetNode = state.nodes.find(n => n.nodeId === next.nodeId);
+        if (!targetNode) continue;
+        
+        // Recursively recalculate downstream nodes
+        get().recalculateNode(next.nodeId);
+      }
+
+      // Update the state to trigger re-renders
+      set({ nodeLatestValues: state.nodeLatestValues, nodes: [...state.nodes], frame: state.frame + 1 });
     }
   },
   async addEdge(params: Connection) {
