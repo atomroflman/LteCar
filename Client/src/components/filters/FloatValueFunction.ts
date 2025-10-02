@@ -29,7 +29,7 @@ export class FloatValueFunction implements FilterFunctionDef<readonly []> {
       default: 0.1,
     }
   ];
-  inputLabels = [] as const;
+  inputLabels = [];
   outputLabels = ['value'];
   
   apply(inputs: InputMap<readonly []>, params: Record<string, any>, nodeId?: number) {

@@ -3,6 +3,7 @@ import { ClampFunction } from "./ClampFunction";
 import { DivideFunction } from "./DivideFunction";
 import { FloatValueFunction } from "./FloatValueFunction";
 import { GearboxFunction } from "./GearboxFunction";
+import { IifFunction } from "./IifFunction";
 import { LogFunction } from "./LogFunction";
 import { ModuloFunction } from "./ModuloFunction";
 import { PowerFunction } from "./PowerFunction";
@@ -27,7 +28,7 @@ export type FilterFunctionDef<TInputs extends ReadonlyArray<string>> = {
   name: string;
   label: string;
   params: FilterFunctionParam[];
-  inputLabels: TInputs; // readonly string[]
+  inputLabels: string[];
   outputLabels: string[];
   init?: () => void;
   apply: (inputs: InputMap<TInputs>, params: Record<string, any>, nodeId?: number) => (number | string)[];
@@ -42,6 +43,7 @@ export const filterFunctionRegistry = {
   Modulo: new ModuloFunction(),
   Power: new PowerFunction(),
   Log: new LogFunction(),
+  Iif: new IifFunction(),
   Toggle: new ToggleFunction(),
   TurnSignal: new TurnSignal(),
   Rescale: new RescaleFunction(),

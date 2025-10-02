@@ -4,6 +4,7 @@ import { filterFunctionRegistry } from "./filters/filter-function-registry";
 import { useControlFlowStore } from "./control-flow-store";
 import FloatValueFlowNode from "./float-value-flow-node";
 import GearboxFlowNode from "./gearbox-flow-node";
+import IifFlowNode from "./iif-flow-node";
 
 export type CustomFlowNodeProps = NodeProps & {
   data: any;
@@ -61,6 +62,9 @@ export default function CustomFlowNode(props: NodeProps) {
     }
     if (functionName === 'Gearbox') {
       return <GearboxFlowNode {...props} handleParamChange={handleParamChange} data={data} />;
+    }
+    if (functionName === 'Iif') {
+      return <IifFlowNode {...props} handleParamChange={handleParamChange} data={data} />;
     }
   }
 
