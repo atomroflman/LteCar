@@ -10,8 +10,13 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.AspNetCore.Authentication.Cookies;
 
+
 var builder = WebApplication.CreateBuilder(args);
-builder.Configuration.AddJsonFile("appSettings.json");
+builder.Configuration
+    .AddJsonFile("appSettings.json")
+    .AddEnvironmentVariables()
+    .AddCommandLine(args)
+    .AddUserSecrets<Program>();
 
 builder.Logging.AddConsole()
     .AddConfiguration(builder.Configuration.GetSection("Logging"));
@@ -73,15 +78,19 @@ else
     logger.LogWarning("Running Janus server is disabled.");
 }
 
+app.Use(async(ctx, next) => {
+    logger.LogDebug($"{ctx.Request.Method} {ctx.Request.Path}");
+    logger.LogTrace($"Request: {string.Join(", ", ctx.Request.Headers.Select(h => $"{h.Key}: {h.Value}"))}");
+    await next();
+    logger.LogDebug($"{ctx.Response.StatusCode}");
+    logger.LogTrace($"Response: {string.Join(", ", ctx.Response.Headers.Select(h => $"{h.Key}: {h.Value}"))}");
+});
+
 if (app.Environment.IsDevelopment())
 {
     app.UseDeveloperExceptionPage();
 }
-app.Use(async(ctx, next) => {
-    logger.LogDebug($"{ctx.Request.Method} {ctx.Request.Path}");
-    await next();
-    logger.LogDebug($"{ctx.Response.StatusCode}");
-});
+
 
 var staticFilePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
 if (!Directory.Exists(staticFilePath))

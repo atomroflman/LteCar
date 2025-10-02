@@ -203,9 +203,6 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
                 dbContext.CarVideoStreams.Add(streamDb);
             }
             
-            // Update stream properties
-            streamDb.Protocol = stream.Value.Protocol;
-            streamDb.StreamPurpose = stream.Value.Purpose;
             streamDb.IsActive = stream.Value.Enabled;
             
             // Store stream configuration as JSON for later use
@@ -329,8 +326,6 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
                 await dbContext.SaveChangesAsync();
             }
             db.IsActive = value.Enabled;
-            db.StreamPurpose = value.Purpose;
-            db.Protocol = value.Protocol;
             db.ProcessArguments = JsonSerializer.Serialize(value);
             videoIds[value.StreamId] = db.Id;
         }
