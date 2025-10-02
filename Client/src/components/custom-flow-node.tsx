@@ -5,6 +5,7 @@ import { useControlFlowStore } from "./control-flow-store";
 import FloatValueFlowNode from "./float-value-flow-node";
 import GearboxFlowNode from "./gearbox-flow-node";
 import IifFlowNode from "./iif-flow-node";
+import SmoothFlowNode from "./smooth-flow-node";
 
 export type CustomFlowNodeProps = NodeProps & {
   data: any;
@@ -64,6 +65,9 @@ export default function CustomFlowNode(props: NodeProps) {
     }
     if (functionName === 'Iif') {
       return <IifFlowNode {...props} handleParamChange={handleParamChange} data={data} />;
+    }
+    if (functionName === 'Smooth') {
+      return <SmoothFlowNode {...props} handleParamChange={handleParamChange} data={data} />;
     }
   }
 
