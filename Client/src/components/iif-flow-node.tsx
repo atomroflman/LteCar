@@ -16,8 +16,8 @@ export default function IifFlowNode(props: CustomFlowNodeProps) {
   // Verwende den globalen State direkt statt lokalen State
   const data = flowControl.nodes.find((n) => n.nodeId == id);
 
-  // Parameter-Änderung
-  const handleParamChange = (key: string, value: any) => {
+  // Parameter-Änderung - use React.useCallback to prevent recreation
+  const handleParamChange = React.useCallback((key: string, value: any) => {
     if (!flowControl.nodes) 
       return;
     console.log(props.data.nodeId, key, value, flowControl.nodes);
@@ -29,19 +29,24 @@ export default function IifFlowNode(props: CustomFlowNodeProps) {
     flowControl.updateNodeParams(props.data.nodeId, newParams);
     const updatedNodes = flowControl.nodes.map(n => n.nodeId === props.data.nodeId ? updatedNode : n);
     flowControl.setNodes(updatedNodes);
-  };
+  }, [props.data.nodeId, flowControl]);
 
   if (!data?.metadata?.functionName || data.metadata.functionName !== 'Iif') {
     return null;
   }
 
   const definition = filterFunctionRegistry.Iif;
-  const inputs = definition.inputLabels.map(e => e);
-  const outputs = definition.outputLabels.map(e => e);
-  const params = definition.params.map(p => ({ 
-    name: p.name, 
-    value: (data.params ?? {})[p.name] || p.default 
-  }));
+  
+  // Memoize inputs, outputs, and params to prevent unnecessary re-renders
+  const { inputs, outputs, params } = React.useMemo(() => {
+    const inputs = definition.inputLabels.map(e => e);
+    const outputs = definition.outputLabels.map(e => e);
+    const params = definition.params.map(p => ({ 
+      name: p.name, 
+      value: (data.params ?? {})[p.name] || p.default 
+    }));
+    return { inputs, outputs, params };
+  }, [JSON.stringify(data?.params)]);
 
   // Get current values
   const outputValues = Array.isArray(data?.latestValue) ? data.latestValue : [data?.latestValue];

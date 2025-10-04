@@ -3,6 +3,7 @@ import { Handle, Position, NodeProps } from "reactflow";
 import { filterFunctionRegistry } from "./filters/filter-function-registry";
 import { useControlFlowStore } from "./control-flow-store";
 import { CustomFlowNodeProps } from "./custom-flow-node";
+import { ParamInput } from "./param-input";
 
 export default function GearboxFlowNode(props: CustomFlowNodeProps) {
   // Umfassender Null-Check für props und props.data
@@ -116,14 +117,12 @@ export default function GearboxFlowNode(props: CustomFlowNodeProps) {
       {params && (
         <div className="flex flex-col gap-1 mt-1">
           {params.map((e) => (
-            <div key={e.name} className="flex flex-row items-center justify-between gap-1">
-              <span className="text-zinc-400 text-xs text-left flex-1">{e.name}:</span>
-              <input
-                className="bg-zinc-900 border border-zinc-700 rounded px-1 text-xs w-16 text-right"
-                value={e.value}
-                onChange={event => handleParamChange(e.name, event.target.value)}
-              />
-            </div>
+            <ParamInput 
+              key={e.name}
+              name={e.name}
+              value={e.value}
+              onBlur={handleParamChange}
+            />
           ))}
         </div>
       )} 

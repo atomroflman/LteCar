@@ -3,6 +3,7 @@ import { Handle, Position, NodeProps } from "reactflow";
 import { filterFunctionRegistry } from "./filters/filter-function-registry";
 import { useControlFlowStore } from "./control-flow-store";
 import { CustomFlowNodeProps } from "./custom-flow-node";
+import { ParamInputField } from "./param-input";
 
 export default function SmoothFlowNode(props: CustomFlowNodeProps) {
   if (!props || !props.data) {
@@ -189,10 +190,11 @@ export default function SmoothFlowNode(props: CustomFlowNodeProps) {
             onKeyUp={(e) => e.stopPropagation()}
           >
             <label className="text-xs text-zinc-400">{param.name}:</label>
-            <input
-              className="bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-200 focus:border-cyan-500 focus:outline-none"
+            <ParamInputField
+              name={param.name}
               value={param.value}
-              onChange={(e) => handleParamChange(param.name, e.target.value)}
+              onBlur={handleParamChange}
+              className="bg-zinc-900 border border-zinc-700 rounded px-2 py-1 text-xs text-zinc-200 focus:border-cyan-500 focus:outline-none"
               placeholder={definition.params.find(p => p.name === param.name)?.default?.toString()}
             />
             {param.name === 'speed' && (
