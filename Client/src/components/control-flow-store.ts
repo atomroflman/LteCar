@@ -1,6 +1,5 @@
 import { create } from 'zustand';
 import { filterFunctionRegistry } from './filters/filter-function-registry';
-import { SmoothFunction } from './filters/SmoothFunction';
 import { Connection } from 'reactflow';
 
 export type ControlFlowNode = {
@@ -558,8 +557,3 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
   setCarId: (carId: string | undefined) => set({ carId }),
   setCarSession: (carSession: string) => set({ carSession }),
 }));
-
-// Initialize SmoothFunction with flow control reference
-setTimeout(() => {
-  SmoothFunction.setFlowControl(useControlFlowStore.getState());
-}, 0);
