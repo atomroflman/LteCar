@@ -6,6 +6,7 @@ import FloatValueFlowNode from "./float-value-flow-node";
 import GearboxFlowNode from "./gearbox-flow-node";
 import IifFlowNode from "./iif-flow-node";
 import SmoothFlowNode from "./smooth-flow-node";
+import { ParamInput } from "./param-input";
 
 export type CustomFlowNodeProps = NodeProps & {
   data: any;
@@ -21,13 +22,11 @@ export default function CustomFlowNode(props: NodeProps) {
   const id = props.data.nodeId;
   const flowControl = useControlFlowStore();
   
-  // Get data directly from store instead of using local state
-  const data = React.useMemo(() => {
-    return flowControl.nodes.find((n) => n.nodeId == id);
-  }, [flowControl.nodes, id]);
+  // Get data directly from store
+  const data = flowControl.nodes.find((n) => n.nodeId == id);
 
-  // Parameter-Änderung
-  const handleParamChange = (key: string, value: any) => {
+  // Parameter-Änderung - use React.useCallback to prevent recreation on every render
+  const handleParamChange = React.useCallback((key: string, value: any) => {
     if (!flowControl.nodes) 
       return;
     console.log(props.data.nodeId, key, value,  flowControl.nodes);
@@ -39,7 +38,7 @@ export default function CustomFlowNode(props: NodeProps) {
     flowControl.updateNodeParams(props.data.nodeId, newParams);
     const updatedNodes = flowControl.nodes.map(n => n.nodeId === props.data.nodeId ? updatedNode : n);
     flowControl.setNodes(updatedNodes);
-  };
+  }, [props.data.nodeId, flowControl]);
 
   function removeButton() {
     return (
@@ -71,27 +70,41 @@ export default function CustomFlowNode(props: NodeProps) {
     }
   }
 
-  let inputs = [] as string[];
-  let outputs = [] as string[];
-  let params = [] as { name: string; value: string | number }[];
-  
-  if (data?.type === "input") {
-    outputs.push("out");
-  } else if (data?.type === "output") {
-    inputs.push("in");
-  } else {
-    if (!data?.metadata?.functionName) {
-      return (<>undefined! {removeButton()}</>);
+  // Memoize inputs, outputs, and params to prevent unnecessary re-renders
+  const { inputs, outputs, params } = React.useMemo(() => {
+    let inputs = [] as string[];
+    let outputs = [] as string[];
+    let params = [] as { name: string; value: string | number }[];
+    
+    if (data?.type === "input") {
+      outputs.push("out");
+    } else if (data?.type === "output") {
+      inputs.push("in");
+    } else {
+      if (data?.metadata?.functionName) {
+        const definition = filterFunctionRegistry[data?.metadata?.functionName as keyof typeof filterFunctionRegistry];
+        if (definition) {
+          inputs = definition.inputLabels.map(e => e);
+          outputs = definition.outputLabels.map(e => e);
+          params = definition.params.map(p => ({ name: p.name, value: (data.params ?? [])[p.name] || p.default }));
+        }
+      }
     }
     
+    return { inputs, outputs, params };
+  }, [data?.type, data?.metadata?.functionName, JSON.stringify(data?.params)]);
+  
+  // Check for undefined function after useMemo
+  if (data?.type !== "input" && data?.type !== "output" && !data?.metadata?.functionName) {
+    return (<>undefined! {removeButton()}</>);
+  }
+  if (data?.type !== "input" && data?.type !== "output" && data?.metadata?.functionName) {
     const definition = filterFunctionRegistry[data?.metadata?.functionName as keyof typeof filterFunctionRegistry];
     if (!definition) {
       return (<>Function not found! {removeButton()}</>);
     }
-    inputs = definition.inputLabels.map(e => e);
-    outputs = definition.outputLabels.map(e => e);
-    params = definition.params.map(p => ({ name: p.name, value: (data.params ?? [])[p.name] || p.default }));
   }
+  
   const outputValues = Array.isArray(data?.latestValue) ? data.latestValue : [data?.latestValue];
   const inputHandles = inputs.map((label, index) => (
     <Handle
@@ -134,14 +147,12 @@ export default function CustomFlowNode(props: NodeProps) {
       {params && (
         <div className="flex flex-col gap-1 mt-1">
           {params.map((e) => (
-            <div key={e.name} className="flex flex-row items-center justify-between gap-1">
-              <span className="text-zinc-400 text-xs text-left flex-1">{e.name}:</span>
-              <input
-                className="bg-zinc-900 border border-zinc-700 rounded px-1 text-xs w-16 text-right"
-                value={e.value}
-                onChange={event => handleParamChange(e.name, event.target.value)}
-              />
-            </div>
+            <ParamInput 
+              key={e.name} 
+              name={e.name} 
+              value={e.value} 
+              onBlur={handleParamChange}
+            />
           ))}
         </div>
       )} 
