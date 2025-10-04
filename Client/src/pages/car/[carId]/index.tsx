@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/router";
 import GamepadViewer from "../../../components/gamepad-viewer";
 import CarFunctionsView from "../../../components/car-functions-view";
+import SessionTransfer from "../../../components/session-transfer";
 import ReactFlow, { MiniMap, Controls, Background, useReactFlow, NodeDragHandler, Node, Edge, ReactFlowProvider, Connection, OnEdgesDelete } from "reactflow";
 import "reactflow/dist/style.css";
 import { ControlFlowEdge, ControlFlowNode, useControlFlowStore } from "@/components/control-flow-store";
@@ -80,6 +81,7 @@ export default function CarControlFlowPage() {
         <GamepadViewer hideFlowButtons={false} />
         <FunctionNodesView />
         <CarFunctionsView carId={router.query.carId as string} hideFlowButtons={false} />
+        <SessionTransfer />
       </div>
       <div className="flex-1 bg-zinc-900 rounded-lg p-2 min-h-[600px]">
         <ReactFlowProvider>

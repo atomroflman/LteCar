@@ -11,5 +11,8 @@ public class UserMapping : IEntityTypeConfiguration<User>
         builder.HasIndex(u => u.SessionToken).IsUnique();
         builder.Property(u => u.Name).HasMaxLength(64);
         builder.Property(u => u.SessionToken).HasMaxLength(32);
+        builder.Property(u => u.TransferCode).HasMaxLength(6);
+        builder.Property(u => u.TransferCodeExpiresAt).HasColumnType("TEXT");
+        builder.HasIndex(u => u.TransferCode).IsUnique();
     }
 }

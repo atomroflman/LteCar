@@ -9,6 +9,8 @@ namespace LteCar.Server.Data
         public Car? ActiveVehicle { get; set; }
         public string? SessionToken { get; set; }
         public DateTime LastSeen { get; set; } = DateTime.Now;
+        public string? TransferCode { get; set; }
+        public DateTime? TransferCodeExpiresAt { get; set; }
         public ICollection<UserChannelDevice> UserChannelDevices { get; set; }
         public ICollection<UserCarSetup> CarSetups { get; set; }
     }
