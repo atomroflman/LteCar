@@ -4,7 +4,7 @@ export class ToggleFunction implements FilterFunctionDef<readonly ["input"]> {
   name = 'Toggle';
   label = 'Toggle (Umschalten)';
   params: FilterFunctionParam[] = [];
-  inputLabels = ["input"] as const;
+  inputLabels = ["input"];
   outputLabels = ['Out'];
   apply(inputs: InputMap<readonly ["input"]>, params: Record<string, any>, nodeId?: number) {
     if (nodeId === undefined) return [0];

@@ -1,8 +1,9 @@
+import { useControlFlowStore } from "../control-flow-store";
 import { FilterFunctionDef, FilterFunctionParam, InputMap } from "./filter-function-registry";
 
 export class SmoothFunction implements FilterFunctionDef<readonly ["input"]> {
   name = 'Smooth';
-  label = 'Smooth (Sanfte Annäherung)';
+  label = 'Smooth';
   params: FilterFunctionParam[] = [
     {
       name: 'speed',
@@ -29,14 +30,9 @@ export class SmoothFunction implements FilterFunctionDef<readonly ["input"]> {
   // Store current values for each node
   private static currentValues: Map<number, number> = new Map();
   private static intervals: Map<number, NodeJS.Timeout> = new Map();
-  private static flowControl: any = null;
-  
-  // Static method to set the flow control reference
-  static setFlowControl(flowControl: any) {
-    SmoothFunction.flowControl = flowControl;
-  }
-  
+
   apply(inputs: InputMap<readonly ["input"]>, params: Record<string, any>, nodeId?: number) {
+    const recalculateNode = useControlFlowStore.getState().recalculateNode;
     const targetValue = inputs.input ?? 0;
     const speed = Math.max(0.01, Math.min(1.0, params?.speed ?? 0.1));
     const threshold = Math.max(0.0001, params?.threshold ?? 0.001);
@@ -65,26 +61,25 @@ export class SmoothFunction implements FilterFunctionDef<readonly ["input"]> {
     this.clearInterval(nodeId);
     
     // Start smooth transition
-    if (SmoothFunction.flowControl) {
-      const intervalId = setInterval(() => {
-        const current = SmoothFunction.currentValues.get(nodeId!) ?? currentValue;
-        const diff = targetValue - current;
-        
-        if (Math.abs(diff) <= threshold) {
-          // We've reached the target
-          SmoothFunction.currentValues.set(nodeId!, targetValue);
-          SmoothFunction.flowControl.recalculateNode(nodeId!);
-          this.clearInterval(nodeId!);
-        } else {
-          // Move closer to target
-          const newValue = current + (diff * speed);
-          SmoothFunction.currentValues.set(nodeId!, newValue);
-          SmoothFunction.flowControl.recalculateNode(nodeId!);
-        }
-      }, intervalMs);
+    const intervalId = setInterval(() => {
+      const current = SmoothFunction.currentValues.get(nodeId!) ?? currentValue;
+      const diff = targetValue - current;
       
-      SmoothFunction.intervals.set(nodeId, intervalId);
-    }
+      if (Math.abs(diff) <= threshold) {
+        // We've reached the target
+        SmoothFunction.currentValues.set(nodeId!, targetValue);
+        recalculateNode(nodeId!);
+        this.clearInterval(nodeId!);
+      } else {
+        // Move closer to target
+        const newValue = current + (diff * speed);
+        SmoothFunction.currentValues.set(nodeId!, newValue);
+        recalculateNode(nodeId!);
+      }
+    }, intervalMs);
+    
+    SmoothFunction.intervals.set(nodeId, intervalId);
+  
     
     return [currentValue];
   }

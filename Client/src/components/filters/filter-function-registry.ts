@@ -6,6 +6,7 @@ import { GearboxFunction } from "./GearboxFunction";
 import { IifFunction } from "./IifFunction";
 import { LogFunction } from "./LogFunction";
 import { ModuloFunction } from "./ModuloFunction";
+import { MultiplyFunction } from "./MultiplyFunction";
 import { PowerFunction } from "./PowerFunction";
 import { RescaleFunction } from "./RescaleFunction";
 import { ReverseFunction } from "./ReverseFunction";
@@ -40,6 +41,7 @@ export const filterFunctionRegistry = {
   Scale: new ScaleFunction(),
   Reverse: new ReverseFunction(),
   Add: new AddFunction(),
+  Multiply: new MultiplyFunction(),
   Divide: new DivideFunction(),
   Modulo: new ModuloFunction(),
   Power: new PowerFunction(),
