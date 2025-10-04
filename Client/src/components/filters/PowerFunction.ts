@@ -7,7 +7,7 @@ export class PowerFunction implements FilterFunctionDef<readonly ["base", "expon
     { name: 'base', label: 'base (default)', type: 'number', default: 0 },
     { name: 'exponent', label: 'exponent (default)', type: 'number', default: 2 },
   ];
-  inputLabels = ["base", "exponent"] as const;
+  inputLabels = ["base", "exponent"];
   outputLabels = ['result'];
   apply(inputs: InputMap<readonly ["base", "exponent"]>, params: Record<string, any>) {
     const base = inputs.base ?? params.base ?? 0;

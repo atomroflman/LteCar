@@ -7,7 +7,7 @@ export class ModuloFunction implements FilterFunctionDef<readonly ["a", "b"]> {
     { name: 'a', label: 'a (default)', type: 'number', default: 0 },
     { name: 'b', label: 'b (default)', type: 'number', default: 1 },
   ];
-  inputLabels = ["a", "b"] as const;
+  inputLabels = ["a", "b"];
   outputLabels = ['remainder'];
   apply(inputs: InputMap<readonly ["a", "b"]>, params: Record<string, any>) {
     const a = inputs.a ?? params.a ?? 0;
