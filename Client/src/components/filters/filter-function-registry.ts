@@ -10,8 +10,8 @@ import { MultiplyFunction } from "./MultiplyFunction";
 import { PowerFunction } from "./PowerFunction";
 import { RescaleFunction } from "./RescaleFunction";
 import { ReverseFunction } from "./ReverseFunction";
-import { ScaleFunction } from "./ScaleFunction";
 import { SmoothFunction } from "./SmoothFunction";
+import { SubtractFunction } from "./SubtractFunction";
 import { ToggleFunction } from "./ToggleFunction";
 import { TurnSignal } from "./TurnSignal";
 
@@ -38,9 +38,9 @@ export type FilterFunctionDef<TInputs extends ReadonlyArray<string>> = {
 
 export const filterFunctionRegistry = {
   Clamp: new ClampFunction(),
-  Scale: new ScaleFunction(),
   Reverse: new ReverseFunction(),
   Add: new AddFunction(),
+  Subtract: new SubtractFunction(),
   Multiply: new MultiplyFunction(),
   Divide: new DivideFunction(),
   Modulo: new ModuloFunction(),
