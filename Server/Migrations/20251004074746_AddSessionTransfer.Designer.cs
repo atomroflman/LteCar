@@ -3,6 +3,7 @@ using System;
 using LteCar.Server.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace LteCar.Server.Migrations
 {
     [DbContext(typeof(LteCarContext))]
-    partial class LteCarContextModelSnapshot : ModelSnapshot
+    [Migration("20251004074746_AddSessionTransfer")]
+    partial class AddSessionTransfer
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "9.0.4");
@@ -231,7 +234,6 @@ namespace LteCar.Server.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<string>("TransferCode")
-                        .HasMaxLength(6)
                         .HasColumnType("TEXT");
 
                     b.Property<DateTime?>("TransferCodeExpiresAt")
@@ -242,9 +244,6 @@ namespace LteCar.Server.Migrations
                     b.HasIndex("ActiveVehicleId");
 
                     b.HasIndex("SessionToken")
-                        .IsUnique();
-
-                    b.HasIndex("TransferCode")
                         .IsUnique();
 
                     b.ToTable("Users");
