@@ -7,7 +7,7 @@ export class LogFunction implements FilterFunctionDef<readonly ["value", "base"]
     { name: 'value', label: 'value (default)', type: 'number', default: 1 },
     { name: 'base', label: 'base (default)', type: 'number', default: Math.E },
   ];
-  inputLabels = ["value", "base"] as const;
+  inputLabels = ["value", "base"];
   outputLabels = ['result'];
   apply(inputs: InputMap<readonly ["value", "base"]>, params: Record<string, any>) {
     const value = inputs.value ?? params.value ?? 1;

@@ -21,7 +21,7 @@ export class TurnSignal implements FilterFunctionDef<readonly ["enable", "steeri
     type: 'boolean',
     default: true, // true = left, false = right
   }];
-  inputLabels = ["enable", "steering"] as const;
+  inputLabels = ["enable", "steering"];
   outputLabels = ['isEnabled'];
   apply(inputs: InputMap<readonly ["enable", "steering"]>, params: Record<string, any>, nodeId?: number) {
     if (nodeId === undefined) return [0];

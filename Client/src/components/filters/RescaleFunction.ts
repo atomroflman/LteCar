@@ -9,7 +9,7 @@ export class RescaleFunction implements FilterFunctionDef<readonly ["input"]> {
     { name: 'outMin', label: 'Output Minimum', type: 'number', default: 0 },
     { name: 'outMax', label: 'Output Maximum', type: 'number', default: 1 },
   ];
-  inputLabels = ["input"] as const;
+  inputLabels = ["input"];
   outputLabels = ['output'];
 
   apply(inputs: InputMap<readonly ["input"]>, params: Record<string, any>) {
