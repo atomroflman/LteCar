@@ -128,7 +128,7 @@ public class CameraProcessParameterBuilder {
     }
 
     public string BuildParameters(VideoSettings videoSettings) {
-        var camOption = _configuration.GetSection("CameraOptions:CameraOptions").Get<string>();
+        var camOption = _configuration.GetSection("CameraOptions:CameraLib").Get<string>();
         switch (camOption) {
             case "libcamera-vid":
                 return BuildLibcameraParameters(videoSettings);
