@@ -158,6 +158,57 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
     const node = state.nodes.find(n => n.nodeId === nodeId);
     if (!node) return;
 
+    // Handle input nodes - just pass through the value
+    if (node.nodeTypeName === "UserSetupUserChannelNode") {
+      // Input nodes already have their value set, just propagate downstream
+      const value = state.nodeLatestValues[nodeId] ?? 0;
+      
+      // Propagate to downstream nodes
+      const nextEdges = state.edges.filter(e => e.source === nodeId);
+      const queue: number[] = [];
+      const visited = new Set<number>();
+      
+      nextEdges.forEach(edge => queue.push(edge.target));
+      
+      while (queue.length > 0) {
+        const targetNodeId = queue.shift();
+        if (!targetNodeId || visited.has(targetNodeId)) continue;
+        visited.add(targetNodeId);
+        
+        const targetNode = state.nodes.find(n => n.nodeId === targetNodeId);
+        if (!targetNode) continue;
+        
+        // Recursively recalculate downstream node
+        get().recalculateNode(targetNodeId);
+        
+        // Add next level to queue
+        const nextLevelEdges = state.edges.filter(e => e.source === targetNodeId);
+        nextLevelEdges.forEach(edge => queue.push(edge.target));
+      }
+      
+      set({ nodeLatestValues: state.nodeLatestValues, nodes: [...state.nodes], frame: state.frame + 1 });
+      return;
+    }
+
+    // Handle output nodes - send value to car
+    if (node.nodeTypeName === "UserSetupCarChannelNode") {
+      // Get the input value from incoming edge
+      const incomingEdge = state.edges.find(e => e.target === nodeId);
+      if (incomingEdge) {
+        const inputValue = state.nodeLatestValues[incomingEdge.source] ?? 0;
+        state.nodeLatestValues[nodeId] = inputValue;
+        node.latestValue = inputValue;
+        
+        // Send to car
+        if (node.representingId !== undefined) {
+          state.sendOutput(node.representingId, inputValue);
+        }
+      }
+      
+      set({ nodeLatestValues: state.nodeLatestValues, nodes: [...state.nodes], frame: state.frame + 1 });
+      return;
+    }
+
     // For function nodes, we need to recalculate based on current inputs
     if (node.nodeTypeName === "UserSetupFunctionNode") {
       const fnName: string | undefined = node.metadata?.functionName;
@@ -193,44 +244,26 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
 
       // Propagate changes to downstream nodes
       const nextEdges = state.edges.filter(e => e.source === nodeId);
-      const queue: {nodeId: number, inputValues: Record<string, number | string>}[] = [];
+      const queue: number[] = [];
+      const visited = new Set<number>();
       
-      nextEdges.forEach((edge, idx) => {
-        const targetNode = state.nodes.find(n => n.nodeId === edge.target);
-        if (!targetNode) return;
-        
-        const targetFnName: string | undefined = targetNode.metadata?.functionName;
-        const targetFn = targetFnName ? filterFunctionRegistry[targetFnName as keyof typeof filterFunctionRegistry] : undefined;
-        const targetInputs: Record<string, number | string> = {};
-        
-        if (targetFn) {
-          (targetFn.inputLabels as readonly string[]).forEach((label: string) => {
-            const incoming = state.edges.find(e => e.target === targetNode.nodeId && e.targetPort === label);
-            if (incoming && incoming.source === nodeId) {
-              targetInputs[label] = calculatedValue[idx] ?? calculatedValue[0] as number | string;
-            } else {
-              targetInputs[label] = state.nodeLatestValues[incoming?.source ?? 0] ?? 0;
-            }
-          });
-        } else {
-          targetInputs.input = calculatedValue[idx] ?? calculatedValue[0];
-        }
-        queue.push({ nodeId: targetNode.nodeId, inputValues: targetInputs });
-      });
+      nextEdges.forEach(edge => queue.push(edge.target));
 
       // Process downstream nodes
-      const visited = new Set<number>();
       while (queue.length > 0) {
-        const next = queue.shift();
-        if (!next?.nodeId) continue;
-        if (visited.has(next.nodeId)) continue;
-        visited.add(next.nodeId);
+        const targetNodeId = queue.shift();
+        if (!targetNodeId || visited.has(targetNodeId)) continue;
+        visited.add(targetNodeId);
         
-        const targetNode = state.nodes.find(n => n.nodeId === next.nodeId);
+        const targetNode = state.nodes.find(n => n.nodeId === targetNodeId);
         if (!targetNode) continue;
         
         // Recursively recalculate downstream nodes
-        get().recalculateNode(next.nodeId);
+        get().recalculateNode(targetNodeId);
+        
+        // Add next level to queue
+        const nextLevelEdges = state.edges.filter(e => e.source === targetNodeId);
+        nextLevelEdges.forEach(edge => queue.push(edge.target));
       }
 
       // Update the state to trigger re-renders
@@ -468,6 +501,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
   handleInputUpdate(inputDbId: number, value: number, fromRemote: boolean = false) {
     const state = get();
     console.log("handleInputUpdate", inputDbId, value, fromRemote);
+    
     // Only broadcast if this is a LOCAL update (not from remote)
     if (!fromRemote) {
       const { userChannelConnection } = state;
@@ -478,103 +512,20 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
       }
     }
     
-    let queue: {nodeId: number, inputValues: Record<string, number | string>}[] = [];
-    state.nodes.forEach(node => {
-      if (node.type === "input" && node.representingId === inputDbId) {
-        queue.push({ nodeId: node.nodeId, inputValues: { input: value } });
-      }
+    // Find all input nodes that represent this channel
+    const inputNodes = state.nodes.filter(node => 
+      node.type === "input" && node.representingId === inputDbId
+    );
+    
+    // Update the value for each input node and trigger recalculation
+    inputNodes.forEach(inputNode => {
+      // Set the input node's value
+      state.nodeLatestValues[inputNode.nodeId] = value;
+      inputNode.latestValue = value;
+      
+      // Recalculate this node (which will propagate to all downstream nodes and send outputs)
+      get().recalculateNode(inputNode.nodeId);
     });
-    const visited = new Set<number>();
-    function executeNode(nodeId: number, inputValues: Record<string, number | string>): (number | string)[] {
-      const node = state.nodes.find(n => n.nodeId === nodeId);
-      if (!node) return [];
-      if (node.nodeTypeName === "UserSetupUserChannelNode") {
-        return [inputValues.input ?? 0] as (number[] | string[]);
-      }
-      if (node.nodeTypeName === "UserSetupFunctionNode") {
-        const fnName: string | undefined = node.metadata?.functionName;
-        if (!fnName) return [];
-        const fnDef = filterFunctionRegistry[fnName as keyof typeof filterFunctionRegistry];
-        if (!fnDef) return [];
-        const mappedInputs: Record<string, number | string> = {};
-        (fnDef.inputLabels as readonly string[]).forEach((label: string) => {
-          let val = inputValues[label];
-          if (val === undefined) {
-            const incomingEdge = state.edges.find(e => e.target === node.nodeId && e.targetPort === label);
-            if (incomingEdge) {
-              const prevNode = state.nodes.find(n => n.nodeId === incomingEdge.source);
-              if (prevNode) {
-                const prevInputs: Record<string, number> = {};
-                if (prevNode.type === "input") {
-                  prevInputs.input = state.nodeLatestValues[prevNode.nodeId] ?? 0;
-                } else {
-                  const prevFnName: string | undefined = prevNode.metadata?.functionName;
-                  if (prevFnName) {
-                    const prevFn = filterFunctionRegistry[prevFnName as keyof typeof filterFunctionRegistry];
-                    if (prevFn) {
-                      (prevFn.inputLabels as readonly string[]).forEach((lab: string) => {
-                        prevInputs[lab] = state.nodeLatestValues[prevNode.nodeId] ?? 0;
-                      });
-                    }
-                  }
-                }
-                const prevOut = executeNode(prevNode.nodeId, prevInputs);
-                val = prevOut[0];
-              }
-            }
-          }
-          mappedInputs[label] = val ?? 0 as number | string;
-        });
-        return fnDef.apply(mappedInputs as any, node.params || {}, node.nodeId);
-      }
-      if (node.nodeTypeName === "UserSetupCarChannelNode") {
-        const inputValue = inputValues.input ?? 0 as number | string;
-        if (typeof inputValue === "string") {
-          throw new Error("Car channel input value is a string");
-        }
-        state.sendOutput(node.representingId!, (inputValues.input ?? 0) as number);
-        return [inputValues.input ?? 0 as number | string];
-      }
-      return [];
-    }
-    while (queue.length > 0) {
-      const next = queue.shift();
-      if (!next?.nodeId) continue;
-      if (visited.has(next.nodeId)) continue;
-      visited.add(next.nodeId);
-      const node = state.nodes.find(n => n.nodeId === next.nodeId);
-      if (!node) continue;
-      let calculatedValue: (number | string)[] = executeNode(node.nodeId, next.inputValues);
-      if (calculatedValue[0] === state.nodeLatestValues[node.nodeId]) 
-        continue;
-      state.nodeLatestValues[node.nodeId] = calculatedValue[0] as number;
-      node.latestValue = calculatedValue[0] as number;
-      const nextEdges = state.edges.filter(e => e.source === node.nodeId);
-      if (nextEdges.length === 0) 
-        continue;
-      nextEdges.forEach((edge, idx) => {
-        const targetNode = state.nodes.find(n => n.nodeId === edge.target);
-        if (!targetNode) 
-          return;
-        const targetFnName: string | undefined = targetNode.metadata?.functionName;
-        const targetFn = targetFnName ? filterFunctionRegistry[targetFnName as keyof typeof filterFunctionRegistry] : undefined;
-        const targetInputs: Record<string, number | string> = {};
-        if (targetFn) {
-          (targetFn.inputLabels as readonly string[]).forEach((label: string, i: number) => {
-            const incoming = state.edges.find(e => e.target === targetNode.nodeId && e.targetPort === label);
-            if (incoming && incoming.source === node.nodeId) {
-              targetInputs[label] = calculatedValue[idx] ?? calculatedValue[0] as number | string;
-            } else {
-              targetInputs[label] = state.nodeLatestValues[incoming?.source ?? 0] ?? 0;
-            }
-          });
-        } else {
-          targetInputs.input = calculatedValue[idx] ?? calculatedValue[0];
-        }
-        queue.push({ nodeId: targetNode.nodeId, inputValues: targetInputs });
-      });
-    }
-    set({ nodeLatestValues: state.nodeLatestValues, nodes: [...state.nodes], frame: state.frame + 1 });
   },
   connection: undefined,
   carSession: undefined,
