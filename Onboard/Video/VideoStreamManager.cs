@@ -84,7 +84,7 @@ public class VideoStreamManager : IDisposable
             streamInstance.Start();
             _activeStreams[streamName] = streamInstance;
             
-            Logger.LogInformation($"Started video stream: {streamName} ({streamConfig.Purpose})");
+            // Logger.LogInformation($"Started video stream: {streamName} ({streamConfig.Purpose})");
         }
         catch (Exception ex)
         {
@@ -160,9 +160,10 @@ public class VideoStreamInstance : IDisposable
         _cancellationToken = new CancellationTokenSource();
         _process = new Process();
 
-        var parameters = ParameterBuilder.BuildParameters(Config.VideoSettings) 
-            + ParameterBuilder.AppendJanusConfig(JanusConfig);
+        // var parameters = ParameterBuilder.BuildParameters(Config.VideoSettings) 
+        //     + ParameterBuilder.AppendJanusConfig(JanusConfig);
             
+        var parameters = "rpicam-vid -t 0 --intra 1 --libav-format h264 --nopreview -o - | gst-launch-1.0 fdsrc ! h264parse ! rtph264pay pt=126 ! tcpsink host=lte-rc.northeurope.cloudapp.azure.com port=11000 sync=false ";
         _process.StartInfo.FileName = "bash";
         _process.StartInfo.Arguments = $"-c \"{parameters}\"";
         _process.StartInfo.UseShellExecute = false;
