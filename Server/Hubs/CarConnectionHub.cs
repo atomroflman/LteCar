@@ -39,6 +39,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
     
     public async Task<CarConfiguration> OpenCarConnection(string carId, string channelMapHash)
     {
+        Logger.LogInformation("Car '{CarId}' attempting to connect: ChannelHash '{ChannelMapHash}'", carId, channelMapHash);
         var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
         var car = dbContext.Cars.FirstOrDefault(c => c.CarId == carId);
         if (car == null)
@@ -56,23 +57,17 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
             Logger.LogWarning($"Janus server host is not configured. Using default: {janusServerHost}");
         }
 
-        // Stream für das Fahrzeug erstellen oder bestehenden verwenden
-        var streamInfo = await EnsureCarStreamExists(carId, car);
-        var streamPort = streamInfo?.Port ?? car.VideoStreamPort ?? GetNextAvailablePort();
-        
-        // Port in der Datenbank aktualisieren
-        if (car.VideoStreamPort != streamPort)
-        {
-            car.VideoStreamPort = streamPort;
-        }
-
         CarConfiguration carConfig = new CarConfiguration();
         carConfig.JanusConfiguration = new LteCar.Shared.JanusConfiguration() {
             JanusServerHost = janusServerHost,
-            JanusUdpPort = streamPort,
+            JanusUdpPort = 10000
         };
         carConfig.VideoSettings = car.VideoSettings;
         carConfig.RequiresChannelMapUpdate = car.ChannelMapHash != channelMapHash;
+        if (carConfig.RequiresChannelMapUpdate)
+        {
+            Logger.LogInformation($"Car '{carId}' channel map hash mismatch. Server: '{car.ChannelMapHash}' Client: '{channelMapHash}'");
+        }
         await dbContext.SaveChangesAsync();  
         
         await UiHub.Clients.All.CarStateUpdated(new CarStateModel() {
@@ -222,38 +217,6 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
 
         await dbContext.SaveChangesAsync();
         Logger.LogInformation($"Channel map updated for car {carId}. Channel map hash: {car.ChannelMapHash}");
-    }
-
-    private async Task<StreamInfo?> EnsureCarStreamExists(string carId, Car car)
-    {
-        try
-        {
-            // Prüfen ob bereits ein aktiver Stream für das Fahrzeug existiert
-            var existingStream = _streamService.GetActiveStreamByCar(carId);
-            if (existingStream != null)
-            {
-                Logger.LogDebug($"Found existing stream for car '{carId}': {existingStream.Id} on port {existingStream.Port}");
-                return existingStream;
-            }
-
-            // Neuen UDP-Stream erstellen (Standard für Janus)
-            var streamInfo = await _streamService.StartNewStream(StreamProtocol.UDP, carId, $"car-{carId}", "video");
-            if (streamInfo != null)
-            {
-                Logger.LogInformation($"Created new UDP stream for car '{carId}': {streamInfo.Id} on port {streamInfo.Port}");
-            }
-            else
-            {
-                Logger.LogWarning($"Failed to create stream for car '{carId}'");
-            }
-
-            return streamInfo;
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, $"Error ensuring stream exists for car '{carId}'");
-            return null;
-        }
     }
 
     public async Task<ChannelMapSyncResponse> SyncChannelMap(ChannelMapSyncRequest request)
