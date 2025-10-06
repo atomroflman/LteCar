@@ -55,6 +55,7 @@ export type GamepadStoreState = {
     pollFps: number;
     setPollFps: (fps: number) => void;
     knownGamepads: Record<string, UserGamepadDatabase>;
+    setKnownGamepads: (gamepads: Record<string, UserGamepadDatabase>) => void;
     setChannelAccuracy: (gamepadId: string, channelIndex: number, accuracy: number) => void;
     loadInitialGamepads: () => Promise<void>;
     pollGamepads: () => void;
@@ -92,6 +93,9 @@ export const useGamepadStore = create<GamepadStoreState>((set, get) => {
         gamepadsLoaded: false,
         onChannelChange: undefined,
         pollFps: 15,
+        setKnownGamepads: (gamepads: Record<string, UserGamepadDatabase>) => {
+            set({ knownGamepads: gamepads });
+        },
         setChannelAccuracy: (gamepadId: string, channelIndex: number, accuracy: number) => {
             const known = get().knownGamepads;
             if (known[gamepadId]) {
