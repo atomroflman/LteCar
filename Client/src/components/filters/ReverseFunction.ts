@@ -4,7 +4,7 @@ export class ReverseFunction implements FilterFunctionDef<readonly ["input"]> {
   name = 'Reverse';
   label = 'Reverse';
   params: FilterFunctionParam[] = [];
-  inputLabels = ["input"] as const;
+  inputLabels = ["input"];
   outputLabels = ['output'];
   apply(inputs: InputMap<readonly ["input"]>) {
     return [-inputs.input];
