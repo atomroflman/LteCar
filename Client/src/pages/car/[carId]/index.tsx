@@ -7,7 +7,6 @@ import ReactFlow, { MiniMap, Controls, Background, useReactFlow, NodeDragHandler
 import "reactflow/dist/style.css";
 import { ControlFlowEdge, ControlFlowNode, useControlFlowStore } from "@/components/control-flow-store";
 import FunctionNodesView from "@/components/function-nodes-view";
-import { useGamepadStore } from "@/components/controller-store";
 import CustomFlowNode from "@/components/custom-flow-node";
 
 const nodeTypes = { custom: CustomFlowNode };
@@ -42,6 +41,8 @@ export default function CarControlFlowPage() {
 
   useEffect(() => {
     flowControl.load(router.query.carId as string);
+    flowControl.startUserChannelConnection();
+    flowControl.subscribeToInputNodes();
   }, [router.query.carId]);
 
   const onNodeDrag: NodeDragHandler = async (event, node) => {
