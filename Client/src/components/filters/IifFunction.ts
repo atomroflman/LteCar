@@ -1,6 +1,6 @@
 import { FilterFunctionDef, FilterFunctionParam, InputMap } from "./filter-function-registry";
 
-export class IifFunction implements FilterFunctionDef<readonly ["a", "b", "trueValue", "falseValue"]> {
+export class IifFunction implements FilterFunctionDef<readonly ["a", "b", "ifTrue", "ifFalse"]> {
   name = 'Iif';
   label = 'IIF (If-Then-Else)';
   params: FilterFunctionParam[] = [
@@ -12,11 +12,11 @@ export class IifFunction implements FilterFunctionDef<readonly ["a", "b", "trueV
   ];
   inputLabels = ["a", "b", "ifTrue", "ifFalse"];
   outputLabels = ['result'];
-  apply(inputs: InputMap<readonly ["a", "b", "trueValue", "falseValue"]>, params: Record<string, any>) {
+  apply(inputs: InputMap<readonly ["a", "b", "ifTrue", "ifFalse"]>, params: Record<string, any>) {
     const a = inputs.a ?? params.a ?? 0;
     const b = inputs.b ?? params.b ?? 0;
-    const trueValue = inputs.trueValue ?? params.trueValue ?? 1;
-    const falseValue = inputs.falseValue ?? params.falseValue ?? 0;
+    const trueValue = inputs.ifTrue ?? params.trueValue ?? 1;
+    const falseValue = inputs.ifFalse ?? params.falseValue ?? 0;
     const operator = params?.operator || '>';
     
     let condition = false;

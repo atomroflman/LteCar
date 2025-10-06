@@ -54,7 +54,7 @@ export type ControlFlowState = {
   sendOutput: (channelId: number, value: number) => Promise<void>;
   startConnection: (carId: string, carKey: string | undefined) => Promise<void>;
   stopConnection: () => Promise<void>;
-  handleInputUpdate: (inputDbId: number, value: number) => void;
+  handleInputUpdate: (inputDbId: number, value: number, fromRemote?: boolean) => void;
   connection: any;
   carId: string | undefined;
   userSetupId: number | undefined;
@@ -62,6 +62,13 @@ export type ControlFlowState = {
   setCarId: (carId: string | undefined) => void;
   setCarSession: (carSession: string) => void;
   carSession: string | undefined;
+  userChannelConnection?: any;
+  subscribedChannels: Set<number>; // Gamepad device IDs we're subscribed to
+  remoteGamepads: Set<number>; // Track which gamepad devices are remote (by device ID)
+  startUserChannelConnection: () => Promise<void>;
+  subscribeToInputNodes: () => Promise<void>;
+  unsubscribeFromGamepad: (gamepadDeviceId: number) => Promise<void>;
+  stopUserChannelConnection: () => Promise<void>;
 };
 
 export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
@@ -73,6 +80,9 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
   error: null,
   carId: undefined,
   userSetupId: undefined,
+  userChannelConnection: undefined,
+  subscribedChannels: new Set<number>(),
+  remoteGamepads: new Set<number>(),
   async load(carId: string) {
     set({ isLoading: true, error: null });
     try {
@@ -94,6 +104,10 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
         carId,
         userSetupId: data.id,
       });
+
+      // Start user channel connection for remote controller sync
+      await get().startUserChannelConnection();
+      await get().subscribeToInputNodes();
 
       // Initial calculation for all function nodes without incoming edges
       const state = get();
@@ -451,8 +465,19 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
       set({ connection: undefined, carSession: undefined });
     } 
   },  
-  handleInputUpdate(inputDbId: number, value: number) {
+  handleInputUpdate(inputDbId: number, value: number, fromRemote: boolean = false) {
     const state = get();
+    console.log("handleInputUpdate", inputDbId, value, fromRemote);
+    // Only broadcast if this is a LOCAL update (not from remote)
+    if (!fromRemote) {
+      const { userChannelConnection } = state;
+      console.log("userChannelConnection", userChannelConnection);
+      if (userChannelConnection) {
+        userChannelConnection.invoke("UpdateUserChannelValue", inputDbId, value)
+          .catch((err: any) => console.error("Failed to broadcast channel update:", err));
+      }
+    }
+    
     let queue: {nodeId: number, inputValues: Record<string, number | string>}[] = [];
     state.nodes.forEach(node => {
       if (node.type === "input" && node.representingId === inputDbId) {
@@ -556,4 +581,106 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
   setConnection: (connection: any) => set({ connection }),
   setCarId: (carId: string | undefined) => set({ carId }),
   setCarSession: (carSession: string) => set({ carSession }),
+  
+  async startUserChannelConnection() {
+    const signalR = await import("@microsoft/signalr");
+    const { userChannelConnection } = get();
+    
+    if (!userChannelConnection) {
+      const connection = new signalR.HubConnectionBuilder()
+        .withUrl("/hubs/userchannel")
+        .withAutomaticReconnect()
+        .build();
+
+      connection.on("ReceiveUserChannelValue", async (userChannelId: number, value: number) => {
+        console.log(`Received remote update: channel ${userChannelId} = ${value}`);
+        const state = get();
+        
+        // Find which gamepad device this channel belongs to and mark it as remote
+        const { useGamepadStore } = await import("./controller-store");
+        const gamepadStore = useGamepadStore.getState();
+        
+        for (const gp of Object.values(gamepadStore.knownGamepads)) {
+          // Check if this channel belongs to this gamepad
+          const axisIndex = gp.axes.findIndex(a => a.id === userChannelId);
+          const buttonIndex = gp.buttons.findIndex(b => b.id === userChannelId);
+          
+          if (axisIndex !== -1 || buttonIndex !== -1) {
+            // Mark gamepad as remote
+            state.remoteGamepads.add(gp.id);
+            set({ remoteGamepads: new Set(state.remoteGamepads) });
+            
+            // Update the value in knownGamepads
+            if (axisIndex !== -1) {
+              gp.axes[axisIndex].latestValue = value;
+            } else if (buttonIndex !== -1) {
+              gp.buttons[buttonIndex].latestValue = value;
+            }
+            
+            // Trigger gamepad store update to refresh UI
+            gamepadStore.setKnownGamepads({ ...gamepadStore.knownGamepads });
+            break;
+          }
+        }
+        
+        // Update the node value
+        get().handleInputUpdate(userChannelId, value, true); // true = fromRemote
+      });
+
+      await connection.start();
+      set({ 
+        userChannelConnection: connection, 
+        subscribedChannels: new Set(),
+        remoteGamepads: new Set()
+      });
+    }
+  },
+
+  async subscribeToInputNodes() {
+    const { userChannelConnection, subscribedChannels } = get();
+    const { useGamepadStore } = await import("./controller-store");
+    const gamepadStore = useGamepadStore.getState();
+    
+    if (!userChannelConnection) return;
+
+    // Subscribe to gamepads that are NOT locally connected
+    for (const gp of Object.values(gamepadStore.knownGamepads)) {
+      if (!gp.connected && !subscribedChannels.has(gp.id)) {
+        await userChannelConnection.invoke("SubscribeToGamepad", gp.id);
+        subscribedChannels.add(gp.id);
+        console.log(`Subscribed to remote gamepad ${gp.id} (${gp.name})`);
+      }
+    }
+    
+    set({ subscribedChannels: new Set(subscribedChannels) });
+  },
+
+  async unsubscribeFromGamepad(gamepadDeviceId: number) {
+    const { userChannelConnection, subscribedChannels, remoteGamepads } = get();
+    if (!userChannelConnection) return;
+    
+    if (subscribedChannels.has(gamepadDeviceId)) {
+      await userChannelConnection.invoke("UnsubscribeFromGamepad", gamepadDeviceId);
+      subscribedChannels.delete(gamepadDeviceId);
+      remoteGamepads.delete(gamepadDeviceId);
+      
+      set({ 
+        subscribedChannels: new Set(subscribedChannels),
+        remoteGamepads: new Set(remoteGamepads)
+      });
+      console.log(`Unsubscribed from gamepad ${gamepadDeviceId}`);
+    }
+  },
+
+  async stopUserChannelConnection() {
+    const { userChannelConnection } = get();
+    if (userChannelConnection) {
+      await userChannelConnection.stop();
+      set({ 
+        userChannelConnection: undefined, 
+        subscribedChannels: new Set(),
+        remoteGamepads: new Set()
+      });
+    }
+  },
 }));
