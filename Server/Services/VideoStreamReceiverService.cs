@@ -59,7 +59,6 @@ public class VideoStreamReceiverService
     {
         streamId ??= Guid.NewGuid().ToString("N")[..8];
         
-        // Freien Port finden
         var port = await Task.Run(() => FindFreePort(protocol));
         if (port == 0)
         {
@@ -79,7 +78,6 @@ public class VideoStreamReceiverService
 
         try
         {
-            // Stream in Datenbank speichern
             var dbStreamId = await SaveStreamToDatabase(streamInfo);
             streamInfo.DatabaseId = dbStreamId;
 
