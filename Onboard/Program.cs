@@ -1,4 +1,7 @@
 ﻿using System.Text.Json;
+using System.Security.Cryptography;
+using System.Text;
+using System.Net;
 using Spectre.Console;
 using LteCar.Onboard;
 using LteCar.Onboard.Control;
@@ -12,7 +15,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Configuration;
-using LteCar.Onboard.Setup;
+using Microsoft.Extensions.FileProviders;
 
 
 // Setup-Modus prüfen
@@ -34,12 +37,27 @@ else
     File.WriteAllText("carId.txt", carId);
 }
 
+// Generate SSH key pair only if no public key exists
+var sshKeyPath = "ssh_key";
+var sshPublicKeyPath = "ssh_key.pub";
+if (!File.Exists(sshPublicKeyPath))
+{
+    Console.WriteLine("Generating SSH key pair for vehicle authentication...");
+    GenerateSshKeyPair(sshKeyPath, sshPublicKeyPath);
+    Console.WriteLine($"SSH key pair generated. Public key: {File.ReadAllText(sshPublicKeyPath)}");
+}
+else
+{
+    Console.WriteLine("SSH public key already exists, skipping generation.");
+}
+
 Console.WriteLine($"Car ID: {carId}");
 var configuration = new ConfigurationBuilder()
     .AddInMemoryCollection(new Dictionary<string, string?>() {
         { "carId", carId }
     })
     .AddJsonFile("appSettings.json")
+    .AddJsonFile("appSettings.development.json", true)
     .Build();
 
 var channelMapFile = new FileInfo("channelMap.json");
@@ -56,6 +74,7 @@ serviceCollection.AddSingleton<ServerConnectionService>();
 serviceCollection.AddSingleton<VideoStreamService>();
 serviceCollection.AddSingleton<VideoStreamManager>();
 serviceCollection.AddSingleton<CarConfigurationService>();
+serviceCollection.AddSingleton<SshKeyService>();
 serviceCollection.AddSingleton<ControlService>();
 serviceCollection.AddSingleton<ControlExecutionService>();
 serviceCollection.AddSingleton<TelemetryService>();
@@ -110,6 +129,95 @@ videoStreamManager.StartAllStreams();
 
 logger.LogInformation($"Car Engine Started...");
 
+// Start HTTP server for SSH key download only if private key still exists
+var keyDownloaded = !File.Exists(sshKeyPath);
+
+if (!keyDownloaded)
+{
+    var httpListener = new HttpListener();
+    httpListener.Prefixes.Add("http://+:8080/");
+    httpListener.Start();
+
+    // Handle SSH key download requests
+    _ = Task.Run(async () =>
+    {
+        while (httpListener.IsListening)
+        {
+            try
+            {
+                var context = await httpListener.GetContextAsync();
+                
+                // Handle CORS preflight requests
+                if (context.Request.HttpMethod == "OPTIONS")
+                {
+                    context.Response.Headers.Add("Access-Control-Allow-Origin", "*");
+                    context.Response.Headers.Add("Access-Control-Allow-Methods", "GET, OPTIONS");
+                    context.Response.Headers.Add("Access-Control-Allow-Headers", "Content-Type");
+                    context.Response.StatusCode = 200;
+                    context.Response.Close();
+                    continue;
+                }
+                
+                if (context.Request.Url?.AbsolutePath == "/ssh-key")
+                {
+                    if (File.Exists(sshKeyPath))
+                    {
+                        // Serve the private key and mark as downloaded
+                        var privateKey = File.ReadAllText(sshKeyPath);
+                        var response = context.Response;
+                        
+                        // Add CORS headers to allow browser access
+                        response.Headers.Add("Access-Control-Allow-Origin", "*");
+                        response.Headers.Add("Access-Control-Allow-Methods", "GET, OPTIONS");
+                        response.Headers.Add("Access-Control-Allow-Headers", "Content-Type");
+                        
+                        response.ContentType = "text/plain";
+                        response.Headers.Add("Content-Disposition", "attachment; filename=\"vehicle-ssh-key.pem\"");
+                        var buffer = Encoding.UTF8.GetBytes(privateKey);
+                        response.ContentLength64 = buffer.Length;
+                        await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                        response.OutputStream.Close();
+                        
+                        // Delete the private key for security (this marks it as downloaded)
+                        File.Delete(sshKeyPath);
+                        logger.LogInformation("SSH private key downloaded and deleted for security.");
+                        
+                        // Stop the HTTP server since key is no longer available
+                        httpListener.Stop();
+                        logger.LogInformation("SSH key download server stopped - key no longer available.");
+                    }
+                    else
+                    {
+                        // No private key available
+                        context.Response.StatusCode = 404;
+                        context.Response.ContentType = "text/plain";
+                        var message = "SSH private key not available.";
+                        var buffer = Encoding.UTF8.GetBytes(message);
+                        context.Response.ContentLength64 = buffer.Length;
+                        await context.Response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                        context.Response.OutputStream.Close();
+                    }
+                }
+                else
+                {
+                    context.Response.StatusCode = 404;
+                    context.Response.Close();
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error in HTTP listener");
+            }
+        }
+    });
+
+    logger.LogInformation("SSH key download server started on port 8080");
+}
+else
+{
+    logger.LogInformation("SSH key already downloaded - HTTP server not started");
+}
+
 // Application loop
 await Task.Run(async () =>
 {
@@ -119,3 +227,26 @@ await Task.Run(async () =>
         await Task.WhenAll(telemetryService.Tick(), Task.Delay(100));
     }
 });
+
+static void GenerateSshKeyPair(string privateKeyPath, string publicKeyPath)
+{
+    using var rsa = RSA.Create(2048);
+    
+    // Generate private key in PEM format
+    var privateKeyBytes = rsa.ExportRSAPrivateKey();
+    var privateKeyPem = Convert.ToBase64String(privateKeyBytes);
+    var privateKeyContent = $"-----BEGIN RSA PRIVATE KEY-----\n{privateKeyPem}\n-----END RSA PRIVATE KEY-----";
+    File.WriteAllText(privateKeyPath, privateKeyContent);
+    
+    // Generate public key in SSH format
+    var publicKeyBytes = rsa.ExportRSAPublicKey();
+    var publicKeyPem = Convert.ToBase64String(publicKeyBytes);
+    var publicKeyContent = $"ssh-rsa {publicKeyPem} ltecar-vehicle-key";
+    File.WriteAllText(publicKeyPath, publicKeyContent);
+    
+    // Set appropriate file permissions (Unix only)
+    if (Environment.OSVersion.Platform == PlatformID.Unix)
+    {
+        File.SetUnixFileMode(privateKeyPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+    }
+}

@@ -69,6 +69,25 @@ export type ControlFlowState = {
   subscribeToInputNodes: () => Promise<void>;
   unsubscribeFromGamepad: (gamepadDeviceId: number) => Promise<void>;
   stopUserChannelConnection: () => Promise<void>;
+  // Update control
+  isInConfigMode: boolean;
+  updatesEnabled: boolean;
+  setConfigMode: (isConfig: boolean) => void;
+  setUpdatesEnabled: (enabled: boolean) => void;
+  // Authentication tracking
+  hasAuthenticatedWithCar: (carId: string) => boolean;
+  markCarAsAuthenticated: (carId: string) => void;
+  // SSH key functions
+  downloadSshKey: (carId: string, vehicleIp: string, saveToStorage?: boolean) => Promise<{ success: boolean; key?: string; error?: string }>;
+  uploadSshKey: (carId: string, privateKey: string) => Promise<{ success: boolean; error?: string }>;
+  authenticateWithSshKey: (carId: string, privateKey: string, vehicleIp: string) => Promise<boolean>;
+  signWithPrivateKey: (data: string, privateKeyPem: string) => Promise<string | null>;
+  generateSessionIdFromPrivateKey: (privateKeyPem: string) => Promise<string | null>;
+  pemToArrayBuffer: (pem: string) => ArrayBuffer;
+  saveSshPrivateKey: (carId: string, privateKey: string, vehicleIp?: string) => boolean;
+  getSshPrivateKey: (carId: string) => string | null;
+  getVehicleIp: (carId: string) => string | null;
+  removeSshPrivateKey: (carId: string) => boolean;
 };
 
 export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
@@ -83,6 +102,9 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
   userChannelConnection: undefined,
   subscribedChannels: new Set<number>(),
   remoteGamepads: new Set<number>(),
+  // Update control
+  isInConfigMode: false,
+  updatesEnabled: true,
   async load(carId: string) {
     set({ isLoading: true, error: null });
     try {
@@ -468,10 +490,16 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
     }));
   },
   async sendOutput(channelId: number, value: number) {
-    const { carId, carSession, connection } = get();
-    console.log("send out", carId, carSession, connection?.state);
-    if (connection && carId && carSession) {
+    const { carId, carSession, connection, updatesEnabled, isInConfigMode } = get();
+    console.log("send out", carId, carSession, connection?.state, "updatesEnabled:", updatesEnabled, "isInConfigMode:", isInConfigMode);
+    
+    // Only send updates if updates are enabled (regardless of config mode)
+    if (connection && carId && carSession && updatesEnabled) {
       await connection.invoke("UpdateChannel", carId, carSession, channelId, value);
+    } else if (isInConfigMode && !updatesEnabled) {
+      console.log("Updates disabled: In configuration mode (default off)");
+    } else if (!updatesEnabled) {
+      console.log("Updates disabled: Updates manually disabled");
     }
   },
   async startConnection(carId: string, carKey: string | undefined) {
@@ -489,6 +517,221 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
     }
     const carSession = await connection.invoke("AquireCarControl", carId, carKey);
     set({ connection, carId, carSession });
+  },
+  async downloadSshKey(carId: string, vehicleIp: string, saveToStorage: boolean = true): Promise<{ success: boolean; key?: string; error?: string }> {
+    try {
+      const response = await fetch(`http://${vehicleIp}:8080/ssh-key`);
+      if (response.status === 410) {
+        return { success: false, error: "SSH key has already been downloaded and is no longer available." };
+      }
+      if (!response.ok) {
+        return { success: false, error: `Failed to get SSH key from vehicle: ${response.statusText}` };
+      }
+      
+      const key = await response.text();
+      const trimmedKey = key.trim();
+      
+      if (saveToStorage) {
+        // Save the private key to localStorage
+        const saveSuccess = this.saveSshPrivateKey(carId, trimmedKey);
+        if (!saveSuccess) {
+          return { success: false, error: "Failed to save SSH private key to browser storage." };
+        }
+        console.log("SSH private key downloaded and saved successfully");
+      }
+      
+      return { success: true, key: trimmedKey };
+    } catch (error) {
+      console.error("Failed to download SSH key:", error);
+      return { success: false, error: `Failed to download SSH key: ${error}` };
+    }
+  },
+
+  async uploadSshKey(carId: string, privateKey: string): Promise<{ success: boolean; error?: string }> {
+    try {
+      // Validate the private key format
+      if (!privateKey.includes("-----BEGIN PRIVATE KEY-----") || !privateKey.includes("-----END PRIVATE KEY-----")) {
+        return { success: false, error: "Invalid private key format. Please ensure it's a valid PEM format." };
+      }
+      
+      // Save the private key to localStorage
+      const saveSuccess = this.saveSshPrivateKey(carId, privateKey);
+      if (!saveSuccess) {
+        return { success: false, error: "Failed to save SSH private key to browser storage." };
+      }
+      
+      console.log("SSH private key uploaded and saved successfully");
+      return { success: true };
+    } catch (error) {
+      console.error("Failed to upload SSH key:", error);
+      return { success: false, error: `Failed to upload SSH key: ${error}` };
+    }
+  },
+  async authenticateWithSshKey(carId: string, privateKey: string, vehicleIp: string): Promise<boolean> {
+    try {
+      // Get the public key from the vehicle (download without saving)
+      const keyResult = await get().downloadSshKey(carId, vehicleIp, false);
+      if (!keyResult.success || !keyResult.key) {
+        console.error("Could not retrieve public key from vehicle");
+        return false;
+      }
+      const publicKey = keyResult.key;
+
+      // Get challenge from the vehicle via server
+      const { connection } = get();
+      if (!connection) {
+        return false;
+      }
+
+      const challenge = await connection.invoke("GetChallenge", carId);
+      if (!challenge) {
+        console.error("Could not get challenge from vehicle");
+        return false;
+      }
+      
+      // Generate consistent session ID from private key
+      const sessionId = await this.generateSessionIdFromPrivateKey(privateKey);
+      if (!sessionId) {
+        console.error("Failed to generate session ID from private key");
+        return false;
+      }
+
+      // Sign the challenge with the private key
+      const signature = await this.signWithPrivateKey(challenge, privateKey);
+      if (!signature) {
+        console.error("Failed to sign challenge");
+        return false;
+      }
+
+      // Create SSH authentication string with session ID
+      const sshAuth = `ssh:${challenge}|${signature}|${sessionId}`;
+      
+      // Try to authenticate
+      const carSession = await connection.invoke("AquireCarControl", carId, sshAuth);
+      if (carSession) {
+        set({ carSession });
+        // Mark car as authenticated for config access
+        get().markCarAsAuthenticated(carId);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error("SSH authentication failed:", error);
+      return false;
+    }
+  },
+  async signWithPrivateKey(data: string, privateKeyPem: string): Promise<string | null> {
+    try {
+      // Import the private key
+      const key = await crypto.subtle.importKey(
+        "pkcs8",
+        this.pemToArrayBuffer(privateKeyPem),
+        {
+          name: "RSASSA-PKCS1-v1_5",
+          hash: "SHA-256",
+        },
+        false,
+        ["sign"]
+      );
+
+      // Sign the data
+      const signature = await crypto.subtle.sign(
+        "RSASSA-PKCS1-v1_5",
+        key,
+        new TextEncoder().encode(data)
+      );
+
+      // Convert to base64
+      return btoa(String.fromCharCode(...new Uint8Array(signature)));
+    } catch (error) {
+      console.error("Failed to sign with private key:", error);
+      return null;
+    }
+  },
+  async generateSessionIdFromPrivateKey(privateKeyPem: string): Promise<string | null> {
+    try {
+      // Import the private key
+      const key = await crypto.subtle.importKey(
+        "pkcs8",
+        this.pemToArrayBuffer(privateKeyPem),
+        {
+          name: "RSASSA-PKCS1-v1_5",
+          hash: "SHA-256",
+        },
+        false,
+        ["sign"]
+      );
+
+      // Export the public key to generate consistent session ID
+      const publicKey = await crypto.subtle.exportKey("spki", key);
+      
+      // Create a hash of the public key for consistent session ID
+      const hashBuffer = await crypto.subtle.digest("SHA-256", publicKey);
+      const hashArray = new Uint8Array(hashBuffer);
+      
+      // Convert to base64 and take first 16 characters
+      const hashBase64 = btoa(String.fromCharCode(...hashArray));
+      const sessionId = hashBase64.substring(0, 16);
+      
+      return sessionId;
+    } catch (error) {
+      console.error("Failed to generate session ID from private key:", error);
+      return null;
+    }
+  },
+  pemToArrayBuffer(pem: string): ArrayBuffer {
+    // Remove PEM headers and convert to ArrayBuffer
+    const pemHeader = "-----BEGIN PRIVATE KEY-----";
+    const pemFooter = "-----END PRIVATE KEY-----";
+    const pemContents = pem
+      .replace(pemHeader, "")
+      .replace(pemFooter, "")
+      .replace(/\s/g, "");
+    
+    const binaryString = atob(pemContents);
+    const bytes = new Uint8Array(binaryString.length);
+    for (let i = 0; i < binaryString.length; i++) {
+      bytes[i] = binaryString.charCodeAt(i);
+    }
+    return bytes.buffer;
+  },
+  saveSshPrivateKey(carId: string, privateKey: string, vehicleIp?: string) {
+    try {
+      localStorage.setItem(`ssh_private_key_${carId}`, privateKey);
+      if (vehicleIp) {
+        localStorage.setItem(`vehicle_ip_${carId}`, vehicleIp);
+      }
+      return true;
+    } catch (error) {
+      console.error("Failed to save SSH private key:", error);
+      return false;
+    }
+  },
+  getSshPrivateKey(carId: string): string | null {
+    try {
+      return localStorage.getItem(`ssh_private_key_${carId}`);
+    } catch (error) {
+      console.error("Failed to get SSH private key:", error);
+      return null;
+    }
+  },
+  getVehicleIp(carId: string): string | null {
+    try {
+      return localStorage.getItem(`vehicle_ip_${carId}`);
+    } catch (error) {
+      console.error("Failed to get vehicle IP:", error);
+      return null;
+    }
+  },
+  removeSshPrivateKey(carId: string) {
+    try {
+      localStorage.removeItem(`ssh_private_key_${carId}`);
+      localStorage.removeItem(`vehicle_ip_${carId}`);
+      return true;
+    } catch (error) {
+      console.error("Failed to remove SSH private key:", error);
+      return false;
+    }
   },
   async stopConnection() {
     const { connection } = get();
@@ -632,6 +875,52 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
         subscribedChannels: new Set(),
         remoteGamepads: new Set()
       });
+    }
+  },
+
+  // Update control functions
+  setConfigMode: (isConfig: boolean) => {
+    const state = get();
+    if (isConfig) {
+      // Entering config mode: disable updates by default
+      set({ 
+        isInConfigMode: true,
+        updatesEnabled: false
+      });
+      console.log("Config mode: ON, Updates disabled by default");
+    } else {
+      // Leaving config mode: restore previous state or enable by default
+      set({ 
+        isInConfigMode: false,
+        updatesEnabled: true // Re-enable when leaving config mode
+      });
+      console.log("Config mode: OFF, Updates enabled");
+    }
+  },
+
+  setUpdatesEnabled: (enabled: boolean) => {
+    set({ updatesEnabled: enabled });
+    console.log("Updates enabled:", enabled);
+  },
+
+  // Authentication tracking functions
+  hasAuthenticatedWithCar: (carId: string) => {
+    try {
+      const authKey = `car_auth_${carId}`;
+      return localStorage.getItem(authKey) === "true";
+    } catch (error) {
+      console.error("Failed to check car authentication:", error);
+      return false;
+    }
+  },
+
+  markCarAsAuthenticated: (carId: string) => {
+    try {
+      const authKey = `car_auth_${carId}`;
+      localStorage.setItem(authKey, "true");
+      console.log(`Marked car ${carId} as authenticated`);
+    } catch (error) {
+      console.error("Failed to mark car as authenticated:", error);
     }
   },
 }));

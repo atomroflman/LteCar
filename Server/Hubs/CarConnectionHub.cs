@@ -221,7 +221,9 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
 
     public async Task<ChannelMapSyncResponse> SyncChannelMap(ChannelMapSyncRequest request)
     {
-        Logger.LogInformation("SyncChannelMap invoked for car {CarId}", request.CarId);
+        try
+        {
+            Logger.LogInformation("SyncChannelMap invoked for car {CarId}", request.CarId);
         var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
         var car = dbContext.Cars.FirstOrDefault(c => c.CarId == request.CarId);
         if (car == null)
@@ -261,12 +263,21 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
             var db = dbContext.CarTelemetry.FirstOrDefault(c => c.ChannelName == kv.Key && c.CarId == car.Id);
             if (db == null)
             {
-                db = new CarTelemetry { ChannelName = kv.Key, CarId = car.Id };
+                db = new CarTelemetry 
+                { 
+                    ChannelName = kv.Key, 
+                    CarId = car.Id,
+                    TelemetryType = kv.Value.TelemetryType,
+                    ReadIntervalTicks = kv.Value.ReadIntervalTicks
+                };
                 dbContext.CarTelemetry.Add(db);
                 await dbContext.SaveChangesAsync();
             }
-            db.TelemetryType = kv.Value.TelemetryType;
-            db.ReadIntervalTicks = kv.Value.ReadIntervalTicks;
+            else
+            {
+                db.TelemetryType = kv.Value.TelemetryType;
+                db.ReadIntervalTicks = kv.Value.ReadIntervalTicks;
+            }
             telemetryIds[kv.Key] = db.Id;
         }
         foreach (var stale in dbContext.CarTelemetry.Where(c => c.CarId == car.Id).ToList())
@@ -351,5 +362,11 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
 
         Logger.LogInformation("ChannelMap sync complete for {CarId} hash {Hash}", request.CarId, hash);
         return response;
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "FATAL ERROR in SyncChannelMap for car {CarId}", request?.CarId ?? "UNKNOWN");
+            throw;
+        }
     }
 }
