@@ -6,4 +6,5 @@ public interface ICarControlServer
     Task ReleaseCarControl(string carId, string sessionId);
     Task UpdateChannel(string carId, string sessionId, int channelId, decimal value);
     Task RegisterForControl(string carId);
+    Task<string?> GetChallenge(string carId);
 }

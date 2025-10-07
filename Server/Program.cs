@@ -11,7 +11,6 @@ using Microsoft.Extensions.FileProviders;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
 
-
 var builder = WebApplication.CreateBuilder(args);
 builder.Configuration
     .AddJsonFile("appSettings.json")
@@ -95,22 +94,6 @@ if (app.Environment.IsDevelopment())
     app.UseDeveloperExceptionPage();
 }
 
-
-var staticFilePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
-if (!Directory.Exists(staticFilePath))
-{
-    Directory.CreateDirectory(staticFilePath);
-}
-if (!Directory.GetFiles(staticFilePath).Any()) 
-{    
-    logger.LogWarning($"No static files in path: '{staticFilePath}'. Server will run without client.");
-}
-app.UseStaticFiles(new StaticFileOptions()
-{
-    ServeUnknownFileTypes = true,
-    DefaultContentType = "application/octet-stream",
-    FileProvider = new PhysicalFileProvider(staticFilePath)
-});
 app.UseRouting();
 
 app.UseAuthentication();

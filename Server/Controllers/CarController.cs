@@ -50,13 +50,7 @@ namespace LteCar.Server.Controllers
 
             if (setup == null)
             {
-                setup = new UserCarSetup
-                {
-                    CarId = car.Id,
-                    UserId = user.Id
-                };
-                _context.UserSetups.Add(setup);
-                await _context.SaveChangesAsync();
+                return NotFound("Setup not found");
             }
             return Ok(new {id =setup.Id, carId = carid, userId = user.Id});
         }

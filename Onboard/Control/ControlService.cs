@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using TypedSignalR.Client;
+using LteCar.Onboard;
 
 namespace LteCar.Onboard.Control;
 
@@ -18,13 +19,14 @@ public class ControlService : ICarControlClient, IHubConnectionObserver
     public ControlExecutionService Control { get; }
     public IConfiguration Configuration { get; }
     public ServerConnectionService ServerConnectionService { get; }
+    public SshKeyService SshKeyService { get; }
 
     private HubConnection _connection;
     private string? _sessionId;
     private DateTime _lastControlUpdate = DateTime.Now;
     private ICarControlServer _server;
 
-    public ControlService(ILogger<ControlService> logger, TelemetryService telemetryService, ControlExecutionService control, IServiceProvider serviceProvider, IConfiguration configuration, ServerConnectionService serverConnectionService)
+    public ControlService(ILogger<ControlService> logger, TelemetryService telemetryService, ControlExecutionService control, IServiceProvider serviceProvider, IConfiguration configuration, ServerConnectionService serverConnectionService, SshKeyService sshKeyService)
     {
         Logger = logger;
         TelemetryService = telemetryService;
@@ -32,6 +34,7 @@ public class ControlService : ICarControlClient, IHubConnectionObserver
         ServiceProvider = serviceProvider;
         Configuration = configuration;
         ServerConnectionService = serverConnectionService;
+        SshKeyService = sshKeyService;
     }
 
     public void Initialize()
@@ -62,20 +65,45 @@ public class ControlService : ICarControlClient, IHubConnectionObserver
             Logger.LogError("Cannot aquire control: Already connected to driver session.");
             return null;
         }
-        var secret = Configuration.GetValue<string>("CarSecret");
-        if (string.IsNullOrWhiteSpace(secret))
-            Logger.LogWarning("CarSecret is not set!");
 
-        if (PasswordHasher.VerifyPassword(carSecret, secret)) 
+        // SSH key authentication only
+        if (!carSecret.StartsWith("ssh:"))
         {
-            Logger.LogError("Cannot aquire control: Invalid car secret.");
+            Logger.LogError("Cannot aquire control: Only SSH key authentication is supported.");
             return null;
         }
-        var sessionId = ShortGuid.NewGuid().ToString();
-        _sessionId = sessionId;
-        Logger.LogInformation($"Aquired control for car. SessionID: {_sessionId}.");
-        await TelemetryService.UpdateTelemetry("Control Session", "Connected");
-        return sessionId;
+
+        var sshData = carSecret.Substring(4); // Remove "ssh:" prefix
+        var parts = sshData.Split('|');
+        if (parts.Length != 3)
+        {
+            Logger.LogError("Cannot aquire control: Invalid SSH authentication format. Expected: challenge|signature|sessionId");
+            return null;
+        }
+
+        var challenge = parts[0];
+        var signature = parts[1];
+        var requestedSessionId = parts[2];
+        
+        if (SshKeyService.VerifySignature(challenge, signature))
+        {
+            // Use the session ID provided by the client (generated from their private key)
+            _sessionId = requestedSessionId;
+            Logger.LogInformation($"Aquired control for car using SSH key. SessionID: {_sessionId}.");
+            await TelemetryService.UpdateTelemetry("Control Session", "Connected (SSH)");
+            return requestedSessionId;
+        }
+        else
+        {
+            Logger.LogError("Cannot aquire control: Invalid SSH signature.");
+            return null;
+        }
+    }
+
+    public Task<string?> GetChallenge()
+    {
+        var challenge = SshKeyService.GenerateChallenge();
+        return Task.FromResult(challenge);
     }
 
     public async Task ReleaseCarControl(string sessionId)
@@ -115,4 +143,5 @@ public class ControlService : ICarControlClient, IHubConnectionObserver
         Control.ReleaseControl();
         await TelemetryService.UpdateTelemetry("Control Server", "Disconnected");
     }
+
 }
