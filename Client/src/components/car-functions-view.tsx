@@ -10,7 +10,7 @@ export type CarFunction = {
   requiresAxis: boolean;
 };
 
-export default function CarFunctionsView({ carId, hideFlowButtons }: { carId: string, hideFlowButtons?: boolean }) {
+export default function CarFunctionsView({ carId, hideFlowButtons }: { carId: number, hideFlowButtons?: boolean }) {
   const [functions, setFunctions] = useState<CarFunction[]>([]);
   const controlFlow = useControlFlowStore();
 

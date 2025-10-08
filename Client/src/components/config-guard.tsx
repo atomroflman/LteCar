@@ -6,7 +6,7 @@ import { useRouter } from "next/router";
 
 interface ConfigGuardProps {
   children: React.ReactNode;
-  carId: string;
+  carId: number;
 }
 
 export default function ConfigGuard({ children, carId }: ConfigGuardProps) {

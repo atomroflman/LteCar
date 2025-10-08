@@ -67,5 +67,17 @@ namespace LteCar.Server.Controllers
             }
             return Ok(new {id =setup.Id, carId = carid, userId = user.Id});
         }
+
+        [HttpGet("{carid}/identity-hash")]
+        public async Task<IActionResult> GetCarIdentityHash(int carid)
+        {
+            var car = await _context.Cars.FirstOrDefaultAsync(c => c.Id == carid);
+            if (car == null)
+                return NotFound("Car not found");
+
+            var hash = LteCar.Shared.HashUtility.GenerateSha256Hash(car.CarIdentityKey);
+
+            return Ok(new { hash });
+        }
     }
 }

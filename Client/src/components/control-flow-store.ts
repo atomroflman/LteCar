@@ -38,7 +38,7 @@ export type ControlFlowState = {
   edges: ControlFlowEdge[];
   isLoading: boolean;
   error: string | null;
-  load: (carId: string) => Promise<void>;
+  load: (carId: number) => Promise<void>;
   // save: (userId: string) => Promise<void>;
   setNodes: (nodes: ControlFlowNode[]) => void;
   setEdges: (edges: ControlFlowEdge[]) => void;
@@ -52,14 +52,14 @@ export type ControlFlowState = {
   registerFunctionNode: (fnName: string, params?: Record<string, any>, inputPorts?: number, outputPorts?: number) => void;
   deleteNode: (nodeId: number) => void;
   sendOutput: (channelId: number, value: number) => Promise<void>;
-  startConnection: (carId: string, carKey: string | undefined) => Promise<void>;
+  startConnection: (carId: number, carKey: string | undefined) => Promise<void>;
   stopConnection: () => Promise<void>;
   handleInputUpdate: (inputDbId: number, value: number, fromRemote?: boolean) => void;
   connection: any;
-  carId: string | undefined;
+  carId: number | undefined;
   userSetupId: number | undefined;
   setConnection: (connection: any) => void;
-  setCarId: (carId: string | undefined) => void;
+  setCarId: (carId: number | undefined) => void;
   setCarSession: (carSession: string) => void;
   carSession: string | undefined;
   userChannelConnection?: any;
@@ -75,19 +75,19 @@ export type ControlFlowState = {
   setConfigMode: (isConfig: boolean) => void;
   setUpdatesEnabled: (enabled: boolean) => void;
   // Authentication tracking
-  hasAuthenticatedWithCar: (carId: string) => boolean;
-  markCarAsAuthenticated: (carId: string) => void;
+  hasAuthenticatedWithCar: (carId: number) => boolean;
+  markCarAsAuthenticated: (carId: number) => void;
   // SSH key functions
-  downloadSshKey: (carId: string, vehicleIp: string, saveToStorage?: boolean) => Promise<{ success: boolean; key?: string; error?: string }>;
-  uploadSshKey: (carId: string, privateKey: string) => Promise<{ success: boolean; error?: string }>;
-  authenticateWithSshKey: (carId: string, privateKey: string, vehicleIp: string) => Promise<boolean>;
+  downloadSshKey: (carId: number, vehicleIp: string, saveToStorage?: boolean) => Promise<{ success: boolean; key?: string; error?: string }>;
+  uploadSshKey: (carId: number, privateKey: string) => Promise<{ success: boolean; error?: string }>;
+  authenticateWithSshKey: (carId: number, privateKey: string, vehicleIp: string) => Promise<boolean>;
   signWithPrivateKey: (data: string, privateKeyPem: string) => Promise<string | null>;
   generateSessionIdFromPrivateKey: (privateKeyPem: string) => Promise<string | null>;
   pemToArrayBuffer: (pem: string) => ArrayBuffer;
-  saveSshPrivateKey: (carId: string, privateKey: string, vehicleIp?: string) => boolean;
-  getSshPrivateKey: (carId: string) => string | null;
-  getVehicleIp: (carId: string) => string | null;
-  removeSshPrivateKey: (carId: string) => boolean;
+  saveSshPrivateKey: (carId: number, privateKey: string, vehicleIp?: string) => boolean;
+  getSshPrivateKey: (carId: number) => string | null;
+  getVehicleIp: (carId: number) => string | null;
+  removeSshPrivateKey: (carId: number) => boolean;
 };
 
 export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
@@ -105,7 +105,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
   // Update control
   isInConfigMode: false,
   updatesEnabled: true,
-  async load(carId: string) {
+  async load(carId: number) {
     set({ isLoading: true, error: null });
     try {
       const res = await fetch(`/api/userconfig/setup/${carId}`);
@@ -502,7 +502,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
       console.log("Updates disabled: Updates manually disabled");
     }
   },
-  async startConnection(carId: string, carKey: string | undefined) {
+  async startConnection(carId: number, carKey: string | undefined) {
     const signalR = await import("@microsoft/signalr");
     var { connection } = get();
     if (!get().connection) {
@@ -512,15 +512,26 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
         .build();
         await connection.start();
     }
-    if (carKey == undefined) {
-        set({ connection, carId, carSession: undefined });
-    }
-    const carSession = await connection.invoke("AquireCarControl", carId, carKey);
-    set({ connection, carId, carSession });
+    // Just establish connection, authentication happens via authenticateWithSshKey
+    set({ connection, carId, carSession: undefined });
   },
-  async downloadSshKey(carId: string, vehicleIp: string, saveToStorage: boolean = true): Promise<{ success: boolean; key?: string; error?: string }> {
+  async downloadSshKey(carId: number, vehicleIp: string, saveToStorage: boolean = true): Promise<{ success: boolean; key?: string; error?: string }> {
     try {
-      const response = await fetch(`http://${vehicleIp}:8080/ssh-key`);
+      // First, get the identity hash from the server
+      const hashResponse = await fetch(`/api/car/${carId}/identity-hash`);
+      if (!hashResponse.ok) {
+        return { success: false, error: "Failed to get vehicle identity hash from server" };
+      }
+      const { hash } = await hashResponse.json();
+
+      // Download SSH key with identity verification
+      const response = await fetch(`http://${vehicleIp}:8080/ssh-key?hash=${hash}`);
+      if (response.status === 400) {
+        return { success: false, error: "Invalid request to vehicle" };
+      }
+      if (response.status === 403) {
+        return { success: false, error: "Identity verification failed - the vehicle IP does not match the selected vehicle" };
+      }
       if (response.status === 410) {
         return { success: false, error: "SSH key has already been downloaded and is no longer available." };
       }
@@ -533,7 +544,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
       
       if (saveToStorage) {
         // Save the private key to localStorage
-        const saveSuccess = this.saveSshPrivateKey(carId, trimmedKey);
+        const saveSuccess = this.saveSshPrivateKey(carId, trimmedKey, vehicleIp);
         if (!saveSuccess) {
           return { success: false, error: "Failed to save SSH private key to browser storage." };
         }
@@ -547,7 +558,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
     }
   },
 
-  async uploadSshKey(carId: string, privateKey: string): Promise<{ success: boolean; error?: string }> {
+  async uploadSshKey(carId: number, privateKey: string): Promise<{ success: boolean; error?: string }> {
     try {
       // Validate the private key format
       if (!privateKey.includes("-----BEGIN PRIVATE KEY-----") || !privateKey.includes("-----END PRIVATE KEY-----")) {
@@ -567,7 +578,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
       return { success: false, error: `Failed to upload SSH key: ${error}` };
     }
   },
-  async authenticateWithSshKey(carId: string, privateKey: string, vehicleIp: string): Promise<boolean> {
+  async authenticateWithSshKey(carId: number, privateKey: string, vehicleIp: string): Promise<boolean> {
     try {
       // Get the public key from the vehicle (download without saving)
       const keyResult = await get().downloadSshKey(carId, vehicleIp, false);
@@ -603,8 +614,11 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
         return false;
       }
 
-      // Create SSH authentication string with session ID
-      const sshAuth = `ssh:${challenge}|${signature}|${sessionId}`;
+      // Create SSH authentication object
+      const sshAuth = {
+        Challenge: challenge,
+        Signature: signature
+      };
       
       // Try to authenticate
       const carSession = await connection.invoke("AquireCarControl", carId, sshAuth);
@@ -650,23 +664,10 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
   },
   async generateSessionIdFromPrivateKey(privateKeyPem: string): Promise<string | null> {
     try {
-      // Import the private key
-      const key = await crypto.subtle.importKey(
-        "pkcs8",
-        this.pemToArrayBuffer(privateKeyPem),
-        {
-          name: "RSASSA-PKCS1-v1_5",
-          hash: "SHA-256",
-        },
-        false,
-        ["sign"]
-      );
-
-      // Export the public key to generate consistent session ID
-      const publicKey = await crypto.subtle.exportKey("spki", key);
-      
-      // Create a hash of the public key for consistent session ID
-      const hashBuffer = await crypto.subtle.digest("SHA-256", publicKey);
+      // Generate session ID from hash of the private key PEM
+      // This is deterministic and doesn't require key export
+      const keyBuffer = new TextEncoder().encode(privateKeyPem);
+      const hashBuffer = await crypto.subtle.digest("SHA-256", keyBuffer);
       const hashArray = new Uint8Array(hashBuffer);
       
       // Convert to base64 and take first 16 characters
@@ -695,7 +696,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
     }
     return bytes.buffer;
   },
-  saveSshPrivateKey(carId: string, privateKey: string, vehicleIp?: string) {
+  saveSshPrivateKey(carId: number, privateKey: string, vehicleIp?: string) {
     try {
       localStorage.setItem(`ssh_private_key_${carId}`, privateKey);
       if (vehicleIp) {
@@ -707,7 +708,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
       return false;
     }
   },
-  getSshPrivateKey(carId: string): string | null {
+  getSshPrivateKey(carId: number): string | null {
     try {
       return localStorage.getItem(`ssh_private_key_${carId}`);
     } catch (error) {
@@ -715,7 +716,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
       return null;
     }
   },
-  getVehicleIp(carId: string): string | null {
+  getVehicleIp(carId: number): string | null {
     try {
       return localStorage.getItem(`vehicle_ip_${carId}`);
     } catch (error) {
@@ -723,7 +724,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
       return null;
     }
   },
-  removeSshPrivateKey(carId: string) {
+  removeSshPrivateKey(carId: number) {
     try {
       localStorage.removeItem(`ssh_private_key_${carId}`);
       localStorage.removeItem(`vehicle_ip_${carId}`);
@@ -773,7 +774,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
   connection: undefined,
   carSession: undefined,
   setConnection: (connection: any) => set({ connection }),
-  setCarId: (carId: string | undefined) => set({ carId }),
+  setCarId: (carId: number | undefined) => set({ carId }),
   setCarSession: (carSession: string) => set({ carSession }),
   
   async startUserChannelConnection() {
@@ -904,7 +905,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
   },
 
   // Authentication tracking functions
-  hasAuthenticatedWithCar: (carId: string) => {
+  hasAuthenticatedWithCar: (carId: number) => {
     try {
       const authKey = `car_auth_${carId}`;
       return localStorage.getItem(authKey) === "true";
@@ -914,7 +915,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
     }
   },
 
-  markCarAsAuthenticated: (carId: string) => {
+  markCarAsAuthenticated: (carId: number) => {
     try {
       const authKey = `car_auth_${carId}`;
       localStorage.setItem(authKey, "true");
