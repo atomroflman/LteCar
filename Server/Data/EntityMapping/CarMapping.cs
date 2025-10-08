@@ -9,7 +9,8 @@ public class CarMapping : IEntityTypeConfiguration<Car>
     {
         builder.HasKey(x => x.Id);
         builder.Property(x => x.Name).HasMaxLength(64);
-        builder.Property(x => x.CarId).HasMaxLength(64);
+        builder.Property(x => x.CarIdentityKey).HasMaxLength(64).IsRequired();
+        builder.HasIndex(x => x.CarIdentityKey).IsUnique();
         builder.Property(x => x.ChannelMapHash).HasMaxLength(64);
         builder.HasMany(v => v.Functions)
             .WithOne(f => f.Car)

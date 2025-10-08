@@ -2,6 +2,7 @@ using System.Text.Json;
 using LteCar.Server.Configuration;
 using LteCar.Server.Data;
 using LteCar.Server.Services;
+using LteCar.Shared;
 using LteCar.Shared.HubClients;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
@@ -24,44 +25,45 @@ public class CarControlHub : Hub<ICarControlClient>, ICarControlServer
         _context = context;
     }
 
-    public async Task RegisterForControl(string carId) 
+    public async Task RegisterForControl(int carId) 
     {
         Logger.LogDebug($"Invoked: RegisterForControl({carId}) => saving Connection Id: {Context.ConnectionId}");
-        _connectionMap.Add(carId, Context.ConnectionId);
+        _connectionMap.Add(carId.ToString(), Context.ConnectionId);
     }
     
-    public async Task<string?> AquireCarControl(string carId, string? carSecret)
+    public async Task<string?> AquireCarControl(int carId, SshAuthenticationRequest authRequest)
     {
-        Logger.LogDebug($"Invoked: AquireCarControl({carId}, {carSecret}) as {this.Context?.User?.Identity?.Name}");
-        if (!_connectionMap.TryGetByKey(carId, out var carClientId))
+        Logger.LogDebug($"Invoked: AquireCarControl({carId}, challenge={authRequest.Challenge.Substring(0, Math.Min(10, authRequest.Challenge.Length))}...) as {this.Context?.User?.Identity?.Name}");
+        var carIdStr = carId.ToString();
+        if (!_connectionMap.TryGetByKey(carIdStr, out var carClientId))
         {
             Logger.LogDebug($"Car not found in connection dictionary. {JsonSerializer.Serialize(_connectionMap)}");
             return null;
         }
-        var session = await Clients.Client(carClientId).AquireCarControl(carSecret);
+        var session = await Clients.Client(carClientId).AquireCarControl(authRequest);
         Logger.LogDebug($"Session returned: {session}");
         
         // If authentication was successful, ensure UserCarSetup exists
         if (!string.IsNullOrEmpty(session))
         {
-            await EnsureUserCarSetupExists(carId);
+            await EnsureUserCarSetupExists(carIdStr);
         }
         
         return session;
     }
     
-    public async Task ReleaseCarControl(string carId, string sessionId)
+    public async Task ReleaseCarControl(int carId, string sessionId)
     {
         Logger.LogDebug($"Invoked: ReleaseCarControl({carId}, {sessionId})");
-        if (!_connectionMap.TryGetByKey(carId, out var carClientId))
+        if (!_connectionMap.TryGetByKey(carId.ToString(), out var carClientId))
             return;
         await Clients.Client(carClientId).ReleaseCarControl(sessionId);
     }
     
-    public async Task UpdateChannel(string carId, string sessionId, int channelId, decimal value)
+    public async Task UpdateChannel(int carId, string sessionId, int channelId, decimal value)
     {
         Logger.LogDebug($"Invoked: UpdateChannel({carId}, {sessionId}, {channelId}, {value})");
-        if (!_connectionMap.TryGetByKey(carId, out var carClientId))
+        if (!_connectionMap.TryGetByKey(carId.ToString(), out var carClientId))
             return;
         // TODO: Cache einbauen
         var channelName = Context.GetHttpContext().RequestServices.GetRequiredService<LteCarContext>()
@@ -74,10 +76,10 @@ public class CarControlHub : Hub<ICarControlClient>, ICarControlServer
         await Clients.Client(carClientId).UpdateChannel(sessionId, channelName, value);
     }
 
-    public async Task<string?> GetChallenge(string carId)
+    public async Task<string?> GetChallenge(int carId)
     {
         Logger.LogDebug($"Invoked: GetChallenge({carId})");
-        if (!_connectionMap.TryGetByKey(carId, out var carClientId))
+        if (!_connectionMap.TryGetByKey(carId.ToString(), out var carClientId))
         {
             Logger.LogDebug($"Car not found in connection dictionary. {JsonSerializer.Serialize(_connectionMap)}");
             return null;
@@ -87,10 +89,17 @@ public class CarControlHub : Hub<ICarControlClient>, ICarControlServer
         return challenge;
     }
 
-    private async Task EnsureUserCarSetupExists(string carId)
+    private async Task EnsureUserCarSetupExists(string carIdString)
     {
         try
         {
+            // Parse carId from string
+            if (!int.TryParse(carIdString, out var carId))
+            {
+                Logger.LogWarning($"Invalid carId format: {carIdString}");
+                return;
+            }
+
             // Get current user from context
             var user = await GetCurrentUserAsync();
             if (user == null)
@@ -99,14 +108,12 @@ public class CarControlHub : Hub<ICarControlClient>, ICarControlServer
                 return;
             }
 
-            // Get or create car
-            var car = await _context.Cars.FirstOrDefaultAsync(c => c.CarId == carId);
+            // Car should already exist (created by OpenCarConnection)
+            var car = await _context.Cars.FirstOrDefaultAsync(c => c.Id == carId);
             if (car == null)
             {
-                Logger.LogInformation($"Creating new car entry for {carId}");
-                car = new Car { CarId = carId };
-                _context.Cars.Add(car);
-                await _context.SaveChangesAsync();
+                Logger.LogWarning($"Car with ID {carId} not found. Car should have been registered via OpenCarConnection.");
+                return;
             }
 
             // Check if UserCarSetup already exists
@@ -132,7 +139,7 @@ public class CarControlHub : Hub<ICarControlClient>, ICarControlServer
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, $"Error ensuring UserCarSetup exists for car {carId}");
+            Logger.LogError(ex, $"Error ensuring UserCarSetup exists for car {carIdString}");
         }
     }
 

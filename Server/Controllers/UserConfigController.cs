@@ -19,18 +19,18 @@ namespace LteCar.Server.Controllers
         }
 
         [HttpGet("setup/{carId}")]
-        public async Task<IActionResult> GetSetup(string carId)
+        public async Task<IActionResult> GetSetup(int carId)
         {
             var user = await GetCurrentUserAsync();
             if (user == null)
                 return Unauthorized("User not found");
 
             var car = await _context.Cars
-                .FirstOrDefaultAsync(c => c.CarId == carId);
+                .FirstOrDefaultAsync(c => c.Id == carId);
             if (car == null)
                 return NotFound("Car not found");
             var setup = await _context.UserSetups
-                .FirstOrDefaultAsync(u => u.UserId == user.Id && u.Car.CarId == carId);
+                .FirstOrDefaultAsync(u => u.UserId == user.Id && u.CarId == carId);
 
             if (setup == null)
             {
@@ -40,7 +40,7 @@ namespace LteCar.Server.Controllers
             return Ok(new
             {
                 id = setup.Id,
-                carId = car.CarId,
+                carId = car.Id,
                 userId = user.Id,
             });
         }
@@ -55,14 +55,14 @@ namespace LteCar.Server.Controllers
 
         // Prüft ob der Benutzer Zugriff auf die Konfiguration eines Fahrzeugs hat
         [HttpGet("has-config-access/{carId}")]
-        public async Task<IActionResult> HasConfigAccess(string carId)
+        public async Task<IActionResult> HasConfigAccess(int carId)
         {
             var user = await GetCurrentUserAsync();
             if (user == null)
                 return Unauthorized("User not found");
 
             var hasAccess = await _context.UserSetups
-                .AnyAsync(u => u.UserId == user.Id && u.Car.CarId == carId);
+                .AnyAsync(u => u.UserId == user.Id && u.CarId == carId);
 
             return Ok(new { hasAccess });
         }
