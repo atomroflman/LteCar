@@ -9,7 +9,7 @@ import UpdateControl from "./update-control";
 import SshKeyManager from "./ssh-key-manager";
 
 export default function CarControl() {
-  const [cars, setCars] = useState<{ id: string; driverId: string; driverName: string }[] | null>(null);
+  const [cars, setCars] = useState<{ id: number; name: string; lastSeen: string }[] | null>(null);
   const [telemetrySubscribed, setTelemetrySubscribed] = useState(false);
   const [sshPrivateKey, setSshPrivateKey] = useState("");
   const [showSshKeyInput, setShowSshKeyInput] = useState(false);
@@ -26,13 +26,16 @@ export default function CarControl() {
         setCars(data);
         
         // Try to load last selected car from localStorage
-        const lastCarId = localStorage.getItem('lastSelectedCarId');
-        if (lastCarId && data.some((c: any) => c.id === lastCarId)) {
-          flowControl.setCarId(lastCarId);
+        const lastCarIdStr = localStorage.getItem('lastSelectedCarId');
+        if (lastCarIdStr) {
+          const lastCarId = parseInt(lastCarIdStr);
+          if (data.some((c: any) => c.id === lastCarId)) {
+            flowControl.setCarId(lastCarId);
+          }
         } else if (data.length === 1) {
           // If only one car, select it automatically
           flowControl.setCarId(data[0].id);
-          localStorage.setItem('lastSelectedCarId', data[0].id);
+          localStorage.setItem('lastSelectedCarId', data[0].id.toString());
         }
       });
   }, []);
@@ -42,7 +45,7 @@ export default function CarControl() {
     async function onCarSelected() {
       if (!flowControl.carId) 
         return;
-      await flowControl.load(flowControl.carId as string);
+      await flowControl.load(flowControl.carId);
       await flowControl.startConnection(flowControl.carId, undefined);
     }
     onCarSelected();
@@ -110,7 +113,10 @@ export default function CarControl() {
       }
 
       // Send authentication to vehicle via server
-      const sshAuth = `ssh:${challenge}|${signature}|${sessionId}`;
+      const sshAuth = {
+        Challenge: challenge,
+        Signature: signature
+      };
       const carSession = await connection.invoke("AquireCarControl", flowControl.carId, sshAuth);
       
       if (carSession) {
@@ -179,22 +185,22 @@ export default function CarControl() {
             <>
               <select
                 onChange={(e) => {
-                  const carId = e.currentTarget.value;
-                  if (carId) {
+                  const carIdStr = e.currentTarget.value;
+                  if (carIdStr) {
+                    const carId = parseInt(carIdStr);
                     flowControl.setCarId(carId);
-                    localStorage.setItem('lastSelectedCarId', carId);
+                    localStorage.setItem('lastSelectedCarId', carIdStr);
                   } else {
                     flowControl.setCarId(undefined);
                   }
                 }}
-                value={flowControl.carId || ""}
-                className="text-xs p-2 w-full block border border-gray-300 rounded-md"
-                style={{ minWidth: 0 }}
+                value={flowControl.carId?.toString() || ""}
+                className="text-sm p-2 w-full block border-2 border-gray-300 rounded-lg bg-white hover:border-blue-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
               >
-                <option value="" className="text-xs">Please select a vehicle...</option>
+                <option value="" className="text-sm text-gray-500">🚗 Select a vehicle...</option>
                 {cars?.map((c) => (
-                  <option key={c.id} value={c.id} className="text-xs">
-                    {c.id}
+                  <option key={c.id} value={c.id} className="text-sm py-2">
+                    {c.name || `Car ${c.id}`} (ID: {c.id})
                   </option>
                 ))}
               </select>

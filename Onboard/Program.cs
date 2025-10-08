@@ -160,6 +160,39 @@ if (!keyDownloaded)
                 
                 if (context.Request.Url?.AbsolutePath == "/ssh-key")
                 {
+                    // Verify identity hash from query parameter
+                    var expectedHash = context.Request.QueryString.Get("hash");
+                    if (string.IsNullOrEmpty(expectedHash))
+                    {
+                        context.Response.StatusCode = 400;
+                        context.Response.ContentType = "text/plain";
+                        context.Response.Headers.Add("Access-Control-Allow-Origin", "*");
+                        var message = "Missing identity hash parameter";
+                        var buffer = Encoding.UTF8.GetBytes(message);
+                        context.Response.ContentLength64 = buffer.Length;
+                        await context.Response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                        context.Response.OutputStream.Close();
+                        continue;
+                    }
+
+                    // Compute hash of our carIdentityKey
+                    var actualHash = LteCar.Shared.HashUtility.GenerateSha256Hash(carIdentityKey);
+
+                    // Verify the hash matches
+                    if (!string.Equals(actualHash, expectedHash, StringComparison.OrdinalIgnoreCase))
+                    {
+                        context.Response.StatusCode = 403;
+                        context.Response.ContentType = "text/plain";
+                        context.Response.Headers.Add("Access-Control-Allow-Origin", "*");
+                        var message = "Identity verification failed - this is not the selected vehicle";
+                        var buffer = Encoding.UTF8.GetBytes(message);
+                        context.Response.ContentLength64 = buffer.Length;
+                        await context.Response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+                        context.Response.OutputStream.Close();
+                        logger.LogWarning($"SSH key download attempt with wrong identity hash. Expected: {actualHash}, Got: {expectedHash}");
+                        continue;
+                    }
+
                     if (File.Exists(sshKeyPath))
                     {
                         // Serve the private key and mark as downloaded
@@ -191,6 +224,7 @@ if (!keyDownloaded)
                         // No private key available
                         context.Response.StatusCode = 404;
                         context.Response.ContentType = "text/plain";
+                        context.Response.Headers.Add("Access-Control-Allow-Origin", "*");
                         var message = "SSH private key not available.";
                         var buffer = Encoding.UTF8.GetBytes(message);
                         context.Response.ContentLength64 = buffer.Length;
@@ -230,19 +264,52 @@ await Task.Run(async () =>
 
 static void GenerateSshKeyPair(string privateKeyPath, string publicKeyPath)
 {
-    using var rsa = RSA.Create(2048);
+    // Use OpenSSL to generate RSA key pair (PKCS#8 format for browser compatibility)
+    // Generate private key
+    var generateKeyProcess = new System.Diagnostics.Process
+    {
+        StartInfo = new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = "openssl",
+            Arguments = $"genpkey -algorithm RSA -out {privateKeyPath} -pkeyopt rsa_keygen_bits:2048",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        }
+    };
     
-    // Generate private key in PEM format
-    var privateKeyBytes = rsa.ExportRSAPrivateKey();
-    var privateKeyPem = Convert.ToBase64String(privateKeyBytes);
-    var privateKeyContent = $"-----BEGIN RSA PRIVATE KEY-----\n{privateKeyPem}\n-----END RSA PRIVATE KEY-----";
-    File.WriteAllText(privateKeyPath, privateKeyContent);
+    generateKeyProcess.Start();
+    generateKeyProcess.WaitForExit();
     
-    // Generate public key in SSH format
-    var publicKeyBytes = rsa.ExportRSAPublicKey();
-    var publicKeyPem = Convert.ToBase64String(publicKeyBytes);
-    var publicKeyContent = $"ssh-rsa {publicKeyPem} ltecar-vehicle-key";
-    File.WriteAllText(publicKeyPath, publicKeyContent);
+    if (generateKeyProcess.ExitCode != 0)
+    {
+        var error = generateKeyProcess.StandardError.ReadToEnd();
+        throw new Exception($"Failed to generate private key with OpenSSL: {error}");
+    }
+    
+    // Extract public key in PEM format
+    var extractPublicKeyProcess = new System.Diagnostics.Process
+    {
+        StartInfo = new System.Diagnostics.ProcessStartInfo
+        {
+            FileName = "openssl",
+            Arguments = $"rsa -pubout -in {privateKeyPath} -out {publicKeyPath}",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        }
+    };
+    
+    extractPublicKeyProcess.Start();
+    extractPublicKeyProcess.WaitForExit();
+    
+    if (extractPublicKeyProcess.ExitCode != 0)
+    {
+        var error = extractPublicKeyProcess.StandardError.ReadToEnd();
+        throw new Exception($"Failed to extract public key with OpenSSL: {error}");
+    }
     
     // Set appropriate file permissions (Unix only)
     if (Environment.OSVersion.Platform == PlatformID.Unix)

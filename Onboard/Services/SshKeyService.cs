@@ -33,34 +33,33 @@ public class SshKeyService
     {
         try
         {
-            // Use public key for verification (works even after private key is deleted)
+            // Use C# RSA with properly imported PEM public key
             if (!File.Exists(_publicKeyPath))
             {
                 _logger.LogError("Public key file not found");
                 return false;
             }
 
-            var publicKeyPem = File.ReadAllText(_publicKeyPath).Trim();
+            var publicKeyPem = File.ReadAllText(_publicKeyPath);
             
-            // Parse SSH public key format: "ssh-rsa <base64> <comment>"
-            var parts = publicKeyPem.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            if (parts.Length < 2 || parts[0] != "ssh-rsa")
-            {
-                _logger.LogError("Invalid SSH public key format");
-                return false;
-            }
-
-            // Convert SSH public key to PEM format
-            var publicKeyBytes = Convert.FromBase64String(parts[1]);
-            var publicKeyPemFormatted = ConvertToPemFormat(publicKeyBytes);
-
             using var rsa = RSA.Create();
-            rsa.ImportFromPem(publicKeyPemFormatted);
+            rsa.ImportFromPem(publicKeyPem);
 
             var dataBytes = Encoding.UTF8.GetBytes(data);
             var signatureBytes = Convert.FromBase64String(signature);
 
-            return rsa.VerifyData(dataBytes, signatureBytes, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+            var isValid = rsa.VerifyData(dataBytes, signatureBytes, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
+            
+            if (isValid)
+            {
+                _logger.LogInformation("Signature verification succeeded");
+            }
+            else
+            {
+                _logger.LogWarning("Signature verification failed - signature does not match");
+            }
+            
+            return isValid;
         }
         catch (Exception ex)
         {
@@ -69,22 +68,6 @@ public class SshKeyService
         }
     }
 
-    private string ConvertToPemFormat(byte[] publicKeyBytes)
-    {
-        // Convert SSH public key bytes to PEM format
-        var base64 = Convert.ToBase64String(publicKeyBytes);
-        var pem = new StringBuilder();
-        pem.AppendLine("-----BEGIN PUBLIC KEY-----");
-        
-        for (int i = 0; i < base64.Length; i += 64)
-        {
-            var line = base64.Substring(i, Math.Min(64, base64.Length - i));
-            pem.AppendLine(line);
-        }
-        
-        pem.AppendLine("-----END PUBLIC KEY-----");
-        return pem.ToString();
-    }
 
     public string? SignData(string data)
     {

@@ -17,6 +17,7 @@ export default function CarControlFlowPage() {
   const router = useRouter();
   const flowControl = useControlFlowStore();
   const carId = router.query.carId as string;
+  const carIdNum = carId ? parseInt(carId) : undefined;
 
   function controlNodeToReact(input: ControlFlowNode): Node<any, string | undefined> {
     return {
@@ -43,8 +44,8 @@ export default function CarControlFlowPage() {
   }
 
   useEffect(() => {
-    if (carId) {
-      flowControl.load(carId);
+    if (carIdNum) {
+      flowControl.load(carIdNum);
       flowControl.startUserChannelConnection();
       flowControl.subscribeToInputNodes();
       // Enable config mode when entering configuration page
@@ -55,7 +56,7 @@ export default function CarControlFlowPage() {
     return () => {
       flowControl.setConfigMode(false);
     };
-  }, [carId]);
+  }, [carIdNum]);
 
   const onNodeDrag: NodeDragHandler = async (event, node) => {
     const oldNode = flowControl.nodes.find(n => n.nodeId === Number(node.id));
@@ -89,14 +90,18 @@ export default function CarControlFlowPage() {
   if (flowControl.isLoading)
     return <div className="p-8 text-zinc-300">Lade Control Flow...</div>;
   
+  if (!carIdNum) {
+    return <div className="p-8 text-zinc-300">Loading...</div>;
+  }
+
   return (
-    <ConfigGuard carId={carId}>
+    <ConfigGuard carId={carIdNum}>
       <div className="flex flex-col md:flex-row gap-4 p-4 bg-zinc-950 min-h-screen">
         <div className="w-full md:w-1/4 space-y-4">
           <UpdateControl />
           <GamepadViewer hideFlowButtons={false} />
           <FunctionNodesView />
-          <CarFunctionsView carId={carId} hideFlowButtons={false} />
+          {carIdNum && <CarFunctionsView carId={carIdNum} hideFlowButtons={false} />}
           <SessionTransfer />
         </div>
         <div className="flex-1 bg-zinc-900 rounded-lg p-2 min-h-[600px]">

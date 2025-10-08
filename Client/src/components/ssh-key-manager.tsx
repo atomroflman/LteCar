@@ -5,7 +5,7 @@ import { useControlFlowStore } from "./control-flow-store";
 import CollapsibleSection from "./collapsible-section";
 
 interface SshKeyManagerProps {
-  carId: string;
+  carId: number;
 }
 
 export default function SshKeyManager({ carId }: SshKeyManagerProps) {
