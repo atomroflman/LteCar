@@ -37,19 +37,29 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
         _configService = configService;
     }
     
-    public async Task<CarConfiguration> OpenCarConnection(string carId, string channelMapHash)
+    public async Task<CarConfiguration> OpenCarConnection(string carIdentityKey, string channelMapHash)
     {
-        Logger.LogInformation("Car '{CarId}' attempting to connect: ChannelHash '{ChannelMapHash}'", carId, channelMapHash);
+        Logger.LogInformation("Car with identity key '{CarIdentityKey}' attempting to connect: ChannelHash '{ChannelMapHash}'", carIdentityKey, channelMapHash);
         var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
-        var car = dbContext.Cars.FirstOrDefault(c => c.CarId == carId);
+        var car = dbContext.Cars.FirstOrDefault(c => c.CarIdentityKey == carIdentityKey);
         if (car == null)
         {
-            Logger.LogWarning($"Car with ID {carId} not found. Creating a new one.");
-            car = new Car() { CarId = carId };
+            Logger.LogWarning($"Car with identity key {carIdentityKey} not found. Creating a new one.");
+            car = new Car() 
+            { 
+                CarIdentityKey = carIdentityKey,
+                Name = carIdentityKey // Initial name is the identity key, user can change it later
+            };
             dbContext.Cars.Add(car);
             car.ChannelMapHash = new Guid().ToString();
         }
         car.LastSeen = DateTime.Now;
+        await dbContext.SaveChangesAsync();
+        
+        // Add connection to SignalR group by CarId for targeted messaging
+        await Groups.AddToGroupAsync(Context.ConnectionId, $"Car-{car.Id}");
+        Logger.LogInformation($"Car '{car.Name}' (ID: {car.Id}) connected and added to group 'Car-{car.Id}'");
+        
         var janusServerHost = _configService.Janus.HostName;
         if (string.IsNullOrEmpty(janusServerHost))
         {
@@ -58,6 +68,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
         }
 
         CarConfiguration carConfig = new CarConfiguration();
+        carConfig.ServerAssignedCarId = car.Id;
         carConfig.JanusConfiguration = new LteCar.Shared.JanusConfiguration() {
             JanusServerHost = janusServerHost,
             JanusUdpPort = 10000
@@ -66,12 +77,11 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
         carConfig.RequiresChannelMapUpdate = car.ChannelMapHash != channelMapHash;
         if (carConfig.RequiresChannelMapUpdate)
         {
-            Logger.LogInformation($"Car '{carId}' channel map hash mismatch. Server: '{car.ChannelMapHash}' Client: '{channelMapHash}'");
+            Logger.LogInformation($"Car ID {car.Id} channel map hash mismatch. Server: '{car.ChannelMapHash}' Client: '{channelMapHash}'");
         }
-        await dbContext.SaveChangesAsync();  
         
         await UiHub.Clients.All.CarStateUpdated(new CarStateModel() {
-            Id = carId
+            Id = car.Id.ToString()
         });
         return carConfig;
     }
@@ -100,7 +110,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
         var kickedCar = dbContext.Cars.OrderBy(c => c.LastSeen).FirstOrDefault(c => c.VideoStreamPort.HasValue);
         if (kickedCar != null && kickedCar.VideoStreamPort.HasValue)
         {
-            Logger.LogWarning($"Kicking car {kickedCar.CarId} from port {kickedCar.VideoStreamPort}");
+            Logger.LogWarning($"Kicking car ID {kickedCar.Id} from port {kickedCar.VideoStreamPort}");
             var port = kickedCar.VideoStreamPort.Value;
             kickedCar.VideoStreamPort = null;
             dbContext.SaveChanges();
@@ -128,10 +138,10 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
         return base.OnDisconnectedAsync(exception);
     }
 
-    public async Task UpdateChannelMap(string carId, ChannelMap channelMap)
+    public async Task UpdateChannelMap(int carId, ChannelMap channelMap)
     {
         var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
-        var car = dbContext.Cars.FirstOrDefault(c => c.CarId == carId);
+        var car = dbContext.Cars.FirstOrDefault(c => c.Id == carId);
         if (car == null)
         {
             Logger.LogWarning($"Car with ID {carId} not found.");
@@ -225,12 +235,11 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
         {
             Logger.LogInformation("SyncChannelMap invoked for car {CarId}", request.CarId);
         var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
-        var car = dbContext.Cars.FirstOrDefault(c => c.CarId == request.CarId);
+        var car = dbContext.Cars.FirstOrDefault(c => c.Id == request.CarId);
         if (car == null)
         {
-            car = new Car() { CarId = request.CarId, LastSeen = DateTime.Now };
-            dbContext.Cars.Add(car);
-            await dbContext.SaveChangesAsync();
+            Logger.LogError($"Car with ID {request.CarId} not found in SyncChannelMap. This should not happen - OpenCarConnection should be called first.");
+            throw new InvalidOperationException($"Car with ID {request.CarId} not found. Please call OpenCarConnection first.");
         }
 
         var map = request.ChannelMap ?? new ChannelMap();
@@ -313,7 +322,6 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
 
         await dbContext.SaveChangesAsync();
 
-
         // Compute hash (canonical JSON with sorted keys)
         string hash;
         {
@@ -365,7 +373,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, "FATAL ERROR in SyncChannelMap for car {CarId}", request?.CarId ?? "UNKNOWN");
+            Logger.LogError(ex, "FATAL ERROR in SyncChannelMap for car {CarId}", request?.CarId.ToString() ?? "UNKNOWN");
             throw;
         }
     }

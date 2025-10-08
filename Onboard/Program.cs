@@ -25,16 +25,16 @@ if (args.Length > 0 && args[0].Equals("setup", StringComparison.OrdinalIgnoreCas
     return;
 }
 
-var carId = Guid.NewGuid().ToString();
+var carIdentityKey = Guid.NewGuid().ToString();
 var startupTime = DateTime.Now;
-if (File.Exists("carId.txt"))
+if (File.Exists("carIdentityKey.txt"))
 {
-    carId = File.ReadAllText("carId.txt");
+    carIdentityKey = File.ReadAllText("carIdentityKey.txt");
 }
 else
 {
-    Console.WriteLine($"New Car ID created: {carId}");
-    File.WriteAllText("carId.txt", carId);
+    Console.WriteLine($"New Car Identity Key created: {carIdentityKey}");
+    File.WriteAllText("carIdentityKey.txt", carIdentityKey);
 }
 
 // Generate SSH key pair only if no public key exists
@@ -51,10 +51,10 @@ else
     Console.WriteLine("SSH public key already exists, skipping generation.");
 }
 
-Console.WriteLine($"Car ID: {carId}");
+Console.WriteLine($"Car Identity Key: {carIdentityKey}");
 var configuration = new ConfigurationBuilder()
     .AddInMemoryCollection(new Dictionary<string, string?>() {
-        { "carId", carId }
+        { "carIdentityKey", carIdentityKey }
     })
     .AddJsonFile("appSettings.json")
     .AddJsonFile("appSettings.development.json", true)
@@ -113,12 +113,12 @@ if (configuration.GetValue<bool>("EnableChannelTest"))
     await carControlService.TestControlsAsync();
 }
 
-await connectionService.ConnectToServer(carId);
+await connectionService.ConnectToServer(carIdentityKey);
 // Try load previous sync (contains server IDs) before optional sync
 var hadPreviousSync = connectionService.TryLoadPreviousSync();
 if (!hadPreviousSync)
 {
-    await connectionService.SyncChannelMapAsync(carId);
+    await connectionService.SyncChannelMapAsync();
 }
 // Connect control (will trigger sync if server hash mismatch)
 await carControlService.ConnectToServer();

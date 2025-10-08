@@ -29,6 +29,7 @@ public class ServerConnectionService
     private readonly IConfiguration _configuration;
     private HubConnection _connection;
     private ChannelMapSyncResponse? _lastSync;
+    private int? _serverAssignedCarId;
 
     public ServerConnectionService(ChannelMap channelMap, IConfiguration configuration, IServiceProvider serviceProvider, ILogger<ServerConnectionService> logger)
     {
@@ -60,7 +61,7 @@ public class ServerConnectionService
             .Build();
     }
     
-    public async Task ConnectToServer(string carId)
+    public async Task ConnectToServer(string carIdentityKey)
     {
         _connection = ConnectToHub(HubPaths.CarConnectionHub);
         _connection.Reconnected += async (connectionId) =>
@@ -81,45 +82,52 @@ public class ServerConnectionService
         
         Logger.LogInformation($"Connected to server: {_connection.State}");
         await _connection.InvokeAsync("Test");
-        Logger.LogDebug($"Tested... Open connection with carId: {carId}");
-        // var config = await _connection.InvokeAsync<CarConfiguration>("OpenCarConnection", carId);
-        // Logger.LogDebug("invoked manually...");
-    var connectionServer = _connection.CreateHubProxy<ICarConnectionServer>();
-    Logger.LogDebug("Proxy created...");
-    // Prefer hash from last SyncChannelMap (if sync already performed before OpenCarConnection is called)
-    var channelMapHash = _lastSync?.Hash ?? ChannelMapHashProvider.GenerateHash(_channelMap);
-    var config = await connectionServer.OpenCarConnection(carId, channelMapHash);
+        Logger.LogDebug($"Tested... Open connection with carIdentityKey: {carIdentityKey}");
+        
+        var connectionServer = _connection.CreateHubProxy<ICarConnectionServer>();
+        Logger.LogDebug("Proxy created...");
+        
+        // Prefer hash from last SyncChannelMap (if sync already performed before OpenCarConnection is called)
+        var channelMapHash = _lastSync?.Hash ?? ChannelMapHashProvider.GenerateHash(_channelMap);
+        var config = await connectionServer.OpenCarConnection(carIdentityKey, channelMapHash);
         if (config == null)
         {
             Logger.LogError("Failed to open car connection.");
             return;
         }
+        
+        // Store server-assigned CarId for all future operations
+        _serverAssignedCarId = config.ServerAssignedCarId;
+        Logger.LogInformation($"Server assigned CarId: {_serverAssignedCarId}");
+        
         // If server still requests channel map update (e.g., initial legacy path or mismatch), perform sync now
         if (config.RequiresChannelMapUpdate)
         {
             Logger.LogInformation("Server indicates channel map mismatch. Triggering SyncChannelMap now.");
-            await SyncChannelMapAsync(carId);
+            await SyncChannelMapAsync();
         }
+        
         Logger.LogDebug($"OpenCarConnection called: {JsonSerializer.Serialize(config)}");
-        if (config == null)
-        {
-            Logger.LogError("Failed to open car connection.");
-            return;
-        }
         var configService = ServiceProvider.GetRequiredService<CarConfigurationService>();
         configService.UpdateConfiguration(config);
     }
 
-    public async Task<ChannelMapSyncResponse?> SyncChannelMapAsync(string carId)
+    public async Task<ChannelMapSyncResponse?> SyncChannelMapAsync()
     {
         if (_connection == null)
         {
             Logger.LogError("Cannot sync channel map. Connection not established.");
             return null;
         }
+        if (!_serverAssignedCarId.HasValue)
+        {
+            Logger.LogError("Cannot sync channel map. Server-assigned CarId not available. Call ConnectToServer first.");
+            return null;
+        }
         var proxy = _connection.CreateHubProxy<ICarConnectionServer>();
-        var request = new ChannelMapSyncRequest { CarId = carId, ChannelMap = _channelMap };
-        Logger.LogInformation("Sending ChannelMapSyncRequest with {Control} control, {Telemetry} telemetry, {Video} video streams", _channelMap.ControlChannels.Count, _channelMap.TelemetryChannels.Count, _channelMap.VideoStreams.Count);
+        var request = new ChannelMapSyncRequest { CarId = _serverAssignedCarId.Value, ChannelMap = _channelMap };
+        Logger.LogInformation("Sending ChannelMapSyncRequest for CarId {CarId} with {Control} control, {Telemetry} telemetry, {Video} video streams", 
+            _serverAssignedCarId.Value, _channelMap.ControlChannels.Count, _channelMap.TelemetryChannels.Count, _channelMap.VideoStreams.Count);
         var response = await _connection.InvokeAsync<ChannelMapSyncResponse>("SyncChannelMap", request);
         _lastSync = response;
         try

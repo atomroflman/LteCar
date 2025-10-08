@@ -21,14 +21,16 @@ public class TelemetryService : IHubConnectionObserver, ITelemetryClient
     public ServerConnectionService ServerConnectionService { get; }
     public IServiceProvider ServiceProvider { get; }
     public ChannelMap ChannelMap { get; }
+    public CarConfigurationService CarConfigurationService { get; }
     
-    public TelemetryService(ChannelMap channelMap, ServerConnectionService serverConnectionService, IConfiguration configuration, ILogger<TelemetryService> logger, IServiceProvider serviceProvider)
+    public TelemetryService(ChannelMap channelMap, ServerConnectionService serverConnectionService, IConfiguration configuration, ILogger<TelemetryService> logger, IServiceProvider serviceProvider, CarConfigurationService carConfigurationService)
     {
         ServiceProvider = serviceProvider;
         ChannelMap = channelMap;
         ServerConnectionService = serverConnectionService;
         Configuration = configuration;
         Logger = logger;
+        CarConfigurationService = carConfigurationService;
     }
 
     public async Task ConnectToServer()
@@ -38,10 +40,13 @@ public class TelemetryService : IHubConnectionObserver, ITelemetryClient
         _server = _connection.CreateHubProxy<ITelemetryServer>();
         _connection.Register<ITelemetryClient>(this);
         // _connection.RegisterObserver(this);
-        _carId = Configuration.GetValue<string>("carId");
-        Logger.LogInformation("Connected to server.");
-
-        
+        var carId = CarConfigurationService.ServerAssignedCarId;
+        _carId = carId?.ToString();
+        if (string.IsNullOrEmpty(_carId))
+        {
+            Logger.LogWarning("ServerAssignedCarId not available yet. Telemetry updates will fail until CarId is set.");
+        }
+        Logger.LogInformation($"Connected to telemetry server with CarId: {_carId}");
     }
 
     public Task<IEnumerable<string>> GetAvailableTelemetryChannels() 

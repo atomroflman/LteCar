@@ -82,11 +82,19 @@ else
 }
 
 app.Use(async(ctx, next) => {
-    logger.LogDebug($"{ctx.Request.Method} {ctx.Request.Path}");
-    logger.LogTrace($"Request: {string.Join(", ", ctx.Request.Headers.Select(h => $"{h.Key}: {h.Value}"))}");
-    await next();
-    logger.LogDebug($"{ctx.Response.StatusCode}");
-    logger.LogTrace($"Response: {string.Join(", ", ctx.Response.Headers.Select(h => $"{h.Key}: {h.Value}"))}");
+    try
+    {
+        logger.LogDebug($"{ctx.Request.Method} {ctx.Request.Path}");
+        logger.LogTrace($"Request: {string.Join(", ", ctx.Request.Headers.Select(h => $"{h.Key}: {h.Value}"))}");
+        await next();
+        logger.LogDebug($"{ctx.Response.StatusCode}");
+        logger.LogTrace($"Response: {string.Join(", ", ctx.Response.Headers.Select(h => $"{h.Key}: {h.Value}"))}");
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "GLOBAL EXCEPTION HANDLER: Unhandled exception in request pipeline for {Method} {Path}", ctx.Request.Method, ctx.Request.Path);
+        throw;
+    }
 });
 
 if (app.Environment.IsDevelopment())

@@ -8,6 +8,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using TypedSignalR.Client;
 using LteCar.Onboard;
+using LteCar.Shared;
 
 namespace LteCar.Onboard.Control;
 
@@ -20,13 +21,14 @@ public class ControlService : ICarControlClient, IHubConnectionObserver
     public IConfiguration Configuration { get; }
     public ServerConnectionService ServerConnectionService { get; }
     public SshKeyService SshKeyService { get; }
+    public CarConfigurationService CarConfigurationService { get; }
 
     private HubConnection _connection;
     private string? _sessionId;
     private DateTime _lastControlUpdate = DateTime.Now;
     private ICarControlServer _server;
 
-    public ControlService(ILogger<ControlService> logger, TelemetryService telemetryService, ControlExecutionService control, IServiceProvider serviceProvider, IConfiguration configuration, ServerConnectionService serverConnectionService, SshKeyService sshKeyService)
+    public ControlService(ILogger<ControlService> logger, TelemetryService telemetryService, ControlExecutionService control, IServiceProvider serviceProvider, IConfiguration configuration, ServerConnectionService serverConnectionService, SshKeyService sshKeyService, CarConfigurationService carConfigurationService)
     {
         Logger = logger;
         TelemetryService = telemetryService;
@@ -35,6 +37,7 @@ public class ControlService : ICarControlClient, IHubConnectionObserver
         Configuration = configuration;
         ServerConnectionService = serverConnectionService;
         SshKeyService = sshKeyService;
+        CarConfigurationService = carConfigurationService;
     }
 
     public void Initialize()
@@ -49,9 +52,14 @@ public class ControlService : ICarControlClient, IHubConnectionObserver
         _connection.Register<ICarControlClient>(this);
         await _connection.StartAsync();
         _server = _connection.CreateHubProxy<ICarControlServer>();
-        var carId = Configuration.GetValue<string>("carId");
-        await _server.RegisterForControl(carId);
-        Logger.LogInformation("Connected to server.");
+        var carId = CarConfigurationService.ServerAssignedCarId;
+        if (!carId.HasValue)
+        {
+            Logger.LogError("Cannot connect to control server: ServerAssignedCarId not available");
+            return;
+        }
+        await _server.RegisterForControl(carId.Value);
+        Logger.LogInformation($"Connected to control server with CarId: {carId}");
         await TelemetryService.UpdateTelemetry("Control Server", "Connected");
     }
 
@@ -59,43 +67,26 @@ public class ControlService : ICarControlClient, IHubConnectionObserver
         await Control.RunControlTestsAsync();
     }
     
-    public async Task<string?> AquireCarControl(string carSecret)
+    public async Task<string?> AquireCarControl(SshAuthenticationRequest authRequest)
     {
         if (_sessionId != null && _lastControlUpdate.AddSeconds(30) > DateTime.Now) {
             Logger.LogError("Cannot aquire control: Already connected to driver session.");
             return null;
         }
 
-        // SSH key authentication only
-        if (!carSecret.StartsWith("ssh:"))
+        // Verify SSH signature
+        if (SshKeyService.VerifySignature(authRequest.Challenge, authRequest.Signature))
         {
-            Logger.LogError("Cannot aquire control: Only SSH key authentication is supported.");
-            return null;
-        }
-
-        var sshData = carSecret.Substring(4); // Remove "ssh:" prefix
-        var parts = sshData.Split('|');
-        if (parts.Length != 3)
-        {
-            Logger.LogError("Cannot aquire control: Invalid SSH authentication format. Expected: challenge|signature|sessionId");
-            return null;
-        }
-
-        var challenge = parts[0];
-        var signature = parts[1];
-        var requestedSessionId = parts[2];
-        
-        if (SshKeyService.VerifySignature(challenge, signature))
-        {
-            // Use the session ID provided by the client (generated from their private key)
-            _sessionId = requestedSessionId;
-            Logger.LogInformation($"Aquired control for car using SSH key. SessionID: {_sessionId}.");
+            // Generate a new session ID using ShortGuid (22 chars instead of 36)
+            var newSessionId = ShortGuid.NewGuid().ToString();
+            _sessionId = newSessionId;
+            Logger.LogInformation($"Acquired control for car using SSH key. SessionID: {_sessionId}.");
             await TelemetryService.UpdateTelemetry("Control Session", "Connected (SSH)");
-            return requestedSessionId;
+            return newSessionId; // Return the newly generated session ID
         }
         else
         {
-            Logger.LogError("Cannot aquire control: Invalid SSH signature.");
+            Logger.LogError("Cannot acquire control: Invalid SSH signature.");
             return null;
         }
     }
@@ -134,7 +125,11 @@ public class ControlService : ICarControlClient, IHubConnectionObserver
 
     public async Task OnReconnected(string? connectionId)
     {
-        await _server.RegisterForControl(Configuration.GetValue<string>("carId"));
+        var carId = CarConfigurationService.ServerAssignedCarId;
+        if (carId.HasValue)
+        {
+            await _server.RegisterForControl(carId.Value);
+        }
         await TelemetryService.UpdateTelemetry("Control Server", "Connected");
     }
 
