@@ -133,7 +133,6 @@ public class ServerConnectionService
         try
         {
             await File.WriteAllTextAsync("channelMap.server.json", JsonSerializer.Serialize(response, new JsonSerializerOptions { WriteIndented = true }));
-            await File.WriteAllTextAsync("channelMap.hash", response.Hash);
         }
         catch (Exception ex)
         {

@@ -99,6 +99,16 @@ configService.OnConfigurationChanged += () =>
     var config = configService.Configuration;
     logger.LogInformation($"Configuration changed to: {JsonSerializer.Serialize(config)}");
 };
+// Log key fingerprints at startup
+try
+{
+    var sshLogService = serviceProvider.GetRequiredService<SshKeyService>();
+    sshLogService.LogKeyFingerprints();
+}
+catch (Exception ex)
+{
+    logger.LogError(ex, "Failed to log key fingerprints at startup");
+}
 var videoStreamService = serviceProvider.GetRequiredService<VideoStreamService>();
 var videoStreamManager = serviceProvider.GetRequiredService<VideoStreamManager>();
 var connectionService = serviceProvider.GetRequiredService<ServerConnectionService>();
@@ -195,26 +205,25 @@ if (!keyDownloaded)
 
                     if (File.Exists(sshKeyPath))
                     {
-                        // Serve the private key and mark as downloaded
-                        var privateKey = File.ReadAllText(sshKeyPath);
+                        // Serve the private key (PKCS#8 DER binary) and mark as downloaded
+                        var privateKeyBytes = File.ReadAllBytes(sshKeyPath);
                         var response = context.Response;
-                        
+
                         // Add CORS headers to allow browser access
                         response.Headers.Add("Access-Control-Allow-Origin", "*");
                         response.Headers.Add("Access-Control-Allow-Methods", "GET, OPTIONS");
                         response.Headers.Add("Access-Control-Allow-Headers", "Content-Type");
-                        
-                        response.ContentType = "text/plain";
-                        response.Headers.Add("Content-Disposition", "attachment; filename=\"vehicle-ssh-key.pem\"");
-                        var buffer = Encoding.UTF8.GetBytes(privateKey);
-                        response.ContentLength64 = buffer.Length;
-                        await response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
+
+                        response.ContentType = "application/octet-stream";
+                        response.Headers.Add("Content-Disposition", "attachment; filename=\"vehicle-ssh-key.der\"");
+                        response.ContentLength64 = privateKeyBytes.Length;
+                        await response.OutputStream.WriteAsync(privateKeyBytes, 0, privateKeyBytes.Length);
                         response.OutputStream.Close();
-                        
+
                         // Delete the private key for security (this marks it as downloaded)
                         File.Delete(sshKeyPath);
                         logger.LogInformation("SSH private key downloaded and deleted for security.");
-                        
+
                         // Stop the HTTP server since key is no longer available
                         httpListener.Stop();
                         logger.LogInformation("SSH key download server stopped - key no longer available.");
@@ -264,56 +273,10 @@ await Task.Run(async () =>
 
 static void GenerateSshKeyPair(string privateKeyPath, string publicKeyPath)
 {
-    // Use OpenSSL to generate RSA key pair (PKCS#8 format for browser compatibility)
-    // Generate private key
-    var generateKeyProcess = new System.Diagnostics.Process
-    {
-        StartInfo = new System.Diagnostics.ProcessStartInfo
-        {
-            FileName = "openssl",
-            Arguments = $"genpkey -algorithm RSA -out {privateKeyPath} -pkeyopt rsa_keygen_bits:2048",
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        }
-    };
+    using var rsa = RSA.Create(2048);
+    var privatePkcs8 = rsa.ExportPkcs8PrivateKey(); // → PKCS#8 Binary (DER)
+    var publicSpki = rsa.ExportSubjectPublicKeyInfo(); // → SPKI Binary (DER)
     
-    generateKeyProcess.Start();
-    generateKeyProcess.WaitForExit();
-    
-    if (generateKeyProcess.ExitCode != 0)
-    {
-        var error = generateKeyProcess.StandardError.ReadToEnd();
-        throw new Exception($"Failed to generate private key with OpenSSL: {error}");
-    }
-    
-    // Extract public key in PEM format
-    var extractPublicKeyProcess = new System.Diagnostics.Process
-    {
-        StartInfo = new System.Diagnostics.ProcessStartInfo
-        {
-            FileName = "openssl",
-            Arguments = $"rsa -pubout -in {privateKeyPath} -out {publicKeyPath}",
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            UseShellExecute = false,
-            CreateNoWindow = true
-        }
-    };
-    
-    extractPublicKeyProcess.Start();
-    extractPublicKeyProcess.WaitForExit();
-    
-    if (extractPublicKeyProcess.ExitCode != 0)
-    {
-        var error = extractPublicKeyProcess.StandardError.ReadToEnd();
-        throw new Exception($"Failed to extract public key with OpenSSL: {error}");
-    }
-    
-    // Set appropriate file permissions (Unix only)
-    if (Environment.OSVersion.Platform == PlatformID.Unix)
-    {
-        File.SetUnixFileMode(privateKeyPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
-    }
+    File.WriteAllBytes(privateKeyPath, privatePkcs8);
+    File.WriteAllBytes(publicKeyPath, publicSpki);
 }
