@@ -7,7 +7,7 @@ namespace LteCar.Shared.Channels;
 [MessagePackObject]
 public class ChannelMapSyncRequest
 {
-    [Key(0)][JsonPropertyName("carId")] public string CarId { get; set; } = string.Empty;
+    [Key(0)][JsonPropertyName("carId")] public int CarId { get; set; }
     [Key(1)][JsonPropertyName("channelMap")] public ChannelMap ChannelMap { get; set; } = new();
 }
 

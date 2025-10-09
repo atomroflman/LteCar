@@ -11,7 +11,6 @@ using Microsoft.Extensions.FileProviders;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
 
-
 var builder = WebApplication.CreateBuilder(args);
 builder.Configuration
     .AddJsonFile("appSettings.json")
@@ -83,11 +82,19 @@ else
 }
 
 app.Use(async(ctx, next) => {
-    logger.LogDebug($"{ctx.Request.Method} {ctx.Request.Path}");
-    logger.LogTrace($"Request: {string.Join(", ", ctx.Request.Headers.Select(h => $"{h.Key}: {h.Value}"))}");
-    await next();
-    logger.LogDebug($"{ctx.Response.StatusCode}");
-    logger.LogTrace($"Response: {string.Join(", ", ctx.Response.Headers.Select(h => $"{h.Key}: {h.Value}"))}");
+    try
+    {
+        logger.LogDebug($"{ctx.Request.Method} {ctx.Request.Path}");
+        logger.LogTrace($"Request: {string.Join(", ", ctx.Request.Headers.Select(h => $"{h.Key}: {h.Value}"))}");
+        await next();
+        logger.LogDebug($"{ctx.Response.StatusCode}");
+        logger.LogTrace($"Response: {string.Join(", ", ctx.Response.Headers.Select(h => $"{h.Key}: {h.Value}"))}");
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "GLOBAL EXCEPTION HANDLER: Unhandled exception in request pipeline for {Method} {Path}", ctx.Request.Method, ctx.Request.Path);
+        throw;
+    }
 });
 
 if (app.Environment.IsDevelopment())
@@ -95,22 +102,6 @@ if (app.Environment.IsDevelopment())
     app.UseDeveloperExceptionPage();
 }
 
-
-var staticFilePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
-if (!Directory.Exists(staticFilePath))
-{
-    Directory.CreateDirectory(staticFilePath);
-}
-if (!Directory.GetFiles(staticFilePath).Any()) 
-{    
-    logger.LogWarning($"No static files in path: '{staticFilePath}'. Server will run without client.");
-}
-app.UseStaticFiles(new StaticFileOptions()
-{
-    ServeUnknownFileTypes = true,
-    DefaultContentType = "application/octet-stream",
-    FileProvider = new PhysicalFileProvider(staticFilePath)
-});
 app.UseRouting();
 
 app.UseAuthentication();

@@ -6,7 +6,7 @@ namespace LteCar.Server.Data
     public class Car : EntityBase
     {
         public string? Name { get; set; }
-        public string CarId { get; set; } = string.Empty;
+        public string CarIdentityKey { get; set; } = string.Empty;
         public string ChannelMapHash { get; set; } = string.Empty;
         
         public int? VideoStreamPort { get; set; }
@@ -19,7 +19,7 @@ namespace LteCar.Server.Data
 
         public override string ToString()
         {
-            return $"{Name ?? CarId} ({CarId})";
+            return $"{Name ?? CarIdentityKey} (ID: {Id})";
         }
     }
 }

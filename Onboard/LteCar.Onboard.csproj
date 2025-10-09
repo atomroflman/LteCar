@@ -5,7 +5,8 @@
         <TargetFramework>net8.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
-    </PropertyGroup>
+      <UserSecretsId>a4995393-a0b4-4060-8810-10aedec03387</UserSecretsId>
+  </PropertyGroup>
 
     <ItemGroup>
       <EmbeddedResource Remove="Setup\SetupTexts.de.resx" />

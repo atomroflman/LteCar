@@ -21,9 +21,22 @@ namespace LteCar.Server.Controllers
         }
 
         [HttpGet("{id}/functions")]
-        public async Task<IActionResult> GetCarFunctions(string id)
+        public async Task<IActionResult> GetCarFunctions(int id)
         {
-            var carFunctions = await _context.Set<CarChannel>().Where(c => c.Car.CarId == id).ToListAsync();
+            // Check if user is authenticated
+            var user = await GetCurrentUserAsync();
+            if (user == null)
+                return Unauthorized("User not found");
+
+            // Check if user has a setup for this car
+            var hasSetup = await _context.UserSetups
+                .AnyAsync(u => u.UserId == user.Id && u.CarId == id);
+            
+            if (!hasSetup)
+                return Forbid("User has no setup for this car");
+
+            // User has access, return car functions
+            var carFunctions = await _context.Set<CarChannel>().Where(c => c.CarId == id).ToListAsync();
             return Ok(carFunctions.Select(cf => new
             {
                 id = cf.Id,
@@ -35,30 +48,36 @@ namespace LteCar.Server.Controllers
         }
 
         [HttpGet("{carid}/setup")]
-        public async Task<IActionResult> GetCarSetup(string carid)
+        public async Task<IActionResult> GetCarSetup(int carid)
         {
             var user = await GetCurrentUserAsync();
             if (user == null)
                 return Unauthorized("User not found");
 
             var car = await _context.Cars
-                .FirstOrDefaultAsync(c => c.CarId == carid);
+                .FirstOrDefaultAsync(c => c.Id == carid);
             if (car == null)
                 return NotFound("Car not found");
             var setup = await _context.UserSetups
-                .FirstOrDefaultAsync(u => u.UserId == user.Id && u.Car.CarId == carid);
+                .FirstOrDefaultAsync(u => u.UserId == user.Id && u.CarId == carid);
 
             if (setup == null)
             {
-                setup = new UserCarSetup
-                {
-                    CarId = car.Id,
-                    UserId = user.Id
-                };
-                _context.UserSetups.Add(setup);
-                await _context.SaveChangesAsync();
+                return NotFound("Setup not found");
             }
             return Ok(new {id =setup.Id, carId = carid, userId = user.Id});
+        }
+
+        [HttpGet("{carid}/identity-hash")]
+        public async Task<IActionResult> GetCarIdentityHash(int carid)
+        {
+            var car = await _context.Cars.FirstOrDefaultAsync(c => c.Id == carid);
+            if (car == null)
+                return NotFound("Car not found");
+
+            var hash = LteCar.Shared.HashUtility.GenerateSha256Hash(car.CarIdentityKey);
+
+            return Ok(new { hash });
         }
     }
 }

@@ -17,6 +17,11 @@ public class CarConfigurationService {
         }
     }
 
+    /// <summary>
+    /// Server-assigned Car ID - available after successful connection to server
+    /// </summary>
+    public int? ServerAssignedCarId => Configuration?.ServerAssignedCarId;
+
     public bool CheckForChanges(object newConfig, object configuration)
     {
         if (newConfig == null ^ configuration == null)

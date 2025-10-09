@@ -41,8 +41,8 @@ public class CarVideoStreamMapping : IEntityTypeConfiguration<CarVideoStream>
             .HasForeignKey(x => x.CarId)
             .OnDelete(DeleteBehavior.Cascade);
 
-        // Index für bessere Performance
-        builder.HasIndex(x => x.StreamId)
+        // Index für bessere Performance - StreamId muss nur pro Car eindeutig sein
+        builder.HasIndex(x => new { x.CarId, x.StreamId })
             .IsUnique();
 
         builder.HasIndex(x => new { x.CarId, x.IsActive });
