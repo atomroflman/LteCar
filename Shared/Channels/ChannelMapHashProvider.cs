@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
 
 namespace LteCar.Shared.Channels;
@@ -16,13 +14,7 @@ public static class ChannelMapHashProvider
             DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
         });
 
-        // Compute the hash using SHA256
-        using var sha256 = SHA256.Create();
-        var hashBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(json));
-
-        // Convert the hash to a hexadecimal string
-        var hashString = BitConverter.ToString(hashBytes).Replace("-", "").ToLowerInvariant();
-
-        return hashString;
+        // Use shared hash utility
+        return HashUtility.GenerateSha256HashLowercase(json);
     }
 }

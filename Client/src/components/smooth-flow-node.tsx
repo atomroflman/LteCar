@@ -86,7 +86,11 @@ export default function SmoothFlowNode(props: CustomFlowNodeProps) {
   };
 
   const transitionTime = calculateTransitionTime(currentValue, inputValue, speed, threshold);
-  const transitionFrames = Math.ceil(transitionTime * fps); // 60fps
+  const transitionFrames = Math.ceil(transitionTime * fps);
+
+  // Calculate maximum possible transition time (from 0 to 1 with current settings)
+  const maxTransitionTime = calculateTransitionTime(0, 1, speed, threshold);
+  const maxTransitionFrames = Math.ceil(maxTransitionTime * fps);
 
   // Format time display
   const formatTime = (seconds: number): string => {
@@ -169,7 +173,18 @@ export default function SmoothFlowNode(props: CustomFlowNodeProps) {
           {formatTime(transitionTime)}
         </div>
         <div className="text-xs text-zinc-500">
-          ~{transitionFrames} frames @ 60fps
+          ~{transitionFrames} frames @ {fps}fps
+        </div>
+      </div>
+
+      {/* Max Duration Info */}
+      <div className="bg-zinc-900 border border-zinc-600 rounded p-2 mb-2">
+        <div className="text-xs text-zinc-400 mb-1">Max Duration (0→1)</div>
+        <div className="text-sm font-bold text-yellow-300">
+          {formatTime(maxTransitionTime)}
+        </div>
+        <div className="text-xs text-zinc-500">
+          ~{maxTransitionFrames} frames @ {fps}fps
         </div>
       </div>
 

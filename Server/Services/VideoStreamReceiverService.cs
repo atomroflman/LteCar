@@ -376,14 +376,14 @@ public class VideoStreamReceiverService
         using var scope = _serviceProvider.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<LteCarContext>();
 
-        // Car aus Datenbank finden oder erstellen
+        // Car aus Datenbank finden
         Car? car = null;
-        if (!string.IsNullOrEmpty(streamInfo.CarId))
+        if (!string.IsNullOrEmpty(streamInfo.CarId) && int.TryParse(streamInfo.CarId, out var carId))
         {
-            car = await dbContext.Cars.FirstOrDefaultAsync(c => c.CarId == streamInfo.CarId);
+            car = await dbContext.Cars.FirstOrDefaultAsync(c => c.Id == carId);
             if (car == null)
             {
-                Logger.LogWarning($"Car '{streamInfo.CarId}' not found in database when saving stream");
+                Logger.LogWarning($"Car with ID '{streamInfo.CarId}' not found in database when saving stream");
             }
         }
 
