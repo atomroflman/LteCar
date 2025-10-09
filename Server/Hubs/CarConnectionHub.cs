@@ -261,7 +261,13 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
             var db = dbContext.CarTelemetry.FirstOrDefault(c => c.ChannelName == kv.Key && c.CarId == car.Id);
             if (db == null)
             {
-                db = new CarTelemetry { ChannelName = kv.Key, CarId = car.Id };
+                db = new CarTelemetry
+                {
+                    ChannelName = kv.Key,
+                    CarId = car.Id,
+                    TelemetryType = kv.Value.TelemetryType,
+                    ReadIntervalTicks = kv.Value.ReadIntervalTicks
+                };
                 dbContext.CarTelemetry.Add(db);
                 await dbContext.SaveChangesAsync();
             }
