@@ -20,13 +20,51 @@ public class SshKeyService
         _publicKeyPath = "ssh_key.pub";
     }
 
-    public string? GetPublicKey()
+    public byte[]? GetPublicKey()
     {
         if (File.Exists(_publicKeyPath))
         {
-            return File.ReadAllText(_publicKeyPath).Trim();
+            return File.ReadAllBytes(_publicKeyPath);
         }
         return null;
+    }
+
+    public void LogKeyFingerprints()
+    {
+        try
+        {
+            if (File.Exists(_publicKeyPath))
+            {
+                var spki = File.ReadAllBytes(_publicKeyPath);
+                using var sha = SHA256.Create();
+                var hash = sha.ComputeHash(spki);
+                var hex = BitConverter.ToString(hash).Replace("-", string.Empty);
+                var b64 = Convert.ToBase64String(hash);
+                _logger.LogInformation($"PublicKey(SPKI) SHA256 HEX={hex} B64={b64}");
+            }
+            else
+            {
+                _logger.LogWarning("Public key file not found for fingerprint logging.");
+            }
+
+            if (File.Exists(_privateKeyPath))
+            {
+                var pkcs8 = File.ReadAllBytes(_privateKeyPath);
+                using var sha = SHA256.Create();
+                var hash = sha.ComputeHash(pkcs8);
+                var hex = BitConverter.ToString(hash).Replace("-", string.Empty);
+                var b64 = Convert.ToBase64String(hash);
+                _logger.LogInformation($"PrivateKey(PKCS8) SHA256 HEX={hex} B64={b64}");
+            }
+            else
+            {
+                _logger.LogWarning("Private key file not found for fingerprint logging (may have been deleted after download).");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error while logging key fingerprints");
+        }
     }
 
     public bool VerifySignature(string data, string signature)
@@ -40,10 +78,10 @@ public class SshKeyService
                 return false;
             }
 
-            var publicKeyPem = File.ReadAllText(_publicKeyPath);
-            
+            // Public key is stored as SPKI DER
+            var publicKeyDer = File.ReadAllBytes(_publicKeyPath);
             using var rsa = RSA.Create();
-            rsa.ImportFromPem(publicKeyPem);
+            rsa.ImportSubjectPublicKeyInfo(publicKeyDer, out _);
 
             var dataBytes = Encoding.UTF8.GetBytes(data);
             var signatureBytes = Convert.FromBase64String(signature);
@@ -80,9 +118,10 @@ public class SshKeyService
                 return null;
             }
 
-            var privateKeyPem = File.ReadAllText(_privateKeyPath);
+            // Private key is stored as PKCS#8 DER
+            var privateKeyDer = File.ReadAllBytes(_privateKeyPath);
             using var rsa = RSA.Create();
-            rsa.ImportFromPem(privateKeyPem);
+            rsa.ImportPkcs8PrivateKey(privateKeyDer, out _);
 
             var dataBytes = Encoding.UTF8.GetBytes(data);
             var signatureBytes = rsa.SignData(dataBytes, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
