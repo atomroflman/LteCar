@@ -88,6 +88,8 @@ export type ControlFlowState = {
   getSshPrivateKey: (carId: number) => string | null;
   getVehicleIp: (carId: number) => string | null;
   removeSshPrivateKey: (carId: number) => boolean;
+  // Build local download URL for vehicle key (HTTP, local network only)
+  getSshKeyDownloadUrl: (carId: number, vehicleIp: string) => Promise<string | null>;
 };
 
 export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
@@ -524,7 +526,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
       }
       const { hash } = await hashResponse.json();
 
-      // Download SSH key (DER binary) with identity verification
+      // Download SSH key directly from vehicle (local network only)
       const response = await fetch(`http://${vehicleIp}:8080/ssh-key?hash=${hash}`);
       if (response.status === 400) {
         return { success: false, error: "Invalid request to vehicle" };
@@ -547,7 +549,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
       
       if (saveToStorage) {
         // Save the private key to localStorage
-        const saveSuccess = this.saveSshPrivateKey(carId, base64Key, vehicleIp);
+        const saveSuccess = get().saveSshPrivateKey(carId, base64Key, vehicleIp);
         if (!saveSuccess) {
           return { success: false, error: "Failed to save SSH private key to browser storage." };
         }
@@ -563,13 +565,25 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
 
   async uploadSshKey(carId: number, privateKey: string): Promise<{ success: boolean; error?: string }> {
     try {
-      // Validate the private key format
-      if (!privateKey.includes("-----BEGIN PRIVATE KEY-----") || !privateKey.includes("-----END PRIVATE KEY-----")) {
-        return { success: false, error: "Invalid private key format. Please ensure it's a valid PEM format." };
+      // Normalize input: accept PEM (PKCS#8) or Base64 DER
+      let base64Body = privateKey.trim();
+      const pemHeader = "-----BEGIN PRIVATE KEY-----";
+      const pemFooter = "-----END PRIVATE KEY-----";
+      if (base64Body.includes(pemHeader) && base64Body.includes(pemFooter)) {
+        base64Body = base64Body.replace(pemHeader, "").replace(pemFooter, "");
       }
-      
-      // Save the private key to localStorage
-      const saveSuccess = this.saveSshPrivateKey(carId, privateKey);
+      // Remove whitespace and normalize URL-safe base64
+      base64Body = base64Body.replace(/\s+/g, "").replace(/-/g, "+").replace(/_/g, "/");
+      // Validate base64 by attempting decode
+      try {
+        const padded = base64Body + "=".repeat((4 - (base64Body.length % 4)) % 4);
+        atob(padded);
+      } catch {
+        return { success: false, error: "Invalid key format. Provide PEM or Base64 DER." };
+      }
+
+      // Save the normalized base64 to localStorage
+      const saveSuccess = get().saveSshPrivateKey(carId, base64Body);
       if (!saveSuccess) {
         return { success: false, error: "Failed to save SSH private key to browser storage." };
       }
@@ -736,6 +750,17 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
     } catch (error) {
       console.error("Failed to remove SSH private key:", error);
       return false;
+    }
+  },
+  async getSshKeyDownloadUrl(carId: number, vehicleIp: string): Promise<string | null> {
+    try {
+      const hashResponse = await fetch(`/api/car/${carId}/identity-hash`);
+      if (!hashResponse.ok) return null;
+      const { hash } = await hashResponse.json();
+      return `http://${vehicleIp}:8080/ssh-key?hash=${hash}`;
+    } catch (e) {
+      console.error("Failed to build SSH key download URL:", e);
+      return null;
     }
   },
   async stopConnection() {

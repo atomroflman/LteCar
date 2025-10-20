@@ -9,7 +9,7 @@ interface SshKeyManagerProps {
 }
 
 export default function SshKeyManager({ carId }: SshKeyManagerProps) {
-  const { downloadSshKey, uploadSshKey, getSshPrivateKey, removeSshPrivateKey } = useControlFlowStore();
+  const { downloadSshKey, uploadSshKey, getSshPrivateKey, removeSshPrivateKey, getSshKeyDownloadUrl } = useControlFlowStore();
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
   const [showUpload, setShowUpload] = useState(false);
@@ -57,11 +57,16 @@ export default function SshKeyManager({ carId }: SshKeyManagerProps) {
       return;
     }
 
-    const blob = new Blob([key], { type: 'text/plain' });
+    // key is base64 DER in storage; export as .der
+    const padded = key + "=".repeat((4 - (key.length % 4)) % 4);
+    const bin = atob(padded);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const blob = new Blob([bytes], { type: 'application/octet-stream' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `vehicle-${carId}-key.pem`;
+    a.download = `vehicle-${carId}-key.der`;
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
@@ -102,10 +107,19 @@ export default function SshKeyManager({ carId }: SshKeyManagerProps) {
 
     const reader = new FileReader();
     reader.onload = (e) => {
-      const content = e.target?.result as string;
-      setUploadKey(content);
+      if (file.type === 'application/octet-stream' || file.name.endsWith('.der')) {
+        // Binary -> base64
+        const buf = e.target?.result as ArrayBuffer;
+        const bytes = new Uint8Array(buf);
+        const b64 = btoa(String.fromCharCode(...bytes));
+        setUploadKey(b64);
+      } else {
+        const content = e.target?.result as string;
+        setUploadKey(content);
+      }
     };
-    reader.readAsText(file);
+    if (file.type === 'application/octet-stream' || file.name.endsWith('.der')) reader.readAsArrayBuffer(file);
+    else reader.readAsText(file);
   };
 
   const handleRemoveKey = () => {
@@ -161,13 +175,27 @@ export default function SshKeyManager({ carId }: SshKeyManagerProps) {
                       placeholder="192.168.1.100"
                       className="w-full px-2 py-1 bg-zinc-900 border border-zinc-700 rounded text-zinc-200 text-xs"
                     />
-                    <button
-                      onClick={handleDownloadKeyFromVehicle}
-                      disabled={isLoading || !vehicleIp.trim()}
-                      className="w-full px-2 py-1 bg-zinc-700 hover:bg-zinc-600 disabled:bg-zinc-800 disabled:text-zinc-600 rounded text-zinc-200 transition-colors"
-                    >
-                      {isLoading ? 'Downloading...' : 'Download'}
-                    </button>
+                <div className="flex items-center space-x-1">
+                  <button
+                    onClick={handleDownloadKeyFromVehicle}
+                    disabled={isLoading || !vehicleIp.trim()}
+                    className="flex-1 px-2 py-1 bg-zinc-700 hover:bg-zinc-600 disabled:bg-zinc-800 disabled:text-zinc-600 rounded text-zinc-200 transition-colors"
+                  >
+                    {isLoading ? 'Fetch via UI' : 'Fetch via UI'}
+                  </button>
+                  <button
+                    onClick={async () => {
+                      const url = await useControlFlowStore.getState().getSshKeyDownloadUrl(carId, vehicleIp.trim());
+                      if (url) window.open(url, '_blank');
+                      else setMessage({ type: 'error', text: 'Failed to build local download URL' });
+                    }}
+                    disabled={!vehicleIp.trim()}
+                    className="px-2 py-1 bg-zinc-700 hover:bg-zinc-600 disabled:bg-zinc-800 disabled:text-zinc-600 rounded text-zinc-200 transition-colors"
+                    title="Open local download link (HTTP, local network)"
+                  >
+                    Open Link
+                  </button>
+                </div>
                   </div>
                 )}
               </div>
