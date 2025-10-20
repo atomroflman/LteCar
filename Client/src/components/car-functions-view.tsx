@@ -15,10 +15,20 @@ export default function CarFunctionsView({ carId, hideFlowButtons }: { carId: nu
   const controlFlow = useControlFlowStore();
 
   useEffect(() => {
-    if (!carId) return;
-    fetch(`/api/car/${carId}/functions`)
-      .then((res) => res.json())
-      .then((data) => setFunctions(data));
+    async function fetchingCarFunctions() {
+      if (!carId) return;
+
+      try {
+        const response = await fetch(`/api/car/${carId}/functions`);
+        const data = await response.json();
+        setFunctions(data);
+      } catch (error) {
+        console.error("Error fetching car functions:", error);
+        setFunctions([]);
+      }
+    }
+
+    fetchingCarFunctions();
   }, [carId]);
 
   // Only allow one output node per function
