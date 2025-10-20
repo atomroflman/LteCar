@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Reflection;
 using System.Text.Json;
 using LteCar.Shared.Channels;
@@ -14,19 +13,17 @@ namespace LteCar.Onboard.Hardware
     /// </summary>
     public class ModuleManagerFactory : IModuleManagerFactory
     {
-        private readonly ILoggerFactory _loggerFactory;
-        private readonly Bash _bash;
-        private readonly IServiceProvider _serviceProvider;
+    private readonly ILoggerFactory _loggerFactory;
+    private readonly IServiceProvider _serviceProvider;
         private readonly ChannelMap _channelMap;
         private readonly Dictionary<string, IModuleManager> _instances = new();
 
         /// <summary>
         /// Constructor. All dependencies are injected via DI.
         /// </summary>
-        public ModuleManagerFactory(ILoggerFactory loggerFactory, Bash bash, IServiceProvider serviceProvider, ChannelMap channelMap)
+        public ModuleManagerFactory(ILoggerFactory loggerFactory, IServiceProvider serviceProvider, ChannelMap channelMap)
         {
             _loggerFactory = loggerFactory;
-            _bash = bash;
             _serviceProvider = serviceProvider;
             _channelMap = channelMap;
             _instances.Add("default", new RaspberryPiGpioManager(serviceProvider));
@@ -72,7 +69,7 @@ namespace LteCar.Onboard.Hardware
             if (type == typeof(Pca9685PwmExtension))
             {
                 var logger = _loggerFactory.CreateLogger<Pca9685PwmExtension>();
-                instance = ActivatorUtilities.CreateInstance(_serviceProvider, type, logger, _bash);
+                instance = ActivatorUtilities.CreateInstance(_serviceProvider, type, logger);
             }
             else
             {
