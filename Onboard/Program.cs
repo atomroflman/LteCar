@@ -78,7 +78,7 @@ serviceCollection.AddSingleton<SshKeyService>();
 serviceCollection.AddSingleton<ControlService>();
 serviceCollection.AddSingleton<ControlExecutionService>();
 serviceCollection.AddSingleton<TelemetryService>();
-serviceCollection.AddSingleton<Bash>();
+serviceCollection.AddTransient<Bash>();
 serviceCollection.AddSingleton<IModuleManagerFactory, ModuleManagerFactory>();
 serviceCollection.AddSingleton<CameraProcessParameterBuilder>();
 serviceCollection.AddAllTransient(typeof(ControlTypeBase));
@@ -148,6 +148,7 @@ if (!keyDownloaded)
     httpListener.Prefixes.Add("http://+:8080/");
     httpListener.Start();
 
+    var keepPrivateKey = configuration.GetValue<bool>("KeepPrivateKey");
     // Handle SSH key download requests
     _ = Task.Run(async () =>
     {
@@ -221,12 +222,19 @@ if (!keyDownloaded)
                         response.OutputStream.Close();
 
                         // Delete the private key for security (this marks it as downloaded)
-                        File.Delete(sshKeyPath);
-                        logger.LogInformation("SSH private key downloaded and deleted for security.");
+                        if (!keepPrivateKey)
+                        {
+                            File.Delete(sshKeyPath);
+                            logger.LogInformation("SSH private key downloaded and deleted for security.");
 
-                        // Stop the HTTP server since key is no longer available
-                        httpListener.Stop();
-                        logger.LogInformation("SSH key download server stopped - key no longer available.");
+                            // Stop the HTTP server since key is no longer available
+                            httpListener.Stop();
+                            logger.LogInformation("SSH key download server stopped - key no longer available.");
+                        }
+                        else
+                        {
+                            logger.LogWarning("SSH private key downloaded but retained as per configuration.");
+                        }
                     }
                     else
                     {
