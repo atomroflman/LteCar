@@ -1,3 +1,6 @@
+using System;
+using System.Threading.Tasks;
+
 namespace LteCar.Onboard.Hardware
 {
     public interface IPwmModule : IModule
@@ -28,6 +31,6 @@ namespace LteCar.Onboard.Hardware
         /// <param name="pulseWidthMs">Pulse width in milliseconds (e.g., 1.5 for 1.5ms)</param>
         /// <returns>A task representing the asynchronous operation.</returns>
         /// <exception cref="ArgumentOutOfRangeException">Thrown if the pulse width is out of range.</exception>
-        public Task SetPulseWidthMilliseconds(float pulseWidthMs);
+        Task SetPulseWidthMilliseconds(float pulseWidthMs);
     }
 }

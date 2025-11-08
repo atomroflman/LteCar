@@ -38,9 +38,9 @@ public class PwmBlinker : PwmLight
         while (!token.IsCancellationRequested)
         {
             base.OnControlRecived(1);
-            await Task.Delay(6000);
+            await Task.Delay(BlinkCycleMs);
             base.OnControlRecived(0);
-            await Task.Delay(1000);
+            await Task.Delay(BlinkCycleMs);
         }
     }
 
