@@ -102,7 +102,6 @@ export default function CarControlFlowPage() {
           <GamepadViewer hideFlowButtons={false} />
           <FunctionNodesView />
           {carIdNum && <CarFunctionsView carId={carIdNum} hideFlowButtons={false} />}
-          <SessionTransfer />
         </div>
         <div className="flex-1 bg-zinc-900 rounded-lg p-2 min-h-[600px]">
           <ReactFlowProvider>

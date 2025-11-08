@@ -7,22 +7,26 @@ using LteCar.Shared.HubClients;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
+using Sqids;
 
 namespace LteCar.Server.Hubs;
 
 public class CarControlHub : Hub<ICarControlClient>, ICarControlServer
 {
     public ILogger<CarControlHub> Logger { get; }
+    public SqidsEncoder<long> SqidsEncoder { get; }
+
     private readonly IConfigurationService _configService;
     private readonly LteCarContext _context;
 
     private static BiDictionary<string, string> _connectionMap = new BiDictionary<string, string>();
 
-    public CarControlHub(IConfigurationService configService, ILogger<CarControlHub> logger, LteCarContext context)
+    public CarControlHub(IConfigurationService configService, ILogger<CarControlHub> logger, LteCarContext context, SqidsEncoder<long> sqidsEncoder)
     {
         _configService = configService;
         Logger = logger;
         _context = context;
+        SqidsEncoder = sqidsEncoder;
     }
 
     public async Task RegisterForControl(int carId) 
@@ -151,8 +155,9 @@ public class CarControlHub : Hub<ICarControlClient>, ICarControlServer
         var sessionToken = Context.User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (string.IsNullOrEmpty(sessionToken))
             return null;
+        var sessionId = SqidsEncoder.Decode(sessionToken).FirstOrDefault();
 
-        return await _context.Users.FirstOrDefaultAsync(u => u.SessionToken == sessionToken);
+        return await _context.Users.FirstOrDefaultAsync(u => u.SessionId == sessionId);
     }
 
 }

@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using System.Data;
 using System.Reflection;
 
 namespace LteCar.Server.Data
@@ -17,11 +18,41 @@ namespace LteCar.Server.Data
         public DbSet<UserSetupTelemetry> UserSetupTelemetries { get; set; }
         public DbSet<SetupFilterType> SetupFilterTypes { get; set; }
 
+        public async Task<long> GetNextUserSessionId() 
+        {
+            var connection = Database.GetDbConnection();
+            var wasClosed = connection.State == ConnectionState.Closed;
+            if (wasClosed)
+            {
+                await connection.OpenAsync();
+            }
+
+            await using var command = connection.CreateCommand();
+            command.CommandText = "SELECT NEXT VALUE FOR [dbo].[UserSessionSeq]";
+
+            var result = await command.ExecuteScalarAsync();
+
+            if (wasClosed)
+            {
+                await connection.CloseAsync();
+            }
+
+            return Convert.ToInt64(result);
+        }
+
+        public class Test
+        {
+            public long Id { get; set; }
+        }
+
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
             // Use all IEntityTypeConfiguration classes in this assembly
             modelBuilder.ApplyConfigurationsFromAssembly(Assembly.GetExecutingAssembly());
+            modelBuilder.HasSequence<long>("UserSessionSeq")
+                .StartsAt(1)
+                .IncrementsBy(1);
         }
     }
 }

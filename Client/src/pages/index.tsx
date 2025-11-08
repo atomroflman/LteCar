@@ -4,6 +4,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import VideoStream from "@/components/video-stream";
 import CarControl from "@/components/car-control";
 import Telemetry from "@/components/telemetry";
+import SessionTransfer from "@/components/session-transfer";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -50,6 +51,7 @@ export default function Home() {
           {/* Car Control on the right */}
           <div className="w-64 border-l border-gray-300">
             <CarControl />
+            <SessionTransfer />
           </div>
         </div>
 

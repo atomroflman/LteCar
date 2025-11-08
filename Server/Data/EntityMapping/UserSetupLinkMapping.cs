@@ -11,11 +11,11 @@ public class UserSetupLinkMapping : IEntityTypeConfiguration<UserSetupLink>
         builder.HasOne(l => l.UserSetupFromNode)
             .WithMany()
             .HasForeignKey(l => l.UserSetupFromNodeId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .OnDelete(DeleteBehavior.ClientCascade);
         builder.HasOne(l => l.UserSetupToNode)
             .WithMany()
             .HasForeignKey(l => l.UserSetupToNodeId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .OnDelete(DeleteBehavior.ClientCascade);
     }
 }
 

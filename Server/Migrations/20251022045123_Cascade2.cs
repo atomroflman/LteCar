@@ -5,20 +5,20 @@
 namespace LteCar.Server.Migrations
 {
     /// <inheritdoc />
-    public partial class CascadeCarRelationsTillEnd2 : Migration
+    public partial class Cascade2 : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropForeignKey(
-                name: "FK_UserChannelDevice_Users_UserId",
-                table: "UserChannelDevice");
+                name: "FK_UserSetupFlowNodes_CarChannels_CarChannelId",
+                table: "UserSetupFlowNodes");
 
             migrationBuilder.AddForeignKey(
-                name: "FK_UserChannelDevice_Users_UserId",
-                table: "UserChannelDevice",
-                column: "UserId",
-                principalTable: "Users",
+                name: "FK_UserSetupFlowNodes_CarChannels_CarChannelId",
+                table: "UserSetupFlowNodes",
+                column: "CarChannelId",
+                principalTable: "CarChannels",
                 principalColumn: "Id",
                 onDelete: ReferentialAction.Cascade);
         }
@@ -27,14 +27,14 @@ namespace LteCar.Server.Migrations
         protected override void Down(MigrationBuilder migrationBuilder)
         {
             migrationBuilder.DropForeignKey(
-                name: "FK_UserChannelDevice_Users_UserId",
-                table: "UserChannelDevice");
+                name: "FK_UserSetupFlowNodes_CarChannels_CarChannelId",
+                table: "UserSetupFlowNodes");
 
             migrationBuilder.AddForeignKey(
-                name: "FK_UserChannelDevice_Users_UserId",
-                table: "UserChannelDevice",
-                column: "UserId",
-                principalTable: "Users",
+                name: "FK_UserSetupFlowNodes_CarChannels_CarChannelId",
+                table: "UserSetupFlowNodes",
+                column: "CarChannelId",
+                principalTable: "CarChannels",
                 principalColumn: "Id");
         }
     }

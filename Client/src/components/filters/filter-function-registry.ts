@@ -1,3 +1,4 @@
+import { AbsFunction } from "./AbsFunction";
 import { AddFunction } from "./AddFunction";
 import { ClampFunction } from "./ClampFunction";
 import { DivideFunction } from "./DivideFunction";
@@ -14,6 +15,7 @@ import { SmoothFunction } from "./SmoothFunction";
 import { SubtractFunction } from "./SubtractFunction";
 import { ToggleFunction } from "./ToggleFunction";
 import { TurnSignal } from "./TurnSignal";
+import { SignFunction } from "./SignFunction";
 
 export var storedToggleValues = {} as Record<number, {switchState: boolean, toggleState: boolean}>;
 
@@ -37,6 +39,7 @@ export type FilterFunctionDef<TInputs extends ReadonlyArray<string>> = {
 };
 
 export const filterFunctionRegistry = {
+  Abs: new AbsFunction(),
   Clamp: new ClampFunction(),
   Reverse: new ReverseFunction(),
   Add: new AddFunction(),
@@ -53,5 +56,6 @@ export const filterFunctionRegistry = {
   Gearbox: new GearboxFunction(),
   FloatValue: new FloatValueFunction(),
   Smooth: new SmoothFunction(),
+  Sign: new SignFunction(),
 };
 
