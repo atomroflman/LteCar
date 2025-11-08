@@ -5,7 +5,7 @@
 namespace LteCar.Server.Migrations
 {
     /// <inheritdoc />
-    public partial class VideoStreamsIntegration : Migration
+    public partial class Cascadesssyyyy : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)

@@ -5,24 +5,20 @@
 namespace LteCar.Server.Migrations
 {
     /// <inheritdoc />
-    public partial class UpdateTransferModel : Migration
+    public partial class UpdateSessionIds2 : Migration
     {
         /// <inheritdoc />
         protected override void Up(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.CreateIndex(
-                name: "IX_Users_TransferCode",
-                table: "Users",
-                column: "TransferCode",
-                unique: true);
+            migrationBuilder.CreateSequence(
+                name: "UserSessionSeq");
         }
 
         /// <inheritdoc />
         protected override void Down(MigrationBuilder migrationBuilder)
         {
-            migrationBuilder.DropIndex(
-                name: "IX_Users_TransferCode",
-                table: "Users");
+            migrationBuilder.DropSequence(
+                name: "UserSessionSeq");
         }
     }
 }

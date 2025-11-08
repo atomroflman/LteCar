@@ -15,7 +15,7 @@ public class CarMapping : IEntityTypeConfiguration<Car>
         builder.HasMany(v => v.Functions)
             .WithOne(f => f.Car)
             .HasForeignKey(f => f.CarId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .OnDelete(DeleteBehavior.ClientCascade);
         builder.OwnsOne(v => v.VideoSettings, b =>
         {
             b.WithOwner();

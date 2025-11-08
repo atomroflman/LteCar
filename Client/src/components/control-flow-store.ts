@@ -218,8 +218,10 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
     if (node.nodeTypeName === "UserSetupCarChannelNode") {
       // Get the input value from incoming edge
       const incomingEdge = state.edges.find(e => e.target === nodeId);
-      if (incomingEdge) {
-        const inputValue = state.nodeLatestValues[incomingEdge.source] ?? 0;
+      if (!incomingEdge) 
+        return;
+      const inputValue = state.nodeLatestValues[incomingEdge.source] ?? 0;
+      if (state.nodeLatestValues[nodeId] !== inputValue) {
         state.nodeLatestValues[nodeId] = inputValue;
         node.latestValue = inputValue;
         
@@ -597,14 +599,6 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
   },
   async authenticateWithSshKey(carId: number, privateKey: string, vehicleIp: string): Promise<boolean> {
     try {
-      // Get the public key from the vehicle (download without saving)
-      const keyResult = await get().downloadSshKey(carId, vehicleIp, false);
-      if (!keyResult.success || !keyResult.key) {
-        console.error("Could not retrieve public key from vehicle");
-        return false;
-      }
-      const publicKey = keyResult.key;
-
       // Get challenge from the vehicle via server
       const { connection } = get();
       if (!connection) {
@@ -626,14 +620,14 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
         return false;
       }
 
-      // Create SSH authentication object
-      const sshAuth = {
+      // Create SSH authentication object matching SshAuthenticationRequest structure
+      const sshAuthRequest = {
         Challenge: challenge,
         Signature: signature
       };
       
       // Try to authenticate
-      const carSession = await connection.invoke("AquireCarControl", carId, sshAuth);
+      const carSession = await connection.invoke("AquireCarControl", carId, sshAuthRequest);
       if (carSession) {
         set({ carSession });
         // Mark car as authenticated for config access

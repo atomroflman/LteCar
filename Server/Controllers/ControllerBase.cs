@@ -17,8 +17,12 @@ public class ControllerBase : Microsoft.AspNetCore.Mvc.ControllerBase
     {
         if (this.User.Identity is not ClaimsIdentity claimsIdentity)
             return null;
-        var sessionId = claimsIdentity.Claims
+        var sessionString = claimsIdentity.Claims
             .FirstOrDefault(c => c.Type == ClaimTypes.NameIdentifier)?.Value;
-        return await _context.Users.FirstOrDefaultAsync(u => u.SessionToken == sessionId);
+        if (string.IsNullOrEmpty(sessionString))
+            return null;
+        var idEncoder = HttpContext.RequestServices.GetRequiredService<Sqids.SqidsEncoder<long>>();
+        var sessionId = idEncoder.Decode(sessionString).FirstOrDefault();
+        return await _context.Users.FirstOrDefaultAsync(u => u.SessionId == sessionId);
     }
 }

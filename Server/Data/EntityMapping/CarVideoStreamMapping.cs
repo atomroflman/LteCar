@@ -39,7 +39,7 @@ public class CarVideoStreamMapping : IEntityTypeConfiguration<CarVideoStream>
         builder.HasOne(x => x.Car)
             .WithMany(c => c.VideoStreams)
             .HasForeignKey(x => x.CarId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .OnDelete(DeleteBehavior.ClientCascade);
 
         // Index für bessere Performance - StreamId muss nur pro Car eindeutig sein
         builder.HasIndex(x => new { x.CarId, x.StreamId })

@@ -3,12 +3,7 @@ using LteCar.Server.Configuration;
 using LteCar.Server.Data;
 using LteCar.Server.Extensions;
 using LteCar.Server.Hubs;
-using LteCar.Server.Services;
-using LteCar.Shared;
-using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.FileProviders;
-using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -23,13 +18,44 @@ builder.Logging.AddConsole()
 
 // Configure application configuration
 builder.Services.AddApplicationConfiguration(builder.Configuration);
+var idSalt = builder.Configuration.GetValue<string>("IdSalt") ?? Guid.NewGuid().ToString();
+var idAlphabet = builder.Configuration.GetValue<string>("IdAlphabet") ?? "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_";
+var transferAlphabet = builder.Configuration.GetValue<string>("SessionTransferAlphabet") ?? "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+while (idSalt.Length < idAlphabet.Length || idSalt.Length < transferAlphabet.Length)
+{
+    idSalt += idSalt;
+}
+var resolvedAlphabet = new string(idAlphabet
+    .Distinct()
+    .Zip(idSalt)
+    .OrderBy(x => x.Second)
+    .Select(x => x.First)
+    .ToArray());
+var transferResolvedAlphabet = new string(transferAlphabet
+    .Distinct()
+    .Zip(idSalt)
+    .OrderBy(x => x.Second)
+    .Select(x => x.First)
+    .ToArray());
+var sqids = new Sqids.SqidsEncoder<long>(new Sqids.SqidsOptions
+{
+    Alphabet = resolvedAlphabet,
+    MinLength = 16
+});
+var transferSqids = new Sqids.SqidsEncoder<long>(new Sqids.SqidsOptions
+{
+    Alphabet = transferResolvedAlphabet,
+    MinLength = 8
+});
+builder.Services.AddSingleton(sqids);
+builder.Services.AddKeyedSingleton("transfer", transferSqids);
 
 builder.Services.AddSingleton<VideoStreamReceiverService>();
 builder.Services.AddSingleton<CarConnectionStore>();
 builder.Services.AddDbContext<LteCarContext>((serviceProvider, options) =>
 {
     var configService = serviceProvider.GetRequiredService<IConfigurationService>();
-    options.UseSqlite(configService.DefaultConnectionString);
+    options.UseSqlServer(configService.DefaultConnectionString);
 });
 
 builder.Services.AddControllers().AddJsonOptions(options =>

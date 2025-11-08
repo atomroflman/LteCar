@@ -33,7 +33,7 @@ namespace LteCar.Server.Controllers
                 .AnyAsync(u => u.UserId == user.Id && u.CarId == id);
             
             if (!hasSetup)
-                return Forbid("User has no setup for this car");
+                return Unauthorized("User has no setup for this car");
 
             // User has access, return car functions
             var carFunctions = await _context.Set<CarChannel>().Where(c => c.CarId == id).ToListAsync();

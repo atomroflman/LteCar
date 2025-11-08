@@ -11,10 +11,10 @@ public class UserCarSetupMapping : IEntityTypeConfiguration<UserCarSetup>
         builder.HasOne(u => u.User)
             .WithMany(c => c.CarSetups)
             .HasForeignKey(u => u.UserId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .OnDelete(DeleteBehavior.ClientCascade);
         builder.HasOne(u => u.Car)
             .WithMany(c => c.UserCarSetups)
             .HasForeignKey(u => u.CarId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .OnDelete(DeleteBehavior.ClientCascade);
     }
 }

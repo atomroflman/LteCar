@@ -11,6 +11,6 @@ public class CarChannelMapping : IEntityTypeConfiguration<CarChannel>
         builder.HasOne(f => f.Car)
             .WithMany(v => v.Functions)
             .HasForeignKey(f => f.CarId)
-            .OnDelete(DeleteBehavior.Cascade);
+            .OnDelete(DeleteBehavior.ClientCascade);
     }
 }
