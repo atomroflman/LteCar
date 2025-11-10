@@ -9,10 +9,8 @@ public static class ServiceCollectionExtensions
     {
         // Configure strongly-typed configuration
         services.Configure<ApplicationConfiguration>(configuration);
-        services.Configure<LteCar.Server.Configuration.JanusConfiguration>(
-            configuration.GetSection(LteCar.Server.Configuration.JanusConfiguration.SectionName));
-        services.Configure<StreamConfiguration>(
-            configuration.GetSection(LteCar.Server.Configuration.JanusConfiguration.SectionName));
+        services.Configure<JanusConfiguration>(
+            configuration.GetSection(JanusConfiguration.SectionName));
 
         // Register configuration service
         services.AddSingleton<IConfigurationService, ConfigurationService>();

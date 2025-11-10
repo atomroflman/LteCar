@@ -34,18 +34,29 @@ public class CarVideoStreamMapping : IEntityTypeConfiguration<CarVideoStream>
 
         builder.Property(x => x.StreamPurpose)
             .HasMaxLength(100);
+        builder.Property(x => x.Name)
+            .IsRequired()
+            .HasMaxLength(100);
+        builder.Property(x => x.Description)
+            .HasMaxLength(500);
+        builder.Property(x => x.Width)
+            .IsRequired();
+        builder.Property(x => x.Height)
+            .IsRequired();
+        builder.Property(x => x.BitrateKbps)    
+            .IsRequired();
+        builder.Property(x => x.Framerate)
+            .IsRequired();
 
         // Foreign Key zu Car
         builder.HasOne(x => x.Car)
             .WithMany(c => c.VideoStreams)
             .HasForeignKey(x => x.CarId)
-            .OnDelete(DeleteBehavior.ClientCascade);
+            .OnDelete(DeleteBehavior.Cascade);
 
-        // Index für bessere Performance - StreamId muss nur pro Car eindeutig sein
+        // Stream needs to be unique per Car
         builder.HasIndex(x => new { x.CarId, x.StreamId })
             .IsUnique();
-
-        builder.HasIndex(x => new { x.CarId, x.IsActive });
         
         builder.HasIndex(x => x.Port);
     }

@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Text.Json;
 using LteCar.Shared;
+using LteCar.Shared.Video;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 

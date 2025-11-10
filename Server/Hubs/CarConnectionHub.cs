@@ -1,13 +1,10 @@
 using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
-using LteCar.Onboard;
-using LteCar.Server;
 using LteCar.Server.Configuration;
 using LteCar.Server.Data;
-using LteCar.Server.Services;
 using LteCar.Shared;
 using LteCar.Shared.Channels;
+using LteCar.Shared.Video;
 using Microsoft.AspNetCore.SignalR;
 
 namespace LteCar.Server.Hubs;
@@ -25,9 +22,6 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
     public ILogger<CarConnectionHub> Logger { get; }
     private readonly VideoStreamReceiverService _streamService;
     private readonly IConfigurationService _configService;
-
-    protected int JanusUdpPortMin => _configService.Janus.UdpPortRangeStart;
-    protected int JanusUdpPortMax => _configService.Janus.UdpPortRangeEnd;
     
     public CarConnectionHub(IHubContext<CarUiHub, ICarUiClient> uiHub, IConfigurationService configService, ILogger<CarConnectionHub> logger, VideoStreamReceiverService streamService)
     {
@@ -69,11 +63,6 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
 
         CarConfiguration carConfig = new CarConfiguration();
         carConfig.ServerAssignedCarId = car.Id;
-        carConfig.JanusConfiguration = new LteCar.Shared.JanusConfiguration() {
-            JanusServerHost = janusServerHost,
-            JanusUdpPort = 10000
-        };
-        carConfig.VideoSettings = car.VideoSettings;
         carConfig.RequiresChannelMapUpdate = car.ChannelMapHash != channelMapHash;
         if (carConfig.RequiresChannelMapUpdate)
         {
@@ -84,40 +73,6 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
             Id = car.Id.ToString()
         });
         return carConfig;
-    }
-
-    private int GetNextAvailablePort()
-    {
-        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
-
-        // Get all allocated ports
-        var allocatedPorts = dbContext.Cars
-            .Where(c => c.VideoStreamPort != null)
-            .Select(c => c.VideoStreamPort)
-            .ToHashSet();
-
-        // Find the first unallocated port in the range
-        for (int port = JanusUdpPortMin; port <= JanusUdpPortMax; port++)
-        {
-            if (!allocatedPorts.Contains(port))
-            {
-                return port;
-            }
-        }
-
-        // If no ports are available, take the longest inactive port
-        Logger.LogWarning("No available ports. All ports are in use. Taking the longest inactive port.");
-        var kickedCar = dbContext.Cars.OrderBy(c => c.LastSeen).FirstOrDefault(c => c.VideoStreamPort.HasValue);
-        if (kickedCar != null && kickedCar.VideoStreamPort.HasValue)
-        {
-            Logger.LogWarning($"Kicking car ID {kickedCar.Id} from port {kickedCar.VideoStreamPort}");
-            var port = kickedCar.VideoStreamPort.Value;
-            kickedCar.VideoStreamPort = null;
-            dbContext.SaveChanges();
-            return port;
-        }
-
-        throw new InvalidOperationException("No available ports and no cars to kick.");
     }
 
     public async Task Test() 
@@ -148,6 +103,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
             return;        
         }
         car.ChannelMapHash = ChannelMapHashProvider.GenerateHash(channelMap);
+        // Add control channels
         foreach (var channel in channelMap.ControlChannels)
         {
             var channelDb = dbContext.CarChannels.FirstOrDefault(c => c.ChannelName == channel.Key && c.CarId == car.Id);
@@ -158,6 +114,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
                 dbContext.CarChannels.Add(channelDb);
             }
         }
+        // Remove missing control channels
         foreach (var channel in dbContext.CarChannels.Where(c => c.CarId == car.Id))
         {
             if (!channelMap.ControlChannels.ContainsKey(channel.ChannelName))
@@ -171,6 +128,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
             }
         }
 
+        // Add telemetry channels
         foreach (var channel in channelMap.TelemetryChannels)
         {
             var channelDb = dbContext.CarTelemetry.FirstOrDefault(c => c.ChannelName == channel.Key && c.CarId == car.Id);
@@ -183,6 +141,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
             channelDb.TelemetryType = channel.Value.TelemetryType;
             channelDb.ReadIntervalTicks = channel.Value.ReadIntervalTicks;
         }
+        // Remove missing telemetry channels
         foreach (var channel in dbContext.CarTelemetry.Where(c => c.CarId == car.Id))
         {
             if (!channelMap.TelemetryChannels.ContainsKey(channel.ChannelName))
@@ -192,27 +151,25 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
             }
         }
 
-        // Handle video streams
+        // Add video streams
         foreach (var stream in channelMap.VideoStreams)
         {
             var streamDb = dbContext.CarVideoStreams.FirstOrDefault(s => s.StreamId == stream.Value.StreamId && s.CarId == car.Id);
             if (streamDb == null)
             {
                 Logger.LogInformation($"Video stream with ID {stream.Value.StreamId} not found. Creating a new one.");
-                streamDb = new CarVideoStream() 
-                { 
-                    StreamId = stream.Value.StreamId, 
+                streamDb = new CarVideoStream()
+                {
+                    StreamId = stream.Value.StreamId,
                     CarId = car.Id,
-                    StartTime = DateTime.Now
                 };
                 dbContext.CarVideoStreams.Add(streamDb);
             }
-            
+
+            streamDb.Name = stream.Value.Name ?? stream.Value.StreamId;
+            streamDb.Type = stream.Value.Type ?? "unknown";
+            streamDb.Location = stream.Value.Location;            
             streamDb.IsActive = stream.Value.Enabled;
-            
-            // Store stream configuration as JSON for later use
-            var streamConfigJson = System.Text.Json.JsonSerializer.Serialize(stream.Value);
-            streamDb.ProcessArguments = streamConfigJson;
         }
 
         // Remove video streams that are no longer in the channel map

@@ -1,149 +1,257 @@
 using System.Diagnostics;
 using System.Collections.Concurrent;
+using System.Text;
+using System.Text.Json;
+using System.Net.Http;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
-using LteCar.Shared;
 using LteCar.Server.Data;
 using Microsoft.EntityFrameworkCore;
+using LteCar.Shared.Video;
+using LteCar.Server.Configuration;
 
 namespace LteCar.Server;
-
-public enum StreamProtocol
-{
-    TCP,
-    UDP
-}
-
-public class StreamInfo
-{
-    public string Id { get; set; } = string.Empty;
-    public string? CarId { get; set; }
-    public StreamProtocol Protocol { get; set; }
-    public int Port { get; set; }
-    public Process? Process { get; set; }
-    public DateTime StartTime { get; set; }
-    public string? StreamPurpose { get; set; }
-    public int? DatabaseId { get; set; } // ID aus der Datenbank
-    public bool IsRunning => Process?.HasExited == false;
-}
-
-public class StreamConfiguration
-{
-    public string HostName { get; set; } = "localhost";
-    public int UdpPortRangeStart { get; set; } = 10000;
-    public int UdpPortRangeEnd { get; set; } = 10200;
-    public int TcpPortRangeStart { get; set; } = 11000;
-    public int TcpPortRangeEnd { get; set; } = 11200;
-}
 
 public class VideoStreamReceiverService
 {
     private Process? _janusProcess;
-    private Process? _ffmpegProcess;
-    private readonly ConcurrentDictionary<string, StreamInfo> _activeStreams = new();
-    private readonly StreamConfiguration _streamConfig;
+    
+    private readonly ConcurrentDictionary<long, Process> _activeStreamProxies = new();
     private readonly IServiceProvider _serviceProvider;
 
-    public VideoStreamReceiverService(ILogger<VideoStreamReceiverService> logger, IOptions<StreamConfiguration> streamConfig, IServiceProvider serviceProvider)
+    public VideoStreamReceiverService(
+        ILogger<VideoStreamReceiverService> logger,
+        IOptions<JanusConfiguration> janusConfig,
+        IServiceProvider serviceProvider)
     {
         Logger = logger;
-        _streamConfig = streamConfig.Value;
+        JanusConfig = janusConfig;
         _serviceProvider = serviceProvider;
-        
-        // Aktive Streams aus der Datenbank laden
-        _ = Task.Run(LoadActiveStreamsFromDatabase);
     }
 
     public ILogger<VideoStreamReceiverService> Logger { get; }
+    public IOptions<JanusConfiguration> JanusConfig { get; }
 
-    public async Task<StreamInfo?> StartNewStream(StreamProtocol protocol, string? carId = null, string? streamId = null, string? streamPurpose = null)
+    public async Task<VideoSettings> StartStreamAsync(int streamId)
     {
-        streamId ??= Guid.NewGuid().ToString("N")[..8];
-        
-        var port = await Task.Run(() => FindFreePort(protocol));
+        if (_activeStreamProxies.ContainsKey(streamId))
+        {
+            Logger.LogWarning($"Stream with ID {streamId} is already active");
+            return null;
+        }
+        var ctx = _serviceProvider.CreateScope().ServiceProvider
+            .GetRequiredService<LteCarContext>();
+        var stream = await ctx
+            .CarVideoStreams
+            .Include(s => s.Car)
+            .FirstOrDefaultAsync(s => s.Id == streamId);
+
+        if (stream == null)
+        {
+            Logger.LogError($"Stream with ID {streamId} not found in database");
+            throw new InvalidOperationException($"Stream with ID {streamId} not found");
+        }
+        var protocol = stream.Protocol;
+        var port = stream.Port > 0 && IsPortAvailable(stream.Port, stream.Protocol) ? stream.Port : FindFreePort(stream.Protocol);
         if (port == 0)
         {
             Logger.LogError($"No free port available for {protocol} stream");
-            return null;
+            throw new InvalidOperationException("No free port available");
+        }
+        if (port != stream.Port)
+        {
+            Logger.LogInformation($"Updating stream '{stream.StreamId}' port from {stream.Port} to {port}");
+            stream.Port = port;
         }
 
-        var streamInfo = new StreamInfo
+        var res = new VideoSettings()
         {
-            Id = streamId,
-            CarId = carId,
             Protocol = protocol,
-            Port = port,
-            StartTime = DateTime.UtcNow,
-            StreamPurpose = streamPurpose
+            TargetPort = port,
+            BitrateKbps = stream.BitrateKbps,
+            Brightness = stream.Brightness,
+            Framerate = stream.Framerate,
+            Width = stream.Width,
+            Height = stream.Height
+        };
+        stream.IsActive = true;
+        await ctx.SaveChangesAsync();
+        Logger.LogInformation($"Starting {protocol} stream '{stream.StreamId}' on port {port}");
+
+        await OpenJanusEndpointAsync(stream);
+        if (protocol == StreamProtocol.TCP)
+            await OpenTcpRelayProcessAsync(stream);
+        return res;
+    }
+
+    private async Task OpenTcpRelayProcessAsync(CarVideoStream stream)
+    {
+        var ffmpegArgs = $"-i tcp://0.0.0.0:{stream.Port}?listen -reconnect 1 -c:v copy -f rtp rtp://127.0.0.1:{stream.JanusPort!}";
+        
+        var startInfo = new ProcessStartInfo("ffmpeg", ffmpegArgs)
+        {
+            CreateNoWindow = true,
+            UseShellExecute = false,
+            RedirectStandardError = true,
+            RedirectStandardOutput = true,
         };
 
+        var process = new Process { StartInfo = startInfo };
+        
+        process.OutputDataReceived += (obj, e) =>
+        {
+            if (!string.IsNullOrEmpty(e.Data))
+                Logger.LogDebug($"FFmpeg TCP:{stream.Port} - {e.Data}");
+        };
+        
+        process.ErrorDataReceived += (obj, e) =>
+        {
+            if (!string.IsNullOrEmpty(e.Data))
+                Logger.LogDebug($"FFmpeg TCP:{stream.Port} Error - {e.Data}");
+        };
+
+        process.Start();
+        process.BeginOutputReadLine();
+        process.BeginErrorReadLine();
+        _activeStreamProxies[stream.Id] = process;
+    }
+
+    /// <summary>
+    /// Opens a new endpoint in Janus for receiving the stream via Janus HTTP API
+    /// The Janus stream is always UDP, RTP 
+    /// </summary>
+    private async Task OpenJanusEndpointAsync(CarVideoStream stream)
+    {
+        var janusPort = stream.JanusPort ?? FindFreePort(StreamProtocol.UDP);
         try
         {
-            var dbStreamId = await SaveStreamToDatabase(streamInfo);
-            streamInfo.DatabaseId = dbStreamId;
+            var janusHost = JanusConfig.Value.HostName;
+            if (string.IsNullOrEmpty(janusHost)) janusHost = "localhost";
+            var janusBase = new UriBuilder("http", janusHost, 8088, "janus").Uri;
 
-            Process process;
-            
-            if (protocol == StreamProtocol.TCP)
+            using var client = new HttpClient();
+            client.BaseAddress = janusBase;
+
+            // 1) Create session
+            var transaction = Guid.NewGuid().ToString("N");
+            var createSession = JsonSerializer.Serialize(new { janus = "create", transaction });
+            var createResp = await client.PostAsync("", new StringContent(createSession, System.Text.Encoding.UTF8, "application/json"));
+            createResp.EnsureSuccessStatusCode();
+            using var createDoc = JsonDocument.Parse(await createResp.Content.ReadAsStringAsync());
+            var sessionId = createDoc.RootElement.GetProperty("data").GetProperty("id").GetInt64();
+
+            // 2) Attach streaming plugin
+            transaction = Guid.NewGuid().ToString("N");
+            var attach = JsonSerializer.Serialize(new { janus = "attach", plugin = "janus.plugin.streaming", transaction });
+            var attachResp = await client.PostAsync($"/{sessionId}", new StringContent(attach, System.Text.Encoding.UTF8, "application/json"));
+            attachResp.EnsureSuccessStatusCode();
+            using var attachDoc = JsonDocument.Parse(await attachResp.Content.ReadAsStringAsync());
+            var handleId = attachDoc.RootElement.GetProperty("data").GetProperty("id").GetInt64();
+
+            // If the DB had a JanusPort configured, ask Janus whether it already knows a stream
+            // bound to that port by issuing a "list" request to the streaming plugin.
+            if (stream.JanusPort.HasValue)
             {
-                // TCP Stream mit FFmpeg
-                process = StartTcpStream(port);
-            }
-            else
-            {
-                // UDP Stream direkt von Janus
-                process = StartUdpStream(port);
+                try
+                {
+                    transaction = Guid.NewGuid().ToString("N");
+                    var listMsg = JsonSerializer.Serialize(new { janus = "message", body = new { request = "list" }, transaction });
+                    var listResp = await client.PostAsync($"/{sessionId}/{handleId}", new StringContent(listMsg, System.Text.Encoding.UTF8, "application/json"));
+                    listResp.EnsureSuccessStatusCode();
+                    using var listDoc = JsonDocument.Parse(await listResp.Content.ReadAsStringAsync());
+
+                    bool janusOwnsPort = false;
+                    // Try common locations for the list array
+                    if (listDoc.RootElement.TryGetProperty("plugindata", out var pd) && pd.TryGetProperty("data", out var pdData) && pdData.TryGetProperty("list", out var listElem))
+                    {
+                        janusOwnsPort = JsonListContainsPort(listElem, stream.JanusPort.Value);
+                    }
+                    else if (listDoc.RootElement.TryGetProperty("data", out var data) && data.TryGetProperty("list", out var dataList))
+                    {
+                        janusOwnsPort = JsonListContainsPort(dataList, stream.JanusPort.Value);
+                    }
+                    else if (listDoc.RootElement.TryGetProperty("list", out var rootList))
+                    {
+                        janusOwnsPort = JsonListContainsPort(rootList, stream.JanusPort.Value);
+                    }
+
+                    if (janusOwnsPort)
+                    {
+                        janusPort = stream.JanusPort.Value;
+                        Logger.LogInformation($"Janus already has a stream using UDP port {janusPort} for stream '{stream.StreamId}'");
+                        return; // Endpoint already exists on Janus; nothing more to do
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogWarning(ex, $"Failed to query Janus for existing streams while checking port {stream.JanusPort.Value}");
+                }
             }
 
-            streamInfo.Process = process;
-            
-            _activeStreams[streamId] = streamInfo;
-            
-            Logger.LogInformation($"Started {protocol} stream '{streamId}' for car '{carId}' on port {port} (DB ID: {dbStreamId})");
-            
-            // Process monitoring
-            _ = Task.Run(() => MonitorStreamProcess(streamInfo));
-            
-            return streamInfo;
+            // 3) Create RTP stream entry
+            transaction = Guid.NewGuid().ToString("N");
+            var body = new
+            {
+                request = "create",
+                type = "rtp",
+                id = stream.StreamId,
+                description = stream.Name ?? stream.StreamId,
+                audio = false,
+                video = true,
+                rtp_port = janusPort,
+                rtp_pt = 96
+            };
+
+            var message = JsonSerializer.Serialize(new { janus = "message", body, transaction });
+            var messageResp = await client.PostAsync($"/{sessionId}/{handleId}", new StringContent(message, System.Text.Encoding.UTF8, "application/json"));
+            messageResp.EnsureSuccessStatusCode();
+
+            Logger.LogInformation($"Created Janus RTP endpoint for stream '{stream.StreamId}' on UDP port {janusPort} (session {sessionId}, handle {handleId})");
+
+            // Persist JanusPort into database
+            using var scope = _serviceProvider.CreateScope();
+            var db = scope.ServiceProvider.GetRequiredService<LteCarContext>();
+            var dbStream = await db.CarVideoStreams.FindAsync(stream.Id);
+            if (dbStream != null)
+            {
+                dbStream.JanusPort = janusPort;
+                await db.SaveChangesAsync();
+            }
         }
         catch (Exception ex)
         {
-            Logger.LogError(ex, $"Failed to start {protocol} stream on port {port}");
-            
-            // Cleanup bei Fehler
-            if (streamInfo.DatabaseId.HasValue)
-            {
-                await MarkStreamAsInactive(streamInfo.DatabaseId.Value);
-            }
-            
-            return null;
+            Logger.LogError(ex, $"Failed to create Janus endpoint for stream {stream.StreamId}");
+            throw;
         }
     }
 
-    private int FindFreePort(StreamProtocol protocol)
+    public int FindFreePort(StreamProtocol protocol)
     {
-        var (startPort, endPort) = protocol switch
-        {
-            StreamProtocol.TCP => (_streamConfig.TcpPortRangeStart, _streamConfig.TcpPortRangeEnd),
-            StreamProtocol.UDP => (_streamConfig.UdpPortRangeStart, _streamConfig.UdpPortRangeEnd),
-            _ => (0, 0)
-        };
-
-        // Bereits verwendete Ports sammeln
-        var usedPorts = _activeStreams.Values
-            .Where(s => s.Protocol == protocol && s.IsRunning)
-            .Select(s => s.Port)
+        var (startPort, endPort) = (JanusConfig.Value.PortRangeStart, JanusConfig.Value.PortRangeEnd);
+        var ctx = _serviceProvider.CreateScope().ServiceProvider
+            .GetRequiredService<LteCarContext>();
+        var takenPorts = ctx.CarVideoStreams
+            .Where(s => s.IsActive)
+            .Select(e => new { e.JanusPort, e.Port })
+            .ToList()
+            .SelectMany(e => new[] { e.JanusPort, e.Port })
+            .Where(p => p.HasValue)
+            .Select(p => p!.Value)
+            .Distinct()
             .ToHashSet();
-
-        // Ersten freien Port finden
         for (int port = startPort; port <= endPort; port++)
         {
-            if (!usedPorts.Contains(port) && IsPortAvailable(port, protocol))
+            if (!takenPorts.Contains(port))
             {
+                if (!IsPortAvailable(port, protocol))
+                {
+                    Logger.LogWarning($"Port {port} is not available even though its within the assigned port range!");
+                    continue;
+                }
                 return port;
             }
         }
-
-        return 0; // Kein freier Port gefunden
+        throw new InvalidOperationException("No free ports available in the configured port range.");
     }
 
     private bool IsPortAvailable(int port, StreamProtocol protocol)
@@ -169,37 +277,57 @@ public class VideoStreamReceiverService
         }
     }
 
-    private Process StartTcpStream(int port)
+    private static bool JsonListContainsPort(JsonElement listElem, int port)
     {
-        var ffmpegArgs = $"-i tcp://0.0.0.0:{port}?listen -reconnect 1 -c:v copy -f rtp rtp://127.0.0.1:10000";
-        
-        var startInfo = new ProcessStartInfo("ffmpeg", ffmpegArgs)
-        {
-            CreateNoWindow = true,
-            UseShellExecute = false,
-            RedirectStandardError = true,
-            RedirectStandardOutput = true,
-        };
+        if (listElem.ValueKind != JsonValueKind.Array)
+            return false;
 
-        var process = new Process { StartInfo = startInfo };
-        
-        process.OutputDataReceived += (obj, e) =>
+        foreach (var item in listElem.EnumerateArray())
         {
-            if (!string.IsNullOrEmpty(e.Data))
-                Logger.LogDebug($"FFmpeg TCP:{port} - {e.Data}");
-        };
-        
-        process.ErrorDataReceived += (obj, e) =>
-        {
-            if (!string.IsNullOrEmpty(e.Data))
-                Logger.LogDebug($"FFmpeg TCP:{port} Error - {e.Data}");
-        };
+            if (TryGetPortFromElement(item, out var found) && found == port)
+                return true;
 
-        process.Start();
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
-        
-        return process;
+            // As a fallback, scan numeric properties for the port value
+            if (item.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var prop in item.EnumerateObject())
+                {
+                    if (prop.Value.ValueKind == JsonValueKind.Number && prop.Value.TryGetInt32(out var v) && v == port)
+                        return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    private static bool TryGetPortFromElement(JsonElement el, out int port)
+    {
+        // Common Janus streaming fields
+        if (el.TryGetProperty("rtp_port", out var rtp) && rtp.ValueKind == JsonValueKind.Number && rtp.TryGetInt32(out port))
+            return true;
+        if (el.TryGetProperty("port", out var p) && p.ValueKind == JsonValueKind.Number && p.TryGetInt32(out port))
+            return true;
+        if (el.TryGetProperty("audioport", out var ap) && ap.ValueKind == JsonValueKind.Number && ap.TryGetInt32(out port))
+            return true;
+        if (el.TryGetProperty("videoport", out var vp) && vp.ValueKind == JsonValueKind.Number && vp.TryGetInt32(out port))
+            return true;
+
+        // Recurse into nested objects
+        if (el.ValueKind == JsonValueKind.Object)
+        {
+            foreach (var prop in el.EnumerateObject())
+            {
+                if (prop.Value.ValueKind == JsonValueKind.Object)
+                {
+                    if (TryGetPortFromElement(prop.Value, out port))
+                        return true;
+                }
+            }
+        }
+
+        port = 0;
+        return false;
     }
 
     private Process StartUdpStream(int port)
@@ -239,97 +367,63 @@ public class VideoStreamReceiverService
         return process;
     }
 
-    private async Task MonitorStreamProcess(StreamInfo streamInfo)
+    public async Task StopStream(int streamId)
     {
-        var process = streamInfo.Process;
-        if (process == null) return;
-
         try
         {
-            await process.WaitForExitAsync();
-            
-            Logger.LogWarning($"Stream '{streamInfo.Id}' ({streamInfo.Protocol}:{streamInfo.Port}) process exited with code {process.ExitCode}");
-            
-            // Stream aus aktiven Streams entfernen
-            _activeStreams.TryRemove(streamInfo.Id, out _);
-            
-            // Stream in Datenbank als inaktiv markieren
-            if (streamInfo.DatabaseId.HasValue)
+            Logger.LogInformation($"Stopping stream '{streamId}'");
+            var ctx = _serviceProvider.CreateScope().ServiceProvider
+                .GetRequiredService<LteCarContext>();
+            var stream = await ctx
+                .CarVideoStreams
+                .FirstOrDefaultAsync(s => s.Id == streamId);
+            if (stream == null)
             {
-                await MarkStreamAsInactive(streamInfo.DatabaseId.Value);
+                Logger.LogError($"Stream with ID {streamId} not found in database");
+                return;
             }
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, $"Error monitoring stream '{streamInfo.Id}'");
-        }
-    }
+            stream.IsActive = false;
+            await ctx.SaveChangesAsync();
 
-    public async Task<bool> StopStream(string streamId)
-    {
-        if (!_activeStreams.TryRemove(streamId, out var streamInfo))
-        {
-            Logger.LogWarning($"Stream '{streamId}' not found");
-            return false;
-        }
-
-        try
-        {
-            streamInfo.Process?.Kill();
-            streamInfo.Process?.Dispose();
-            
-            // Stream in Datenbank als inaktiv markieren
-            if (streamInfo.DatabaseId.HasValue)
+            if (_activeStreamProxies.TryRemove(streamId, out var streamInfo))
             {
-                await MarkStreamAsInactive(streamInfo.DatabaseId.Value);
+                Logger.LogDebug($"Found active process for stream '{streamId}', stopping it.");
+                try
+                {
+                    streamInfo.Kill();
+                    streamInfo.Dispose();
+                    Logger.LogInformation($"Stopped stream proxy for '{streamId}'");
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, $"Error stopping stream '{streamId}'");
+                }            
             }
-            
-            Logger.LogInformation($"Stopped stream '{streamId}' ({streamInfo.Protocol}:{streamInfo.Port})");
-            return true;
+            Logger.LogInformation($"Stopped stream '{streamId}' successfully");
         }
         catch (Exception ex)
         {
             Logger.LogError(ex, $"Error stopping stream '{streamId}'");
-            return false;
         }
-    }
-
-    public IEnumerable<StreamInfo> GetActiveStreams()
-    {
-        return _activeStreams.Values.Where(s => s.IsRunning).ToList();
-    }
-
-    public StreamInfo? GetStream(string streamId)
-    {
-        _activeStreams.TryGetValue(streamId, out var streamInfo);
-        return streamInfo;
-    }
-
-    public IEnumerable<StreamInfo> GetStreamsByCar(string carId)
-    {
-        return _activeStreams.Values.Where(s => s.CarId == carId && s.IsRunning).ToList();
     }
 
     public async Task<bool> StopStreamsByCar(string carId)
     {
-        var carStreams = _activeStreams.Values.Where(s => s.CarId == carId).ToList();
+        var carStreams = _serviceProvider.CreateScope().ServiceProvider
+            .GetRequiredService<LteCarContext>()
+            .CarVideoStreams
+            .Where(s => s.Car.CarIdentityKey == carId && s.IsActive)
+            .AsNoTracking()
+            .ToList();
         var stoppedCount = 0;
 
         foreach (var stream in carStreams)
         {
-            if (await StopStream(stream.Id))
-            {
-                stoppedCount++;
-            }
+            await StopStream(stream.Id);
+            stoppedCount++;
         }
-
         Logger.LogInformation($"Stopped {stoppedCount} streams for car '{carId}'");
         return stoppedCount > 0;
-    }
-
-    public StreamInfo? GetActiveStreamByCar(string carId)
-    {
-        return _activeStreams.Values.FirstOrDefault(s => s.CarId == carId && s.IsRunning);
     }
 
     public void RunVideoStreamServer()
@@ -348,114 +442,5 @@ public class VideoStreamReceiverService
         };
         _janusProcess.StartInfo = startParams;
         _janusProcess.Start();
-
-        var ffmpegParams = new ProcessStartInfo("ffmpeg", "-i tcp://0.0.0.0:11000?listen -reconnect 1 -c:v copy -f rtp rtp://127.0.0.1:10000")
-        {
-            CreateNoWindow = true,
-            UseShellExecute = false,
-            RedirectStandardError = true,
-            RedirectStandardOutput = true,
-        };
-
-        _ffmpegProcess = new Process();
-        _ffmpegProcess.OutputDataReceived += (obj, e) =>
-        {
-            Logger.LogInformation("FFMPEG: " + e.Data);
-        };
-        _ffmpegProcess.StartInfo = ffmpegParams;
-        _ffmpegProcess.Exited += (obj, e) =>
-        {
-            Logger.LogWarning("FFMPEG process exited!");
-            _ffmpegProcess.Start();
-        };
-        _ffmpegProcess.Start();
-    }
-
-    private async Task<int> SaveStreamToDatabase(StreamInfo streamInfo)
-    {
-        using var scope = _serviceProvider.CreateScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<LteCarContext>();
-
-        // Car aus Datenbank finden
-        Car? car = null;
-        if (!string.IsNullOrEmpty(streamInfo.CarId) && int.TryParse(streamInfo.CarId, out var carId))
-        {
-            car = await dbContext.Cars.FirstOrDefaultAsync(c => c.Id == carId);
-            if (car == null)
-            {
-                Logger.LogWarning($"Car with ID '{streamInfo.CarId}' not found in database when saving stream");
-            }
-        }
-
-        var dbStream = new CarVideoStream
-        {
-            StreamId = streamInfo.Id,
-            CarId = car?.Id ?? 0, // 0 wenn kein Fahrzeug zugeordnet
-            Protocol = streamInfo.Protocol.ToString(),
-            Port = streamInfo.Port,
-            StartTime = streamInfo.StartTime,
-            IsActive = true,
-            StreamPurpose = streamInfo.StreamPurpose
-        };
-
-        dbContext.CarVideoStreams.Add(dbStream);
-        await dbContext.SaveChangesAsync();
-
-        Logger.LogDebug($"Saved stream '{streamInfo.Id}' to database with ID {dbStream.Id}");
-        return dbStream.Id;
-    }
-
-
-
-    private async Task MarkStreamAsInactive(int streamDbId)
-    {
-        try
-        {
-            using var scope = _serviceProvider.CreateScope();
-            var dbContext = scope.ServiceProvider.GetRequiredService<LteCarContext>();
-
-            var dbStream = await dbContext.CarVideoStreams.FindAsync(streamDbId);
-            if (dbStream != null)
-            {
-                dbStream.IsActive = false;
-                dbStream.EndTime = DateTime.UtcNow;
-                await dbContext.SaveChangesAsync();
-                Logger.LogDebug($"Marked stream {streamDbId} as inactive");
-            }
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, $"Failed to mark stream {streamDbId} as inactive");
-        }
-    }
-
-    private async Task LoadActiveStreamsFromDatabase()
-    {
-        try
-        {
-            using var scope = _serviceProvider.CreateScope();
-            var dbContext = scope.ServiceProvider.GetRequiredService<LteCarContext>();
-
-            var activeStreams = await dbContext.CarVideoStreams
-                .Include(s => s.Car)
-                .Where(s => s.IsActive && s.EndTime == null)
-                .ToListAsync();
-
-            foreach (var dbStream in activeStreams)
-            {
-                // Da wir keine Prozess-ID speichern, markieren wir alle Streams beim Start als inaktiv
-                // und lassen sie nur bei Bedarf neu erstellen
-                dbStream.IsActive = false;
-                dbStream.EndTime = DateTime.UtcNow;
-                Logger.LogInformation($"Marked stream {dbStream.StreamId} as inactive during service restart");
-            }
-
-            await dbContext.SaveChangesAsync();
-            Logger.LogInformation($"Loaded {activeStreams.Count(s => s.IsActive)} active streams from database");
-        }
-        catch (Exception ex)
-        {
-            Logger.LogError(ex, "Failed to load active streams from database");
-        }
     }
 }

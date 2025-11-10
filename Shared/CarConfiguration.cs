@@ -1,4 +1,4 @@
-using LteCar.Onboard;
+using LteCar.Shared.Video;
 
 namespace LteCar.Shared;
 

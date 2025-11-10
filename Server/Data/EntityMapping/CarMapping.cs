@@ -16,14 +16,5 @@ public class CarMapping : IEntityTypeConfiguration<Car>
             .WithOne(f => f.Car)
             .HasForeignKey(f => f.CarId)
             .OnDelete(DeleteBehavior.ClientCascade);
-        builder.OwnsOne(v => v.VideoSettings, b =>
-        {
-            b.WithOwner();
-            b.Property(v => v.Width).HasColumnName("VideoWidth");
-            b.Property(v => v.Height).HasColumnName("VideoHeight");
-            b.Property(v => v.Framerate).HasColumnName("VideoFramerate");
-            b.Property(v => v.Brightness).HasColumnName("VideoBrightness");
-            b.Property(v => v.Bitrate).HasColumnName("VideoBitrate");
-        });
     }
 }
