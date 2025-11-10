@@ -39,10 +39,6 @@
     </ItemGroup>
 
     <ItemGroup>
-      <Resource Include="Setup\SetupTexts.de.resx" />
-    </ItemGroup>
-
-    <ItemGroup>
       <None Update="channelMap.json">
         <CopyToOutputDirectory>Always</CopyToOutputDirectory>
       </None>      

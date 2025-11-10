@@ -1,9 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using LteCar.Server.Data;
-using System.Threading.Tasks;
-using System.Linq;
-using System.Security.Claims;
 
 namespace LteCar.Server.Controllers
 {
