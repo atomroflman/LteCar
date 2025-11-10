@@ -55,7 +55,10 @@ builder.Services.AddSingleton<CarConnectionStore>();
 builder.Services.AddDbContext<LteCarContext>((serviceProvider, options) =>
 {
     var configService = serviceProvider.GetRequiredService<IConfigurationService>();
-    options.UseSqlServer(configService.DefaultConnectionString);
+    options.UseSqlServer(configService.DefaultConnectionString, opt =>
+    {
+        opt.EnableRetryOnFailure(5, TimeSpan.FromSeconds(10), null);
+    });
 });
 
 builder.Services.AddControllers().AddJsonOptions(options =>

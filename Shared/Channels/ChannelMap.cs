@@ -9,10 +9,18 @@ namespace LteCar.Shared.Channels;
 public class ChannelMap
 {
     // Pin managers are client-only; excluded from MessagePack payload to save bandwidth.
-    [IgnoreMember][JsonPropertyName("pinManagers")] public Dictionary<string, PinManagerMapItem> PinManagers { get; set; } = new();
-    [Key(1)][JsonPropertyName("controlChannels")] public Dictionary<string, ControlChannelMapItem> ControlChannels { get; set; } = new();
-    [Key(2)][JsonPropertyName("telemetryChannels")] public Dictionary<string, TelemetryChannelMapItem> TelemetryChannels { get; set; } = new();
-    [Key(3)][JsonPropertyName("videoStreams")] public Dictionary<string, VideoStreamMapItem> VideoStreams { get; set; } = new();
+    [IgnoreMember]
+    [JsonPropertyName("pinManagers")] 
+    public Dictionary<string, PinManagerMapItem> PinManagers { get; set; } = new();
+    [Key(1)]
+    [JsonPropertyName("controlChannels")] 
+    public Dictionary<string, ControlChannelMapItem> ControlChannels { get; set; } = new();
+    [Key(2)]
+    [JsonPropertyName("telemetryChannels")] 
+    public Dictionary<string, TelemetryChannelMapItem> TelemetryChannels { get; set; } = new();
+    [Key(3)]
+    [JsonPropertyName("videoStreams")] 
+    public Dictionary<string, VideoStreamMapItem> VideoStreams { get; set; } = new();
 }
 
 [MessagePackObject]

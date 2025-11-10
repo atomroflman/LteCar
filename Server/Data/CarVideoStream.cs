@@ -1,10 +1,11 @@
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using LteCar.Shared.Video;
 using System.Text.Json;
 
 namespace LteCar.Server.Data;
 
-public class CarVideoStream : EntityBase
+public class CarVideoStream : EntityBase, IVideoSettings
 {
     [Required]
     [MaxLength(50)]
@@ -19,10 +20,11 @@ public class CarVideoStream : EntityBase
     // Transport details (existing)
     [Required]
     [MaxLength(10)]
-    public string Protocol { get; set; } = string.Empty; // TCP, UDP
+    public StreamProtocol Protocol { get; set; } // TCP, UDP
 
     [Required]
     public int Port { get; set; }
+    public int? JanusPort { get; set; }
 
     [Required]
     public DateTime StartTime { get; set; }
@@ -57,10 +59,13 @@ public class CarVideoStream : EntityBase
     public int Priority { get; set; } = 1;
 
     [Required]
-    public bool Enabled { get; set; } = true;
+    public bool Enabled { get; set; } = false;
 
     public DateTime LastStatusUpdate { get; set; } = DateTime.UtcNow;
 
-    [NotMapped]
-    public bool IsRunning => IsActive && Enabled && EndTime == null;
+    public int Height { get; set; } = 720;
+    public int Width { get; set; } = 1280;
+    public int BitrateKbps { get; set; } = 1500;
+    public int Framerate { get; set; } = 30;
+    public float Brightness { get; set; } = 0.5f;
 }
