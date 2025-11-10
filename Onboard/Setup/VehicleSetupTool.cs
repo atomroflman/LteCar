@@ -536,7 +536,8 @@ public class VehicleSetupTool
 
     private void AddVideoStream()
     {
-        var name = AnsiConsole.Ask<string>("Stream Name:");
+        var streamId = AnsiConsole.Ask<string>("Stream Key:");
+        var name = AnsiConsole.Ask<string>("Stream Name: (default: Key)");
         var displayName = AnsiConsole.Ask<string>("Anzeige Name:");
         var location = AnsiConsole.Ask<string>("Kamera Position:", "Front");
         var type = AnsiConsole.Ask<string>("Stream Typ:", "raspicam");
@@ -544,6 +545,7 @@ public class VehicleSetupTool
 
         var stream = new VideoStreamMapItem
         {
+            StreamId = streamId, 
             Name = displayName,
             Location = location,
             Type = type,

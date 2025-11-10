@@ -54,7 +54,7 @@ else
 Console.WriteLine($"Car Identity Key: {carIdentityKey}");
 var configuration = new ConfigurationBuilder()
     .AddInMemoryCollection(new Dictionary<string, string?>() {
-        { "carIdentityKey", carIdentityKey }
+        { "CarIdentityKey", carIdentityKey }
     })
     .AddJsonFile("appSettings.json")
     .AddJsonFile("appSettings.development.json", true)
@@ -68,19 +68,21 @@ if (channelMap == null)
     throw new Exception("channelMap.json could not be deserialized");
 
 var serviceCollection = new ServiceCollection();
+// Configuration
 serviceCollection.AddSingleton<ChannelMap>(channelMap);
 serviceCollection.AddSingleton<IConfiguration>(configuration);
+
+// Hub Connections
 serviceCollection.AddSingleton<ServerConnectionService>();
 serviceCollection.AddSingleton<VideoStreamService>();
-serviceCollection.AddSingleton<VideoStreamManager>();
 serviceCollection.AddSingleton<CarConfigurationService>();
-serviceCollection.AddSingleton<SshKeyService>();
 serviceCollection.AddSingleton<ControlService>();
-serviceCollection.AddSingleton<ControlExecutionService>();
 serviceCollection.AddSingleton<TelemetryService>();
+
+serviceCollection.AddSingleton<SshKeyService>();
+serviceCollection.AddSingleton<ControlExecutionService>();
 serviceCollection.AddTransient<Bash>();
 serviceCollection.AddSingleton<IModuleManagerFactory, ModuleManagerFactory>();
-serviceCollection.AddSingleton<CameraProcessParameterBuilder>();
 serviceCollection.AddAllTransient(typeof(ControlTypeBase));
 serviceCollection.AddAllTransient(typeof(IPwmModule));
 serviceCollection.AddAllTransient(typeof(IGpioModule));
@@ -110,7 +112,7 @@ catch (Exception ex)
     logger.LogError(ex, "Failed to log key fingerprints at startup");
 }
 var videoStreamService = serviceProvider.GetRequiredService<VideoStreamService>();
-var videoStreamManager = serviceProvider.GetRequiredService<VideoStreamManager>();
+await videoStreamService.Connect();
 var connectionService = serviceProvider.GetRequiredService<ServerConnectionService>();
 var carControlService = serviceProvider.GetRequiredService<ControlService>();
 
@@ -132,16 +134,10 @@ if (!hadPreviousSync)
 }
 // Connect control (will trigger sync if server hash mismatch)
 await carControlService.ConnectToServer();
-
-// Start video streams from channel map
-logger.LogInformation("Starting video stream manager...");
-videoStreamManager.StartAllStreams();
-
 logger.LogInformation($"Car Engine Started...");
 
 // Start HTTP server for SSH key download only if private key still exists
 var keyDownloaded = !File.Exists(sshKeyPath);
-
 if (!keyDownloaded)
 {
     var httpListener = new HttpListener();
