@@ -1,9 +1,6 @@
 using System.Diagnostics;
 using System.Collections.Concurrent;
-using System.Text;
 using System.Text.Json;
-using System.Net.Http;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Options;
 using LteCar.Server.Data;
 using Microsoft.EntityFrameworkCore;
@@ -34,17 +31,27 @@ public class VideoStreamReceiverService
 
     public async Task<VideoSettings> StartStreamAsync(int streamId)
     {
-        if (_activeStreamProxies.ContainsKey(streamId))
-        {
-            Logger.LogWarning($"Stream with ID {streamId} is already active");
-            return null;
-        }
         var ctx = _serviceProvider.CreateScope().ServiceProvider
             .GetRequiredService<LteCarContext>();
         var stream = await ctx
             .CarVideoStreams
             .Include(s => s.Car)
             .FirstOrDefaultAsync(s => s.Id == streamId);
+        if (stream != null && _activeStreamProxies.ContainsKey(streamId))
+        {
+            Logger.LogWarning($"Stream with ID {streamId} is already active");
+            return new VideoSettings()
+            {
+                Protocol = stream.Protocol,
+                TargetPort = stream.Port,
+                BitrateKbps = stream.BitrateKbps,
+                Brightness = stream.Brightness,
+                Framerate = stream.Framerate,
+                Width = stream.Width,
+                Height = stream.Height,
+                JanusServer = JanusConfig.Value.HostName,
+            };
+        }
 
         if (stream == null)
         {
@@ -63,7 +70,19 @@ public class VideoStreamReceiverService
             Logger.LogInformation($"Updating stream '{stream.StreamId}' port from {stream.Port} to {port}");
             stream.Port = port;
         }
+        if (stream.JanusPort == null)
+        {
+            var janusPort = FindFreePort(StreamProtocol.UDP);
+            Logger.LogInformation($"Assigning Janus port {janusPort} to stream '{stream.StreamId}'");
+            stream.JanusPort = janusPort;
+        }
 
+        await ctx.SaveChangesAsync();
+        Logger.LogInformation($"Starting {protocol} stream '{stream.StreamId}' on port {port}");
+
+        await OpenJanusEndpointAsync(stream);
+        if (protocol == StreamProtocol.TCP)
+            await OpenTcpRelayProcessAsync(stream);
         var res = new VideoSettings()
         {
             Protocol = protocol,
@@ -72,15 +91,10 @@ public class VideoStreamReceiverService
             Brightness = stream.Brightness,
             Framerate = stream.Framerate,
             Width = stream.Width,
-            Height = stream.Height
+            Height = stream.Height,
+            JanusServer = JanusConfig.Value.HostName,
         };
         stream.IsActive = true;
-        await ctx.SaveChangesAsync();
-        Logger.LogInformation($"Starting {protocol} stream '{stream.StreamId}' on port {port}");
-
-        await OpenJanusEndpointAsync(stream);
-        if (protocol == StreamProtocol.TCP)
-            await OpenTcpRelayProcessAsync(stream);
         return res;
     }
 
@@ -123,100 +137,107 @@ public class VideoStreamReceiverService
     private async Task OpenJanusEndpointAsync(CarVideoStream stream)
     {
         var janusPort = stream.JanusPort ?? FindFreePort(StreamProtocol.UDP);
+        stream.JanusPort = janusPort;
         try
         {
             var janusHost = JanusConfig.Value.HostName;
             if (string.IsNullOrEmpty(janusHost)) janusHost = "localhost";
-            var janusBase = new UriBuilder("http", janusHost, 8088, "janus").Uri;
+            var janusBase = new UriBuilder("http", janusHost, 8088).Uri;
 
             using var client = new HttpClient();
             client.BaseAddress = janusBase;
 
             // 1) Create session
             var transaction = Guid.NewGuid().ToString("N");
-            var createSession = JsonSerializer.Serialize(new { janus = "create", transaction });
-            var createResp = await client.PostAsync("", new StringContent(createSession, System.Text.Encoding.UTF8, "application/json"));
-            createResp.EnsureSuccessStatusCode();
-            using var createDoc = JsonDocument.Parse(await createResp.Content.ReadAsStringAsync());
-            var sessionId = createDoc.RootElement.GetProperty("data").GetProperty("id").GetInt64();
+            var session = await client.PostJsonAsync<JanusRequestBase, JanusCreateTransactionResponse>("janus", new JanusRequestBase() { 
+                Janus = "create", 
+                Transaction = transaction
+            }, Logger, $"Creating Janus session for stream '{stream.StreamId}': ");
+            var sessionId = session!.Data.Id;
 
             // 2) Attach streaming plugin
-            transaction = Guid.NewGuid().ToString("N");
-            var attach = JsonSerializer.Serialize(new { janus = "attach", plugin = "janus.plugin.streaming", transaction });
-            var attachResp = await client.PostAsync($"/{sessionId}", new StringContent(attach, System.Text.Encoding.UTF8, "application/json"));
-            attachResp.EnsureSuccessStatusCode();
-            using var attachDoc = JsonDocument.Parse(await attachResp.Content.ReadAsStringAsync());
-            var handleId = attachDoc.RootElement.GetProperty("data").GetProperty("id").GetInt64();
+            var pluginSession = await client.PostJsonAsync<JanusAttachPluginRequest, JanusAttachPluginResponse>($"janus/{sessionId}", new JanusAttachPluginRequest() { 
+                Janus = "attach", 
+                Transaction = transaction,
+                Plugin = "janus.plugin.streaming"
+            }, Logger, $"Attaching streaming plugin for stream '{stream.StreamId}': ");
+            var handleId = pluginSession!.Data.Id;
 
             // If the DB had a JanusPort configured, ask Janus whether it already knows a stream
             // bound to that port by issuing a "list" request to the streaming plugin.
-            if (stream.JanusPort.HasValue)
+            try
             {
-                try
+                var listResponse = await client.PostJsonAsync<JanusMessageRequest<JanusMessageBody>, JanusPluginMessageResponse<JanusPluginMessageListResponseBody>>(
+                    $"janus/{sessionId}/{handleId}",
+                    new JanusMessageRequest<JanusMessageBody>()
+                    {
+                        Janus = "message",
+                        Transaction = transaction,
+                        Body = new JanusMessageBody()
+                        {
+                            Request = "list"
+                        }
+                    }, 
+                    Logger, 
+                    $"Checking existing streams for port {stream.JanusPort.Value}: ");
+                
+                bool janusOwnsPort = false;
+                
+                if (listResponse?.Body?.Streams?.Any(s => s.Id == stream.JanusId) ?? false)
                 {
-                    transaction = Guid.NewGuid().ToString("N");
-                    var listMsg = JsonSerializer.Serialize(new { janus = "message", body = new { request = "list" }, transaction });
-                    var listResp = await client.PostAsync($"/{sessionId}/{handleId}", new StringContent(listMsg, System.Text.Encoding.UTF8, "application/json"));
-                    listResp.EnsureSuccessStatusCode();
-                    using var listDoc = JsonDocument.Parse(await listResp.Content.ReadAsStringAsync());
-
-                    bool janusOwnsPort = false;
-                    // Try common locations for the list array
-                    if (listDoc.RootElement.TryGetProperty("plugindata", out var pd) && pd.TryGetProperty("data", out var pdData) && pdData.TryGetProperty("list", out var listElem))
-                    {
-                        janusOwnsPort = JsonListContainsPort(listElem, stream.JanusPort.Value);
-                    }
-                    else if (listDoc.RootElement.TryGetProperty("data", out var data) && data.TryGetProperty("list", out var dataList))
-                    {
-                        janusOwnsPort = JsonListContainsPort(dataList, stream.JanusPort.Value);
-                    }
-                    else if (listDoc.RootElement.TryGetProperty("list", out var rootList))
-                    {
-                        janusOwnsPort = JsonListContainsPort(rootList, stream.JanusPort.Value);
-                    }
-
-                    if (janusOwnsPort)
-                    {
-                        janusPort = stream.JanusPort.Value;
-                        Logger.LogInformation($"Janus already has a stream using UDP port {janusPort} for stream '{stream.StreamId}'");
-                        return; // Endpoint already exists on Janus; nothing more to do
-                    }
+                    janusOwnsPort = true;
                 }
-                catch (Exception ex)
+                // // Try common locations for the list array
+                // if (listDoc.RootElement.TryGetProperty("plugindata", out var pd) && pd.TryGetProperty("data", out var pdData) && pdData.TryGetProperty("list", out var listElem))
+                // {
+                //     janusOwnsPort = JsonListContainsPort(listElem, stream.JanusPort.Value);
+                // }
+                // else if (listDoc.RootElement.TryGetProperty("data", out var data) && data.TryGetProperty("list", out var dataList))
+                // {
+                //     janusOwnsPort = JsonListContainsPort(dataList, stream.JanusPort.Value);
+                // }
+                // else if (listDoc.RootElement.TryGetProperty("list", out var rootList))
+                // {
+                //     janusOwnsPort = JsonListContainsPort(rootList, stream.JanusPort.Value);
+                // }
+
+                if (janusOwnsPort)
                 {
-                    Logger.LogWarning(ex, $"Failed to query Janus for existing streams while checking port {stream.JanusPort.Value}");
+                    janusPort = stream.JanusPort.Value;
+                    Logger.LogInformation($"Janus already has a stream using UDP port {janusPort} for stream '{stream.StreamId}'");
+                    return; // Endpoint already exists on Janus; nothing more to do
                 }
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, $"Failed to query Janus for existing streams while checking port {stream.JanusPort.Value}");
             }
 
             // 3) Create RTP stream entry
-            transaction = Guid.NewGuid().ToString("N");
-            var body = new
+            var body = new JanusCreateStreamRequestBody()
             {
-                request = "create",
-                type = "rtp",
-                id = stream.StreamId,
-                description = stream.Name ?? stream.StreamId,
-                audio = false,
-                video = true,
-                rtp_port = janusPort,
-                rtp_pt = 96
+                Request = "create",
+                Type = "rtp",
+                Id = $"{stream.CarId}-{stream.StreamId}",
+                Description = $"{stream.Car?.Name ?? stream.CarId.ToString()}-{stream.Name ?? stream.StreamId}",
+                Audio = false,
+                Video = true,
+                RtpPort = janusPort,
+                RtpPt = 96
             };
-
-            var message = JsonSerializer.Serialize(new { janus = "message", body, transaction });
-            var messageResp = await client.PostAsync($"/{sessionId}/{handleId}", new StringContent(message, System.Text.Encoding.UTF8, "application/json"));
-            messageResp.EnsureSuccessStatusCode();
+            stream.JanusId = $"{stream.CarId}-{stream.StreamId}";
+            var createResponse = await client.PostJsonAsync<JanusMessageRequest<JanusCreateStreamRequestBody>, JanusPluginMessageResponse<object>>(
+                $"janus/{sessionId}/{handleId}",
+                new JanusMessageRequest<JanusCreateStreamRequestBody>()
+                {
+                    Janus = "message",
+                    Transaction = transaction,
+                    Body = body
+                }, 
+                Logger, 
+                $"Creating Janus RTP endpoint for stream '{stream.StreamId}': ");
 
             Logger.LogInformation($"Created Janus RTP endpoint for stream '{stream.StreamId}' on UDP port {janusPort} (session {sessionId}, handle {handleId})");
-
-            // Persist JanusPort into database
-            using var scope = _serviceProvider.CreateScope();
-            var db = scope.ServiceProvider.GetRequiredService<LteCarContext>();
-            var dbStream = await db.CarVideoStreams.FindAsync(stream.Id);
-            if (dbStream != null)
-            {
-                dbStream.JanusPort = janusPort;
-                await db.SaveChangesAsync();
-            }
         }
         catch (Exception ex)
         {

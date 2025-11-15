@@ -22,4 +22,5 @@ public class VideoSettings : IVideoSettings
     public StreamProtocol Protocol { get; set; }
     public int TargetPort { get; set; }
     public string Encoding { get; set; } = "H264";
+    public string JanusServer { get; set; }
 }
