@@ -68,4 +68,5 @@ public class CarVideoStream : EntityBase, IVideoSettings
     public int BitrateKbps { get; set; } = 1500;
     public int Framerate { get; set; } = 30;
     public float Brightness { get; set; } = 0.5f;
+    public string? JanusId { get; set; }
 }

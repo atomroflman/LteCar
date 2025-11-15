@@ -42,6 +42,7 @@ public class CarVideoHub : Hub<ICarVideoClient>, ICarVideoServer
             _logger.LogWarning("Car with identity key {CarIdentityKey} not found", carIdentityKey);
             throw new InvalidOperationException($"Car with identity key {carIdentityKey} not found!");
         }
+        await this.AddCarToGroupAsync(car.Id);
         _logger.LogInformation("Car {CarIdentityKey} connected with ID {CarId}. Starting enabled video streams...", carIdentityKey, car.Id);
         foreach (var stream in car.VideoStreams.Where(s => s.Enabled))
         {
@@ -57,6 +58,8 @@ public class CarVideoHub : Hub<ICarVideoClient>, ICarVideoServer
             ?? throw new InvalidOperationException($"Video stream with ID {streamId} not found.");
         _logger.LogInformation("Starting video stream {StreamId} ({StreamName}) for car {CarId}", stream.Id, stream.Name, stream.CarId);
         await VideoStreamReceiverService.StartStreamAsync(streamId);
+        stream.s.Enabled = true;
+        await _lteCarContext.SaveChangesAsync();   
         await Clients.Car(stream.CarId).StartVideoStream(stream.Name, new VideoSettings()
         {
             Height = stream.Height,
@@ -66,9 +69,7 @@ public class CarVideoHub : Hub<ICarVideoClient>, ICarVideoServer
             Brightness = stream.Brightness,
             Protocol = stream.Protocol,
             TargetPort = stream.Port
-        });
-        stream.s.Enabled = true;
-        await _lteCarContext.SaveChangesAsync();        
+        });     
     }
 
     private async Task SanitizeStreamSettings(CarVideoStream s)
