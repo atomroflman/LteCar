@@ -57,19 +57,10 @@ public class CarVideoHub : Hub<ICarVideoClient>, ICarVideoServer
             .FirstOrDefault(s => s.Id == streamId)
             ?? throw new InvalidOperationException($"Video stream with ID {streamId} not found.");
         _logger.LogInformation("Starting video stream {StreamId} ({StreamName}) for car {CarId}", stream.Id, stream.Name, stream.CarId);
-        await VideoStreamReceiverService.StartStreamAsync(streamId);
+        var settings = await VideoStreamReceiverService.StartStreamAsync(streamId);
         stream.s.Enabled = true;
         await _lteCarContext.SaveChangesAsync();   
-        await Clients.Car(stream.CarId).StartVideoStream(stream.Name, new VideoSettings()
-        {
-            Height = stream.Height,
-            Width = stream.Width,
-            Framerate = stream.Framerate,
-            BitrateKbps = stream.BitrateKbps,
-            Brightness = stream.Brightness,
-            Protocol = stream.Protocol,
-            TargetPort = stream.Port
-        });     
+        await Clients.Car(stream.CarId).StartVideoStream(stream.s.StreamId, settings!);     
     }
 
     private async Task SanitizeStreamSettings(CarVideoStream s)
