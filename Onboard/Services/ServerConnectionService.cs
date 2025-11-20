@@ -1,11 +1,5 @@
-using System.ComponentModel.DataAnnotations;
 using System.Text.Json;
-using System.Text.Json.Serialization;
-using System.Threading.Channels;
-using LteCar.Shared;
 using LteCar.Shared.Channels;
-using System.Security.Cryptography;
-using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -108,7 +102,7 @@ public class ServerConnectionService
         }
         
         Logger.LogDebug($"OpenCarConnection called: {JsonSerializer.Serialize(config)}");
-        var configService = ServiceProvider.GetRequiredService<CarConfigurationService>();
+        var configService = ServiceProvider.GetRequiredService<ServerCarConfigurationService>();
         configService.UpdateConfiguration(config);
     }
 

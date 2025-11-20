@@ -37,6 +37,16 @@
     <ItemGroup>
       <ProjectReference Include="..\Shared\LteCar.Shared.csproj" />
     </ItemGroup>
+    <ItemGroup>
+      <None Update="Extern/mediamtx.yml">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      </None>
+      <None Update="Extern/mediamtx">
+        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+        <CopyToPublishDirectory>Always</CopyToPublishDirectory>
+        <UnixFileMode>Executable</UnixFileMode>
+      </None>
+    </ItemGroup>
 
     <ItemGroup>
       <None Update="channelMap.json">
