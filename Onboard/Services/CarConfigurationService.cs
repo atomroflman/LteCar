@@ -1,6 +1,6 @@
 using LteCar.Shared;
 
-public class CarConfigurationService {
+public class ServerCarConfigurationService {
     public event Action OnConfigurationChanged;
 
     private CarConfiguration _configuration;

@@ -21,14 +21,14 @@ public class ControlService : ICarControlClient, IHubConnectionObserver
     public IConfiguration Configuration { get; }
     public ServerConnectionService ServerConnectionService { get; }
     public SshKeyService SshKeyService { get; }
-    public CarConfigurationService CarConfigurationService { get; }
+    public ServerCarConfigurationService CarConfigurationService { get; }
 
     private HubConnection _connection;
     private string? _sessionId;
     private DateTime _lastControlUpdate = DateTime.Now;
     private ICarControlServer _server;
 
-    public ControlService(ILogger<ControlService> logger, TelemetryService telemetryService, ControlExecutionService control, IServiceProvider serviceProvider, IConfiguration configuration, ServerConnectionService serverConnectionService, SshKeyService sshKeyService, CarConfigurationService carConfigurationService)
+    public ControlService(ILogger<ControlService> logger, TelemetryService telemetryService, ControlExecutionService control, IServiceProvider serviceProvider, IConfiguration configuration, ServerConnectionService serverConnectionService, SshKeyService sshKeyService, ServerCarConfigurationService carConfigurationService)
     {
         Logger = logger;
         TelemetryService = telemetryService;
