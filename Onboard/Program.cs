@@ -75,7 +75,7 @@ serviceCollection.AddSingleton<IConfiguration>(configuration);
 // Hub Connections
 serviceCollection.AddSingleton<ServerConnectionService>();
 serviceCollection.AddSingleton<VideoStreamService>();
-serviceCollection.AddSingleton<CarConfigurationService>();
+serviceCollection.AddSingleton<ServerCarConfigurationService>();
 serviceCollection.AddSingleton<ControlService>();
 serviceCollection.AddSingleton<TelemetryService>();
 
@@ -95,7 +95,7 @@ var serviceProvider = serviceCollection.BuildServiceProvider();
 var logger = serviceProvider.GetRequiredService<ILogger<Program>>();
 logger.LogDebug("Debug log enabled...");
 
-var configService = serviceProvider.GetRequiredService<CarConfigurationService>();
+var configService = serviceProvider.GetRequiredService<ServerCarConfigurationService>();
 configService.OnConfigurationChanged += () =>
 {
     var config = configService.Configuration;
@@ -111,13 +111,8 @@ catch (Exception ex)
 {
     logger.LogError(ex, "Failed to log key fingerprints at startup");
 }
-var videoStreamService = serviceProvider.GetRequiredService<VideoStreamService>();
-await videoStreamService.Connect();
 var connectionService = serviceProvider.GetRequiredService<ServerConnectionService>();
 var carControlService = serviceProvider.GetRequiredService<ControlService>();
-
-logger.LogInformation("Initializing car control...");
-carControlService.Initialize();
 
 if (configuration.GetValue<bool>("EnableChannelTest")) 
 {
@@ -133,8 +128,18 @@ if (!hadPreviousSync)
     await connectionService.SyncChannelMapAsync();
 }
 // Connect control (will trigger sync if server hash mismatch)
+// Iniotialize Car incatance if needed
 await carControlService.ConnectToServer();
 logger.LogInformation($"Car Engine Started...");
+
+// Initialize Car remote control
+logger.LogInformation("Initializing car control...");
+carControlService.Initialize();
+
+// Initialize video streaming
+var videoStreamService = serviceProvider.GetRequiredService<VideoStreamService>();
+logger.LogInformation("Initializing video streaming...");
+await videoStreamService.Connect();
 
 // Start HTTP server for SSH key download only if private key still exists
 var keyDownloaded = !File.Exists(sshKeyPath);
