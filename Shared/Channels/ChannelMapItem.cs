@@ -7,11 +7,19 @@ namespace LteCar.Shared.Channels;
 [MessagePackObject]
 public class ChannelMapItem
 {
-    [Key(0)][JsonPropertyName("pinManager")] public string PinManager { get; set; } = "default";
-    [Key(1)][JsonPropertyName("address")] public int? Address { get; set; }
-    [Key(2)][JsonPropertyName("options")] public Dictionary<string, object> Options { get; set; } = new();
+    [Key(0)]
+    [JsonPropertyName("pinManager")] 
+    public string PinManager { get; set; } = "default";
+    [Key(1)]
+    [JsonPropertyName("address")] 
+    public int? Address { get; set; }
+    [Key(2)]
+    [JsonPropertyName("options")] 
+    public Dictionary<string, object> Options { get; set; } = new();
     // Server-assigned numeric id (for compact messaging). Null until first sync.
-    [Key(3)][JsonPropertyName("serverId")] public int? ServerId { get; set; }
+    [Key(3)]
+    [JsonPropertyName("serverId")] 
+    public int? ServerId { get; set; }
 }
 
 [MessagePackObject]

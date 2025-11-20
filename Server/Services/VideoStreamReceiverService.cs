@@ -37,21 +37,21 @@ public class VideoStreamReceiverService
             .CarVideoStreams
             .Include(s => s.Car)
             .FirstOrDefaultAsync(s => s.Id == streamId);
-        if (stream != null && _activeStreamProxies.ContainsKey(streamId))
-        {
-            Logger.LogWarning($"Stream with ID {streamId} is already active");
-            return new VideoSettings()
-            {
-                Protocol = stream.Protocol,
-                TargetPort = stream.Port,
-                BitrateKbps = stream.BitrateKbps,
-                Brightness = stream.Brightness,
-                Framerate = stream.Framerate,
-                Width = stream.Width,
-                Height = stream.Height,
-                JanusServer = JanusConfig.Value.HostName,
-            };
-        }
+        // if (stream != null && _activeStreamProxies.ContainsKey(streamId))
+        // {
+        //     Logger.LogWarning($"Stream with ID {streamId} is already active");
+        //     return new VideoSettings()
+        //     {
+        //         Protocol = stream.Protocol,
+        //         TargetPort = stream.Port,
+        //         BitrateKbps = stream.BitrateKbps,
+        //         Brightness = stream.Brightness,
+        //         Framerate = stream.Framerate,
+        //         Width = stream.Width,
+        //         Height = stream.Height,
+        //         JanusServer = JanusConfig.Value.HostName,
+        //     };
+        // }
 
         if (stream == null)
         {
@@ -59,7 +59,7 @@ public class VideoStreamReceiverService
             throw new InvalidOperationException($"Stream with ID {streamId} not found");
         }
         var protocol = stream.Protocol;
-        var port = stream.Port > 0 && IsPortAvailable(stream.Port, stream.Protocol) ? stream.Port : FindFreePort(stream.Protocol);
+        var port = (stream.Port > 0 && IsPortAvailable(stream.Port, stream.Protocol)) ? stream.Port : FindFreePort(stream.Protocol);
         if (port == 0)
         {
             Logger.LogError($"No free port available for {protocol} stream");
@@ -81,8 +81,14 @@ public class VideoStreamReceiverService
         Logger.LogInformation($"Starting {protocol} stream '{stream.StreamId}' on port {port}");
 
         await OpenJanusEndpointAsync(stream);
-        if (protocol == StreamProtocol.TCP)
+        if (protocol == StreamProtocol.TCP && ! _activeStreamProxies.ContainsKey(streamId)) {
             await OpenTcpRelayProcessAsync(stream);
+            port = stream.Port;
+        }
+        if (protocol == StreamProtocol.UDP)
+        {
+            port = stream.JanusPort.Value;
+        }
         var res = new VideoSettings()
         {
             Protocol = protocol,
@@ -100,8 +106,10 @@ public class VideoStreamReceiverService
 
     private async Task OpenTcpRelayProcessAsync(CarVideoStream stream)
     {
-        var ffmpegArgs = $"-i tcp://0.0.0.0:{stream.Port}?listen -reconnect 1 -c:v copy -f rtp rtp://127.0.0.1:{stream.JanusPort!}";
-        
+        Logger.LogInformation($"Starting TCP relay for stream '{stream.StreamId}' on port {stream.Port}");
+        var isDebug = Logger.IsEnabled(LogLevel.Debug);
+        var ffmpegArgs = $"{(isDebug ? "" : "-hide_banner -loglevel warning ")} -nostdin -i tcp://0.0.0.0:{stream.Port}?listen -reconnect 1 -c:v copy -f rtp rtp://127.0.0.1:{stream.JanusPort!}";
+        Logger.LogDebug($"FFmpeg args: {ffmpegArgs}");
         var startInfo = new ProcessStartInfo("ffmpeg", ffmpegArgs)
         {
             CreateNoWindow = true,
@@ -187,24 +195,28 @@ public class VideoStreamReceiverService
                 {
                     janusOwnsPort = true;
                 }
-                // // Try common locations for the list array
-                // if (listDoc.RootElement.TryGetProperty("plugindata", out var pd) && pd.TryGetProperty("data", out var pdData) && pdData.TryGetProperty("list", out var listElem))
-                // {
-                //     janusOwnsPort = JsonListContainsPort(listElem, stream.JanusPort.Value);
-                // }
-                // else if (listDoc.RootElement.TryGetProperty("data", out var data) && data.TryGetProperty("list", out var dataList))
-                // {
-                //     janusOwnsPort = JsonListContainsPort(dataList, stream.JanusPort.Value);
-                // }
-                // else if (listDoc.RootElement.TryGetProperty("list", out var rootList))
-                // {
-                //     janusOwnsPort = JsonListContainsPort(rootList, stream.JanusPort.Value);
-                // }
+                // If the plugin returned streams, check whether any match our stored JanusId or port
+                if (!janusOwnsPort && listResponse?.Body?.Streams != null)
+                {
+                    janusOwnsPort = listResponse.Body.Streams.Any(s =>
+                        string.Equals(s.Id, stream.JanusId, StringComparison.OrdinalIgnoreCase) ||
+                        (!string.IsNullOrEmpty(s.Description) && stream.JanusPort.HasValue && s.Description.Contains(stream.JanusPort.Value.ToString()))
+                    );
+                }
 
                 if (janusOwnsPort)
                 {
-                    janusPort = stream.JanusPort.Value;
+                    janusPort = stream.JanusPort!.Value;
                     Logger.LogInformation($"Janus already has a stream using UDP port {janusPort} for stream '{stream.StreamId}'");
+                    // Persist JanusPort into database (if needed)
+                    using var scope = _serviceProvider.CreateScope();
+                    var db = scope.ServiceProvider.GetRequiredService<LteCarContext>();
+                    var dbStream = await db.CarVideoStreams.FindAsync(stream.Id);
+                    if (dbStream != null)
+                    {
+                        dbStream.JanusPort = janusPort;
+                        await db.SaveChangesAsync();
+                    }
                     return; // Endpoint already exists on Janus; nothing more to do
                 }
             }
@@ -218,14 +230,13 @@ public class VideoStreamReceiverService
             {
                 Request = "create",
                 Type = "rtp",
-                Id = $"{stream.CarId}-{stream.StreamId}",
+                Id = (uint)stream.Id,
                 Description = $"{stream.Car?.Name ?? stream.CarId.ToString()}-{stream.Name ?? stream.StreamId}",
                 Audio = false,
                 Video = true,
-                RtpPort = janusPort,
-                RtpPt = 96
+                VideoPort = janusPort
             };
-            stream.JanusId = $"{stream.CarId}-{stream.StreamId}";
+            stream.JanusId = $"{stream.Car?.Name ?? stream.CarId.ToString()}-{stream.Name ?? stream.StreamId}";
             var createResponse = await client.PostJsonAsync<JanusMessageRequest<JanusCreateStreamRequestBody>, JanusPluginMessageResponse<object>>(
                 $"janus/{sessionId}/{handleId}",
                 new JanusMessageRequest<JanusCreateStreamRequestBody>()
@@ -298,29 +309,29 @@ public class VideoStreamReceiverService
         }
     }
 
-    private static bool JsonListContainsPort(JsonElement listElem, int port)
-    {
-        if (listElem.ValueKind != JsonValueKind.Array)
-            return false;
+    // private static bool JsonListContainsPort(JsonElement listElem, int port)
+    // {
+    //     if (listElem.ValueKind != JsonValueKind.Array)
+    //         return false;
 
-        foreach (var item in listElem.EnumerateArray())
-        {
-            if (TryGetPortFromElement(item, out var found) && found == port)
-                return true;
+    //     foreach (var item in listElem.EnumerateArray())
+    //     {
+    //         if (TryGetPortFromElement(item, out var found) && found == port)
+    //             return true;
 
-            // As a fallback, scan numeric properties for the port value
-            if (item.ValueKind == JsonValueKind.Object)
-            {
-                foreach (var prop in item.EnumerateObject())
-                {
-                    if (prop.Value.ValueKind == JsonValueKind.Number && prop.Value.TryGetInt32(out var v) && v == port)
-                        return true;
-                }
-            }
-        }
+    //         // As a fallback, scan numeric properties for the port value
+    //         if (item.ValueKind == JsonValueKind.Object)
+    //         {
+    //             foreach (var prop in item.EnumerateObject())
+    //             {
+    //                 if (prop.Value.ValueKind == JsonValueKind.Number && prop.Value.TryGetInt32(out var v) && v == port)
+    //                     return true;
+    //             }
+    //         }
+    //     }
 
-        return false;
-    }
+    //     return false;
+    // }
 
     private static bool TryGetPortFromElement(JsonElement el, out int port)
     {
@@ -351,42 +362,51 @@ public class VideoStreamReceiverService
         return false;
     }
 
-    private Process StartUdpStream(int port)
-    {
-        // Für UDP direkt von Janus - hier könnten wir einen einfachen UDP Relay starten
-        // oder direkt Janus mit dem spezifischen Port konfigurieren
+    // private Process StartUdpStream(int port)
+    // {
+    //     // Für UDP direkt von Janus - hier könnten wir einen einfachen UDP Relay starten
+    //     // oder direkt Janus mit dem spezifischen Port konfigurieren
         
-        // Beispiel: netcat als UDP Relay zu Janus
-        var ncArgs = $"-l -u -p {port} -c 'nc -u 127.0.0.1 10000'";
-        
-        var startInfo = new ProcessStartInfo("sh", $"-c \"nc {ncArgs}\"")
-        {
-            CreateNoWindow = true,
-            UseShellExecute = false,
-            RedirectStandardError = true,
-            RedirectStandardOutput = true,
-        };
+    //     // Use ffmpeg to listen on a UDP port and forward to local RTP ingest.
+    //     var ffmpegArgs = $"-hide_banner -loglevel warning -nostats -nostdin -i udp://0.0.0.0:{port} -c:v copy -f rtp rtp://127.0.0.1:10000";
 
-        var process = new Process { StartInfo = startInfo };
-        
-        process.OutputDataReceived += (obj, e) =>
-        {
-            if (!string.IsNullOrEmpty(e.Data))
-                Logger.LogDebug($"UDP Relay:{port} - {e.Data}");
-        };
-        
-        process.ErrorDataReceived += (obj, e) =>
-        {
-            if (!string.IsNullOrEmpty(e.Data))
-                Logger.LogDebug($"UDP Relay:{port} Error - {e.Data}");
-        };
+    //     var startInfo = new ProcessStartInfo("ffmpeg", ffmpegArgs)
+    //     {
+    //         CreateNoWindow = true,
+    //         UseShellExecute = false,
+    //         RedirectStandardError = true,
+    //         RedirectStandardOutput = true,
+    //     };
 
-        process.Start();
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
-        
-        return process;
-    }
+    //     var process = new Process { StartInfo = startInfo };
+
+    //     process.OutputDataReceived += (obj, e) =>
+    //     {
+    //         if (string.IsNullOrEmpty(e.Data)) return;
+    //         Logger.LogDebug($"FFmpeg UDP:{port} - {e.Data}");
+    //     };
+
+    //     process.ErrorDataReceived += (obj, e) =>
+    //     {
+    //         if (string.IsNullOrEmpty(e.Data)) return;
+    //         Logger.LogWarning($"FFmpeg UDP:{port} Error - {e.Data}");
+    //     };
+
+    //     process.Exited += (obj, e) =>
+    //     {
+    //         try
+    //         {
+    //             Logger.LogWarning($"FFmpeg UDP:{port} exited with code {process.ExitCode}");
+    //         }
+    //         catch { }
+    //     };
+
+    //     process.Start();
+    //     process.BeginOutputReadLine();
+    //     process.BeginErrorReadLine();
+
+    //     return process;
+    // }
 
     public async Task StopStream(int streamId)
     {
