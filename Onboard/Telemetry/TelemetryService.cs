@@ -21,9 +21,9 @@ public class TelemetryService : IHubConnectionObserver, ITelemetryClient
     public ServerConnectionService ServerConnectionService { get; }
     public IServiceProvider ServiceProvider { get; }
     public ChannelMap ChannelMap { get; }
-    public CarConfigurationService CarConfigurationService { get; }
+    public ServerCarConfigurationService CarConfigurationService { get; }
     
-    public TelemetryService(ChannelMap channelMap, ServerConnectionService serverConnectionService, IConfiguration configuration, ILogger<TelemetryService> logger, IServiceProvider serviceProvider, CarConfigurationService carConfigurationService)
+    public TelemetryService(ChannelMap channelMap, ServerConnectionService serverConnectionService, IConfiguration configuration, ILogger<TelemetryService> logger, IServiceProvider serviceProvider, ServerCarConfigurationService carConfigurationService)
     {
         ServiceProvider = serviceProvider;
         ChannelMap = channelMap;
