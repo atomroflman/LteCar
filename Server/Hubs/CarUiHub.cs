@@ -25,6 +25,7 @@ public class CarUiHub : Hub<ICarUiClient>, ICarUiServer
 public interface ICarUiClient
 {
     Task CarStateUpdated(CarStateModel stateModel);
+    Task SendBashOutput(int carId, string output, bool isError);
 }
 
 public interface ICarUiServer

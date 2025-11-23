@@ -1,13 +1,5 @@
 using System.Text.Json;
-using LteCar.Server.Configuration;
-using LteCar.Server.Data;
-using LteCar.Server.Services;
-using LteCar.Shared;
-using LteCar.Shared.HubClients;
-using Microsoft.AspNetCore.SignalR;
-using Microsoft.EntityFrameworkCore;
 using System.Security.Claims;
-using Sqids;
 
 namespace LteCar.Server.Hubs;
 
@@ -15,18 +7,20 @@ public class CarControlHub : Hub<ICarControlClient>, ICarControlServer
 {
     public ILogger<CarControlHub> Logger { get; }
     public SqidsEncoder<long> SqidsEncoder { get; }
+    public IHubContext<CarUiHub, ICarUiClient> CarUiHubContext { get; }
 
     private readonly IConfigurationService _configService;
     private readonly LteCarContext _context;
 
     private static BiDictionary<string, string> _connectionMap = new BiDictionary<string, string>();
 
-    public CarControlHub(IConfigurationService configService, ILogger<CarControlHub> logger, LteCarContext context, SqidsEncoder<long> sqidsEncoder)
+    public CarControlHub(IConfigurationService configService, ILogger<CarControlHub> logger, LteCarContext context, SqidsEncoder<long> sqidsEncoder, IHubContext<CarUiHub, ICarUiClient> carUiHubContext)
     {
         _configService = configService;
         Logger = logger;
         _context = context;
         SqidsEncoder = sqidsEncoder;
+        CarUiHubContext = carUiHubContext;
     }
 
     public async Task RegisterForControl(int carId) 
@@ -160,4 +154,15 @@ public class CarControlHub : Hub<ICarControlClient>, ICarControlServer
         return await _context.Users.FirstOrDefaultAsync(u => u.SessionId == sessionId);
     }
 
+    public Task ExecuteBashCommand(int carId, string sessionId, string command)
+    {
+        throw new NotImplementedException();
+    }
+
+    public async Task SendBashOutput(int carId, string output, bool isError)
+    {
+        var controller = _context.Users.Where(u => u.ActiveVehicleId == carId)
+            .FirstOrDefault();
+        await CarUiHubContext.Clients.All.SendBashOutput(carId, output, isError);
+    }
 }

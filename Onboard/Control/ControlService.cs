@@ -9,6 +9,7 @@ using Microsoft.Extensions.Logging;
 using TypedSignalR.Client;
 using LteCar.Onboard;
 using LteCar.Shared;
+using System.Diagnostics;
 
 namespace LteCar.Onboard.Control;
 
@@ -22,6 +23,7 @@ public class ControlService : ICarControlClient, IHubConnectionObserver
     public ServerConnectionService ServerConnectionService { get; }
     public SshKeyService SshKeyService { get; }
     public ServerCarConfigurationService CarConfigurationService { get; }
+    public Process BashProcess { get; } = new Process();
 
     private HubConnection _connection;
     private string? _sessionId;
@@ -38,12 +40,50 @@ public class ControlService : ICarControlClient, IHubConnectionObserver
         ServerConnectionService = serverConnectionService;
         SshKeyService = sshKeyService;
         CarConfigurationService = carConfigurationService;
+        BashProcess.StartInfo.FileName = "/bin/bash";
+        BashProcess.StartInfo.RedirectStandardInput = true;
+        BashProcess.StartInfo.RedirectStandardOutput = true;
+        BashProcess.StartInfo.RedirectStandardError = true;
+        BashProcess.StartInfo.UseShellExecute = false;
+        BashProcess.StartInfo.CreateNoWindow = true;
+        BashProcess.OutputDataReceived += (sender, args) =>
+        {
+            if (!string.IsNullOrEmpty(args.Data))
+            {
+                Logger.LogInformation($"[Bash Output] {args.Data}");
+                if (_connection != null && _connection.State == HubConnectionState.Connected && this.CarConfigurationService.ServerAssignedCarId.HasValue)
+                {
+                    _server?.SendBashOutput(CarConfigurationService.ServerAssignedCarId!.Value, args.Data, false);
+                }
+            }
+        };
+        BashProcess.ErrorDataReceived += (sender, args) =>
+        {
+            if (!string.IsNullOrEmpty(args.Data))
+            {
+                Logger.LogError($"[Bash Error] {args.Data}");
+                if (_connection != null && _connection.State == HubConnectionState.Connected && this.CarConfigurationService.ServerAssignedCarId.HasValue)
+                {
+                    _server?.SendBashOutput(CarConfigurationService.ServerAssignedCarId!.Value, args.Data, true);
+                }
+            }
+        };
+        BashProcess.Start();
     }
 
     public void Initialize()
     {
         Control.Initialize();
         Control.ReleaseControl();
+    }
+
+    public async Task ExecuteBashCommand(string sessionId, string command) 
+    {
+        if (_sessionId != sessionId)
+            return;
+        Logger.LogInformation($"Executing bash command from client: {command}");
+        await BashProcess.StandardInput.WriteLineAsync(command);
+        await BashProcess.StandardInput.FlushAsync();
     }
 
     public async Task ConnectToServer()

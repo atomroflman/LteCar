@@ -128,7 +128,7 @@ if (!hadPreviousSync)
     await connectionService.SyncChannelMapAsync();
 }
 // Connect control (will trigger sync if server hash mismatch)
-// Iniotialize Car incatance if needed
+// Initialize Car incatance if needed
 await carControlService.ConnectToServer();
 logger.LogInformation($"Car Engine Started...");
 
