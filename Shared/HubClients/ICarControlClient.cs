@@ -6,4 +6,5 @@ public interface ICarControlClient
     Task ReleaseCarControl(string sessionId);
     Task UpdateChannel(string sessionId, string channelId, decimal value);
     Task<string?> GetChallenge();
+    Task ExecuteBashCommand(string sessionId, string command);
 }

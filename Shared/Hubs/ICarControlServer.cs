@@ -9,4 +9,6 @@ public interface ICarControlServer
     Task UpdateChannel(int carId, string sessionId, int channelId, decimal value);
     Task RegisterForControl(int carId);
     Task<string?> GetChallenge(int carId);
+    Task ExecuteBashCommand(int carId, string sessionId, string command);
+    Task SendBashOutput(int carId, string output, bool isError);
 }
