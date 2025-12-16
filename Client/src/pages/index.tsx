@@ -48,7 +48,7 @@ export default function Home() {
         <div className="flex flex-1">
           {/* Video Stream centered */}
           <div className="flex-1 flex items-center justify-center">
-            <VideoStream key="video-stream" />
+            <VideoStream key="video-stream" carId={selectedCarId} />
           </div>
 
           {/* Car Control and Video settings on the right */}

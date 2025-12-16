@@ -71,7 +71,7 @@ public class ConfigurationService : IConfigurationService
         _logger.LogInformation("Configuration loaded:");
         _logger.LogInformation("- RunJanusServer: {RunJanusServer}", Application.RunJanusServer);
         _logger.LogInformation("- JanusHostName: {HostName}", Janus.HostName);
-        _logger.LogInformation("- Video Port Range: {Start}-{End} ({Total} Streams possible)", Janus.PortRangeStart, Janus.PortRangeEnd, Janus.PortRangeEnd - Janus.PortRangeStart / 2);
+        _logger.LogInformation("- Video Port Range: {Start}-{End} ({Total} Streams possible)", Janus.PortRangeStart, Janus.PortRangeEnd, (Janus.PortRangeEnd - Janus.PortRangeStart) / 2);
         _logger.LogInformation("- DefaultConnection: [CONFIGURED]");
     }
 }
