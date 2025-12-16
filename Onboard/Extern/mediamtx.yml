@@ -767,11 +767,11 @@ paths:
   # example:
   # my_camera:
   #   source: rtsp://my_camera
-  cam:
-    source:     
+  # cam:
+  #   source:     
   rpi0:
     source: rpiCamera
-    runOnInit: ffmpeg -i rtsp://localhost:8554/rpi0 -c copy -f rtp rtp://<your-server>:10001?pkt_size=1300
+    runOnInit: ffmpeg -t 2147483647 -i rtsp://localhost:8554/rpi0 -c copy -f rtp rtp://lte-rc.northeurope.cloudapp.azure.com:10001?pkt_size=1300
     runOnInitRestart: yes
 
     rpiCameraCamID: 0
@@ -780,7 +780,7 @@ paths:
     # Height of frames.
     rpiCameraHeight: 768
     # FPS.
-    rpiCameraFPS: 30
+    rpiCameraFPS: 22
 
     rpiCameraTextOverlay: '%Y-%m-%d %H:%M:%S - Cam0'
     rpiCameraBrightness: 0.3
@@ -788,18 +788,18 @@ paths:
     rpiCameraIDRPeriod: 60
 
 
-  rpi1:
-    source: rpiCamera
-    rpiCameraCamID: 1
-    # Width of frames.
-    rpiCameraWidth: 1024
-    # Height of frames.
-    rpiCameraHeight: 768
-    # FPS.
-    rpiCameraFPS: 30
+  # rpi1:
+  #  source: rpiCamera
+  #  rpiCameraCamID: 1
+  #  # Width of frames.
+  #  rpiCameraWidth: 1024
+  #  # Height of frames.
+  #  rpiCameraHeight: 768
+  #  # FPS.
+  #  rpiCameraFPS: 30
 
-    rpiCameraTextOverlay: '%Y-%m-%d %H:%M:%S - Cam0'
+  #  rpiCameraTextOverlay: '%Y-%m-%d %H:%M:%S - Cam0'
 
-    rpiCameraBitrate: 5000000 
-    rpiCameraIDRPeriod: 60
+  #  rpiCameraBitrate: 5000000 
+  #  rpiCameraIDRPeriod: 60
   all_others:

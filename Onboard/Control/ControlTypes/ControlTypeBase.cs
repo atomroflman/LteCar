@@ -2,7 +2,7 @@ using LteCar.Onboard.Hardware;
 
 namespace LteCar.Onboard.Control.ControlTypes;
 
-public abstract class ControlTypeBase
+public abstract class ControlTypeBase : IControlType
 {
     public int? Address { get; set; }
     public string Name { get; set; } = string.Empty;

@@ -25,8 +25,16 @@ public class ChannelMapItem
 [MessagePackObject]
 public class ControlChannelMapItem : ChannelMapItem
 {
-    [Key(10)][JsonPropertyName("controlType")] public string ControlType { get; set; } = string.Empty;
-    [Key(11)][JsonPropertyName("testDisabled")] public bool TestDisabled { get; set; }
+    [Key(10)]
+    [JsonPropertyName("controlType")] 
+    public string ControlType { get; set; } = string.Empty;
+    [Key(11)]
+    [JsonPropertyName("testDisabled")] 
+    public bool TestDisabled { get; set; }
+
+    [JsonPropertyName("maxResendInterval")]
+    [Key(12)]
+    public int? MaxResendInterval { get; set; }
 }
 
 [MessagePackObject]
