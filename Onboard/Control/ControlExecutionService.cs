@@ -15,7 +15,7 @@ public class ControlExecutionService
     public ILogger<ControlExecutionService> Logger { get; }
     public bool RunInTestMode { get; }
 
-    private readonly Dictionary<string, ControlTypeBase> _controls = new();
+    private readonly Dictionary<string, IControlType> _controls = new();
     private readonly ChannelMap _channelMap;
 
     public ControlExecutionService(ChannelMap channelMap, IServiceProvider serviceProvider, ILogger<ControlExecutionService> logger)
@@ -52,6 +52,10 @@ public class ControlExecutionService
             control.Options = channel.Value.Options;
             control.TestDisabled = channel.Value.TestDisabled;
             control.Address = channel.Value.Address;
+            if (channel.Value.MaxResendInterval is not null)
+            {
+                control = new ResendRequiredContolDecorator(control, TimeSpan.FromMilliseconds(channel.Value.MaxResendInterval), TimeSpan.FromMilliseconds(channel.Value.MaxResendInterval) / 3);
+            }
             control.Initialize();
             _controls.Add(channel.Key, control);
             Logger.LogInformation($"Initialized Channel: {channel.Key} - {channel.Value.ControlType}@{pinManagerName}:{channel.Value.Address}");

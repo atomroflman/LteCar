@@ -84,12 +84,11 @@ public class VideoStreamService : IDisposable, ICarVideoClient, IHubConnectionOb
     //     var command = $"{cameraBinary} {cameraParameters} | /usr/bin/ffmpeg {transportFfmpegParameters}";
         
 
-        var newProcessStart = new ProcessStartInfo();
-        
+        var newProcessStart = new ProcessStartInfo();        
 
         var command = $"{Path.GetFullPath("./Extern/mediamtx")} {Path.GetFullPath("./Extern/mediamtx.yml")}";
         Logger.LogInformation($"Starting camera process with command: {command}");
-        newProcessStart.FileName = "bash"; // await GetSetsidPathAsync(); // Use setsid to run the processes as child of init, avoiding zombie processes
+        newProcessStart.FileName = "bash";
         newProcessStart.Arguments = $"-c \"{command}\"";
         newProcessStart.UseShellExecute = false;
         newProcessStart.RedirectStandardOutput = true;
@@ -175,53 +174,6 @@ public class VideoStreamService : IDisposable, ICarVideoClient, IHubConnectionOb
         // };
         // cameraProcessInfo.Process.EnableRaisingEvents = true;
         // cameraProcessInfo.Process.Start();
-    }
-
-    private async Task<string> GetSetsidPathAsync()
-    {
-        var commonPaths = new[] { "/usr/bin/setsid", "/bin/setsid" };
-
-        foreach (var path in commonPaths)
-        {
-            if (File.Exists(path))
-            {
-                Logger.LogDebug("Found setsid at: {Path}", path);
-                return path;
-            }
-        }
-
-        // Fallback: try using 'which' command
-        try
-        {
-            var whichProcess = Process.Start(new ProcessStartInfo
-            {
-                FileName = "/usr/bin/which",
-                Arguments = "setsid",
-                UseShellExecute = false,
-                RedirectStandardOutput = true,
-                CreateNoWindow = true
-            });
-
-            if (whichProcess != null)
-            {
-                await whichProcess.WaitForExitAsync();
-                if (whichProcess.ExitCode == 0)
-                {
-                    var output = await whichProcess.StandardOutput.ReadToEndAsync();
-                    var path = output.Trim();
-                    Logger.LogDebug("Found setsid via which: {Path}", path);
-                    return path;
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            Logger.LogWarning(ex, "Failed to locate setsid using which command");
-        }
-
-        // Final fallback
-        Logger.LogWarning("setsid not found, using 'setsid' and hoping it's in PATH");
-        return "setsid";
     }
 
     private async Task StopCameraProcess()
