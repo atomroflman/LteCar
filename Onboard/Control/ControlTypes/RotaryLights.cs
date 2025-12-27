@@ -8,11 +8,11 @@ namespace LteCar.Onboard.Control.ControlTypes
     {
         const float LOW_PWM = 1.5f; // 1.5ms pulse width
         const float HIGH_PWM = 2.5f; // 2.5ms pulse width
-        const int AVAILABLE_MODES = 10; // Number of available modes
+    
         private IPwmModule? _pwm;
         private byte _currentMode = 0;
         private bool _isHigh = false;
-
+        public int AvailableModes { get;set; } = 10; 
 
         public RotaryLight(ILogger<ServoControlBase> logger)
         {
@@ -36,7 +36,7 @@ namespace LteCar.Onboard.Control.ControlTypes
                 return;
             }
             var res = (int)Math.Round(newValue, 0);
-            var selectedMode = (byte)(res % AVAILABLE_MODES);
+            var selectedMode = (byte)(res % AvailableModes);
             Task.Run(() => SetModeAsync(selectedMode));
         }
 
@@ -51,7 +51,7 @@ namespace LteCar.Onboard.Control.ControlTypes
 
         private Task SetNextModeAsync()
         {
-            _currentMode = (byte)((_currentMode + 1) % AVAILABLE_MODES);
+            _currentMode = (byte)((_currentMode + 1) % AvailableModes);
             _isHigh = !_isHigh;
             var pulseWidth = _isHigh ? HIGH_PWM : LOW_PWM;
             _pwm.SetPulseWidthMilliseconds(pulseWidth);
@@ -61,7 +61,7 @@ namespace LteCar.Onboard.Control.ControlTypes
 
         protected override async Task RunTestInternalAsync()
         {
-            for (int i = 0; i < AVAILABLE_MODES; i++)
+            for (int i = 0; i < AvailableModes; i++)
             {
                 OnControlRecived(i);
                 await Task.Delay(3000);

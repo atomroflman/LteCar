@@ -9,46 +9,62 @@
     }
   },
   "controlChannels": {
-    "steer": {
+    "steering": {
       "pinManager": "Pca9685",
-      "testDisabled": true,
-      "address": 14,
-      "controlType": "Steering"
-    },
-    "throttle": {
-      "pinManager": "Pca9685",
-      "address": 1,
-      "controlType": "Throttle",
+      "address": 15,
+      "controlType": "Steering",
       "testDisabled": true
     },
-    "gearDown": {
-      "controlType": "GearShift",
-      "testDisabled": true,
-      "options": {
-        "shiftDirection": "down"
-      }
+    "physicalGears": {
+      "pinManager": "Pca9685",
+      "address": 14,
+      "controlType": "ServoOnOff"
     },
-    "gearUp": {
-      "controlType": "GearShift",
-      "testDisabled": true,
+    "differentialLockFront": {
+      "pinManager": "Pca9685",
+      "address": 13,
+      "controlType": "ServoOnOff"
+    },    
+    "throttle": {
+      "pinManager": "Pca9685",
+      "address": 12,
+      "controlType": "Steering"
+    },
+    "differentialLockRear": {
+      "pinManager": "Pca9685",
+      "address": 11,
+      "controlType": "ServoOnOff"
+    },
+    "headLight": {
+      "controlType": "PwmLight",
+      "pinManager": "Pca9685",
+      "address": 7,
       "options": {
-        "shiftDirection": "up"
+        "blinkCycleMs": 500
       }
     },
     "headWarningLight": {
       "controlType": "RotaryLight",
       "pinManager": "Pca9685",
-      "address": 15
+      "address": 8
     },
-    "rightTurnLight": {
-      "controlType": "PwmBlinker",
+    "reverseLight": {
+      "controlType": "PwmLight",
       "pinManager": "Pca9685",
-      "address": 11,
+      "address": 0,
       "options": {
         "blinkCycleMs": 500
       }
     },
     "leftTurnLight": {
+      "controlType": "PwmBlinker",
+      "pinManager": "Pca9685",
+      "address": 9,
+      "options": {
+        "blinkCycleMs": 500
+      }
+    },
+    "rightTurnLight": {
       "controlType": "PwmBlinker",
       "pinManager": "Pca9685",
       "address": 10,
@@ -65,7 +81,7 @@
       "telemetryType": "LteCar.Onboard.Telemetry.JbdBmsTelemetryReader",
       "readIntervalTicks": 50,
       "options": {
-        "jbdToolPath": "~/ltecar/bin/jbdtools",
+        "jbdToolPath": "/home/greg-e/jbdtool/jbdtool",
         "channel": "A5:C2:37:55:36:B6"
       }
     }

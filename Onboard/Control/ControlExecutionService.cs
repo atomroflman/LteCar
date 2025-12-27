@@ -3,6 +3,7 @@ using System.Text.Json;
 using LteCar.Onboard.Control.ControlTypes;
 using LteCar.Onboard.Hardware;
 using LteCar.Shared.Channels;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
@@ -12,8 +13,9 @@ public class ControlExecutionService
 {
     public IServiceProvider ServiceProvider { get; }
     public ILogger<ControlExecutionService> Logger { get; }
+    public bool RunInTestMode { get; }
 
-    private readonly Dictionary<string, ControlTypeBase> _controls = new();
+    private readonly Dictionary<string, IControlType> _controls = new();
     private readonly ChannelMap _channelMap;
 
     public ControlExecutionService(ChannelMap channelMap, IServiceProvider serviceProvider, ILogger<ControlExecutionService> logger)
@@ -21,10 +23,16 @@ public class ControlExecutionService
         _channelMap = channelMap;
         ServiceProvider = serviceProvider;
         Logger = logger;
+        RunInTestMode = serviceProvider.GetRequiredService<IConfiguration>().GetValue<bool>("RunInTestMode");
     }
     
     public void Initialize()
     {
+        if (RunInTestMode)
+        {
+            Logger.LogWarning("Running in test mode. Skipping control initialization.");
+            return;
+        }
         foreach (var channel in _channelMap.ControlChannels)
         {
             var controlType = GetControlType(channel.Value.ControlType);
@@ -44,6 +52,10 @@ public class ControlExecutionService
             control.Options = channel.Value.Options;
             control.TestDisabled = channel.Value.TestDisabled;
             control.Address = channel.Value.Address;
+            if (channel.Value.MaxResendInterval is not null)
+            {
+                control = new ResendRequiredContolDecorator(control, TimeSpan.FromMilliseconds(channel.Value.MaxResendInterval), TimeSpan.FromMilliseconds(channel.Value.MaxResendInterval) / 3);
+            }
             control.Initialize();
             _controls.Add(channel.Key, control);
             Logger.LogInformation($"Initialized Channel: {channel.Key} - {channel.Value.ControlType}@{pinManagerName}:{channel.Value.Address}");
@@ -52,6 +64,11 @@ public class ControlExecutionService
 
     public async Task RunControlTestsAsync() 
     {
+        if (RunInTestMode)
+        {
+            Logger.LogWarning("Running in test mode. Skipping control tests.");
+            return;
+        }
         foreach (var c in _controls) {
             if (c.Value.TestDisabled)
             {
@@ -65,6 +82,11 @@ public class ControlExecutionService
     
     public void SetControl(string channel, decimal value)
     {
+        if (RunInTestMode)
+        {
+            Logger.LogInformation($"Set control {channel} to {value} in test mode.");
+            return;
+        }
         if (!_controls.ContainsKey(channel))
         {
             Logger.LogError($"Channel not configured: {channel}");
@@ -77,6 +99,11 @@ public class ControlExecutionService
 
     public void ReleaseControl()
     {
+        if (RunInTestMode)
+        {
+            Logger.LogInformation($"Release Control in test mode.");
+            return;
+        }
         foreach (var control in _controls)
         {
             control.Value.OnControlReleased();
@@ -88,7 +115,12 @@ public class ControlExecutionService
         var t = typeof(ControlTypeBase).Assembly.GetTypes()
             .FirstOrDefault(type => (type.GetCustomAttributes(typeof(ControlTypeAttribute), false).FirstOrDefault() as ControlTypeAttribute)?.TypeName == valueControlType);
         if (t == null)
-            throw new Exception($"ControlType {valueControlType} not found");
+        {
+            Logger.LogError($"ControlType {valueControlType} not found!");
+            if (!RunInTestMode)
+                throw new Exception($"ControlType {valueControlType} not found!");
+            return null;
+        }
         return t;
     }
 }

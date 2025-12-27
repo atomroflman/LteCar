@@ -1,0 +1,109 @@
+{
+  "pinManagers": {
+    "Pca9685": {
+      "type": "Pca9685PwmExtension",
+      "options": {
+        "boardAddress": 0,
+        "i2cBus": 1
+      }
+    }
+  },
+  "controlChannels": {
+    "throttle": {
+      "pinManager": "Pca9685",
+      "address": 15,
+      "controlType": "Throttle",
+      "testDisabled": true
+    },
+    "cameraTilt": {
+      "pinManager": "Pca9685",
+      "address": 14,
+      "controlType": "Steering"
+    },
+    "steer": {      
+      "pinManager": "Pca9685",
+      "address": 13,
+      "controlType": "Steering"
+    },    
+    "physicalGears": {
+      "pinManager": "Pca9685",
+      "address": 12,
+      "controlType": "ServoOnOff"
+    },
+    "differentialLockFront": {
+      "pinManager": "Pca9685",
+      "address": 11,
+      "controlType": "ServoOnOff"
+    },
+    "differentialLockRear": {
+      "pinManager": "Pca9685",
+      "address": 10,
+      "controlType": "ServoOnOff"
+    },
+    "brakeLight": {
+      "controlType": "PwmBlinker",
+      "pinManager": "Pca9685",
+      "address": 9,
+      "options": {
+        "blinkCycleMs": 500
+      }
+    },
+    "headWarningLight": {
+      "controlType": "RotaryLight",
+      "pinManager": "Pca9685",
+      "address": 7
+    },
+    "reverseLight": {
+      "controlType": "PwmBlinker",
+      "pinManager": "Pca9685",
+      "address": 2,
+      "options": {
+        "blinkCycleMs": 500
+      }
+    },
+    "leftTurnLight": {
+      "controlType": "PwmBlinker",
+      "pinManager": "Pca9685",
+      "address": 0,
+      "options": {
+        "blinkCycleMs": 500
+      }
+    },
+    "rightTurnLight": {
+      "controlType": "PwmBlinker",
+      "pinManager": "Pca9685",
+      "address": 1,
+      "options": {
+        "blinkCycleMs": 500
+      }
+    },
+
+    "gearDown": {
+      "controlType": "GearShift",
+      "testDisabled": true,
+      "options": {
+        "shiftDirection": "down"
+      }
+    },
+    "gearUp": {
+      "controlType": "GearShift",
+      "testDisabled": true,
+      "options": {
+        "shiftDirection": "up"
+      }
+    }
+  },
+  "telemetryChannels": {
+    "lifetime": {
+      "telemetryType": "LteCar.Onboard.Telemetry.ApplicationLifetimeReader"
+    },
+    "battery": {
+      "telemetryType": "LteCar.Onboard.Telemetry.JbdBmsTelemetryReader",
+      "readIntervalTicks": 50,
+      "options": {
+        "jbdToolPath": "/home/greg-e/jbdtool/jbdtool",
+        "channel": "A5:C2:37:55:36:B6"
+      }
+    }
+  }
+}

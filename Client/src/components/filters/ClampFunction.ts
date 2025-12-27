@@ -7,7 +7,7 @@ export class ClampFunction implements FilterFunctionDef<readonly ["input"]> {
     { name: 'min', label: 'Minimum', type: 'number', default: -1 },
     { name: 'max', label: 'Maximum', type: 'number', default: 1 },
   ];
-  inputLabels = ["input"] as const;
+  inputLabels = ["input"];
   outputLabels = ['output'];
   apply(inputs: InputMap<readonly ["input"]>, params: Record<string, any>) {
     const min = params?.min ?? -1;

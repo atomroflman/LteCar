@@ -2,18 +2,22 @@ import React, { useEffect, useState, useCallback } from "react";
 import { useRouter } from "next/router";
 import GamepadViewer from "../../../components/gamepad-viewer";
 import CarFunctionsView from "../../../components/car-functions-view";
+import SessionTransfer from "../../../components/session-transfer";
 import ReactFlow, { MiniMap, Controls, Background, useReactFlow, NodeDragHandler, Node, Edge, ReactFlowProvider, Connection, OnEdgesDelete } from "reactflow";
 import "reactflow/dist/style.css";
 import { ControlFlowEdge, ControlFlowNode, useControlFlowStore } from "@/components/control-flow-store";
 import FunctionNodesView from "@/components/function-nodes-view";
-import { useGamepadStore } from "@/components/controller-store";
 import CustomFlowNode from "@/components/custom-flow-node";
+import ConfigGuard from "@/components/config-guard";
+import UpdateControl from "@/components/update-control";
 
 const nodeTypes = { custom: CustomFlowNode };
 
 export default function CarControlFlowPage() {
   const router = useRouter();
   const flowControl = useControlFlowStore();
+  const carId = router.query.carId as string;
+  const carIdNum = carId ? parseInt(carId) : undefined;
 
   function controlNodeToReact(input: ControlFlowNode): Node<any, string | undefined> {
     return {
@@ -40,8 +44,19 @@ export default function CarControlFlowPage() {
   }
 
   useEffect(() => {
-    flowControl.load(router.query.carId as string);
-  }, [router.query.carId]);
+    if (carIdNum) {
+      flowControl.load(carIdNum);
+      flowControl.startUserChannelConnection();
+      flowControl.subscribeToInputNodes();
+      // Enable config mode when entering configuration page
+      flowControl.setConfigMode(true);
+    }
+    
+    // Cleanup: disable config mode when leaving
+    return () => {
+      flowControl.setConfigMode(false);
+    };
+  }, [carIdNum]);
 
   const onNodeDrag: NodeDragHandler = async (event, node) => {
     const oldNode = flowControl.nodes.find(n => n.nodeId === Number(node.id));
@@ -74,32 +89,40 @@ export default function CarControlFlowPage() {
 
   if (flowControl.isLoading)
     return <div className="p-8 text-zinc-300">Lade Control Flow...</div>;
+  
+  if (!carIdNum) {
+    return <div className="p-8 text-zinc-300">Loading...</div>;
+  }
+
   return (
-    <div className="flex flex-col md:flex-row gap-4 p-4 bg-zinc-950 min-h-screen">
-      <div className="w-full md:w-1/4 space-y-4">
-        <GamepadViewer hideFlowButtons={false} />
-        <FunctionNodesView />
-        <CarFunctionsView carId={router.query.carId as string} hideFlowButtons={false} />
+    <ConfigGuard carId={carIdNum}>
+      <div className="flex flex-col md:flex-row gap-4 p-4 bg-zinc-950 min-h-screen">
+        <div className="w-full md:w-1/4 space-y-4">
+          <UpdateControl />
+          <GamepadViewer hideFlowButtons={false} />
+          <FunctionNodesView />
+          {carIdNum && <CarFunctionsView carId={carIdNum} hideFlowButtons={false} />}
+        </div>
+        <div className="flex-1 bg-zinc-900 rounded-lg p-2 min-h-[600px]">
+          <ReactFlowProvider>
+            <ReactFlow
+              nodes={flowControl.nodes.map(controlNodeToReact)}
+              edges={flowControl.edges.map(controlEdgeToReact)}
+              fitView
+              onNodeDrag={onNodeDrag}
+              onNodeDragStop={onNodeDragStop}
+              onConnect={onConnect}
+              onEdgeClick={onEdgeClick}
+              nodeTypes={nodeTypes}
+              draggable
+            >
+              <MiniMap />
+              <Controls />
+              <Background />
+            </ReactFlow>
+          </ReactFlowProvider>
+        </div>
       </div>
-      <div className="flex-1 bg-zinc-900 rounded-lg p-2 min-h-[600px]">
-        <ReactFlowProvider>
-          <ReactFlow
-            nodes={flowControl.nodes.map(controlNodeToReact)}
-            edges={flowControl.edges.map(controlEdgeToReact)}
-            fitView
-            onNodeDrag={onNodeDrag}
-            onNodeDragStop={onNodeDragStop}
-            onConnect={onConnect}
-            onEdgeClick={onEdgeClick}
-            nodeTypes={nodeTypes}
-            draggable
-          >
-            <MiniMap />
-            <Controls />
-            <Background />
-          </ReactFlow>
-        </ReactFlowProvider>
-      </div>
-    </div>
+    </ConfigGuard>
   );
 }

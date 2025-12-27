@@ -26,6 +26,14 @@ export default function GamepadViewer({ onUpdate, onRegisterInputChannelValue, h
     gamepadStore.pollGamepads();
     gamepadStore.setPollFps(fps);
     gamepadStore.setOnChannelChange((gp, type, i, newVal, dbId) => {
+      // Unsubscribe from remote updates when local controller is detected
+      // We need to find the gamepad device ID from the channel
+      const gamepad = Object.values(gamepadStore.knownGamepads).find(g => 
+        g.axes.some(a => a.id === dbId) || g.buttons.some(b => b.id === dbId)
+      );
+      if (gamepad) {
+        controlFlow.unsubscribeFromGamepad(gamepad.id);
+      }
       controlFlow.handleInputUpdate(dbId, newVal);
     });
     return () => {
@@ -67,11 +75,27 @@ export default function GamepadViewer({ onUpdate, onRegisterInputChannelValue, h
           <div className="mt-3">
             <div className="font-bold mb-1 text-zinc-200 text-xs">Gamepads:</div>
             {Object.values(gamepadStore.knownGamepads).length === 0 && <div className="text-zinc-400 text-xs">No gamepad connected.</div>}
-            {Object.values(gamepadStore.knownGamepads).map(gp => (
+            {Object.values(gamepadStore.knownGamepads).map(gp => {
+              // Determine gamepad status based on device ID
+              const isConnected = gp.connected;
+              const isRemote = controlFlow.remoteGamepads?.has(gp.id);
+              
+              // Status: green = local connected, yellow = remote, red = not connected
+              let statusColor = "bg-red-700 border-zinc-400";
+              let statusTitle = "Not connected";
+              if (isConnected) {
+                statusColor = "bg-green-700 border-zinc-400";
+                statusTitle = "Local controller";
+              } else if (isRemote) {
+                statusColor = "bg-yellow-500 border-zinc-400";
+                statusTitle = "Remote controller (via hub)";
+              }
+              
+              return (
               <div key={gp.id} className="mb-2 border border-zinc-700 p-1 rounded bg-zinc-800 text-xs">
                 <div className="font-mono text-[10px] mb-1 text-zinc-400"><div
-                  className={`inline-block mx-1 w-2 h-2 rounded-full border transition-colors duration-150 ${gp.connected ? "bg-green-700 border-zinc-400" : "bg-red-700 border-zinc-400"}`}
-                  title={gp.connected ? "Connected" : "Not connected"}
+                  className={`inline-block mx-1 w-2 h-2 rounded-full border transition-colors duration-150 ${statusColor}`}
+                  title={statusTitle}
                 />{gp.id}: {gp.name.length > 40 ? gp.name.slice(0, 40) + "…" : gp.name}</div>
                 {/* Calibration Section */}
                 <div className="mt-2 mb-1 font-semibold text-zinc-200 text-xs flex items-center justify-between cursor-pointer" onClick={() => setCalibCollapsed(c => ({ ...c, [gp.id]: !c[gp.id] }))}>
@@ -141,7 +165,8 @@ export default function GamepadViewer({ onUpdate, onRegisterInputChannelValue, h
                   </ul>
                 )}
               </div>
-            ))}
+            );
+            })}
           </div>
         </>
       )}

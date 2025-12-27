@@ -3,6 +3,7 @@ using System;
 using LteCar.Server.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -15,166 +16,294 @@ namespace LteCar.Server.Migrations
         protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
-            modelBuilder.HasAnnotation("ProductVersion", "9.0.4");
+            modelBuilder
+                .HasAnnotation("ProductVersion", "9.0.10")
+                .HasAnnotation("Relational:MaxIdentifierLength", 128);
+
+            SqlServerModelBuilderExtensions.UseIdentityColumns(modelBuilder);
+
+            modelBuilder.HasSequence("UserSessionSeq");
 
             modelBuilder.Entity("LteCar.Server.Data.Car", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
-                    b.Property<string>("CarId")
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("CarIdentityKey")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("ChannelMapHash")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<DateTime>("LastSeen")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("datetime2");
 
                     b.Property<string>("Name")
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT");
-
-                    b.Property<int?>("VideoStreamPort")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("nvarchar(64)");
 
                     b.HasKey("Id");
 
-                    b.ToTable("Cars", (string)null);
+                    b.HasIndex("CarIdentityKey")
+                        .IsUnique();
+
+                    b.ToTable("Cars");
                 });
 
             modelBuilder.Entity("LteCar.Server.Data.CarChannel", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<int>("CarId")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<string>("ChannelName")
                         .IsRequired()
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("DisplayName")
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<bool>("IsEnabled")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("bit");
 
                     b.Property<bool>("RequiresAxis")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("bit");
 
                     b.HasKey("Id");
 
                     b.HasIndex("CarId");
 
-                    b.ToTable("CarChannels", (string)null);
+                    b.ToTable("CarChannels");
                 });
 
             modelBuilder.Entity("LteCar.Server.Data.CarTelemetry", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<int>("CarId")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<string>("ChannelName")
                         .IsRequired()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("ReadIntervalTicks")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<string>("TelemetryType")
                         .IsRequired()
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(max)");
 
                     b.HasKey("Id");
 
                     b.HasIndex("CarId");
 
-                    b.ToTable("CarTelemetry", (string)null);
+                    b.ToTable("CarTelemetry");
+                });
+
+            modelBuilder.Entity("LteCar.Server.Data.CarVideoStream", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
+
+                    b.Property<int>("BitrateKbps")
+                        .HasColumnType("int");
+
+                    b.Property<float>("Brightness")
+                        .HasColumnType("real");
+
+                    b.Property<int>("CarId")
+                        .HasColumnType("int");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("bit");
+
+                    b.Property<DateTime?>("EndTime")
+                        .HasColumnType("datetime2");
+
+                    b.Property<int>("Framerate")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Height")
+                        .HasColumnType("int");
+
+                    b.Property<bool>("IsActive")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("bit")
+                        .HasDefaultValue(true);
+
+                    b.Property<string>("JanusId")
+                        .HasColumnType("nvarchar(max)");
+
+                    b.Property<int?>("JanusPort")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("LastStatusUpdate")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Location")
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<int>("Port")
+                        .HasColumnType("int");
+
+                    b.Property<int>("Priority")
+                        .HasColumnType("int");
+
+                    b.Property<string>("ProcessArguments")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<int>("Protocol")
+                        .HasMaxLength(10)
+                        .HasColumnType("int");
+
+                    b.Property<DateTime>("StartTime")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("StreamId")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("StreamPurpose")
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<int>("Width")
+                        .HasColumnType("int");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("Port");
+
+                    b.HasIndex("CarId", "StreamId")
+                        .IsUnique();
+
+                    b.ToTable("CarVideoStreams", (string)null);
                 });
 
             modelBuilder.Entity("LteCar.Server.Data.SetupFilterType", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<string>("Description")
                         .HasMaxLength(512)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(512)");
 
                     b.Property<string>("Name")
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<string>("TypeName")
                         .IsRequired()
                         .HasMaxLength(256)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(256)");
 
                     b.HasKey("Id");
 
-                    b.ToTable("SetupFilterTypes", (string)null);
+                    b.ToTable("SetupFilterTypes");
                 });
 
             modelBuilder.Entity("LteCar.Server.Data.User", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<int?>("ActiveVehicleId")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<DateTime>("LastSeen")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("datetime2");
 
                     b.Property<string>("Name")
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(64)");
 
-                    b.Property<string>("SessionToken")
-                        .HasMaxLength(32)
-                        .HasColumnType("TEXT");
+                    b.Property<long>("SessionId")
+                        .HasColumnType("bigint");
+
+                    b.Property<long?>("TransferCode")
+                        .HasMaxLength(6)
+                        .HasColumnType("bigint");
+
+                    b.Property<DateTime?>("TransferCodeExpiresAt")
+                        .HasColumnType("datetime2");
 
                     b.HasKey("Id");
 
                     b.HasIndex("ActiveVehicleId");
 
-                    b.HasIndex("SessionToken")
+                    b.HasIndex("SessionId")
                         .IsUnique();
 
-                    b.ToTable("Users", (string)null);
+                    b.HasIndex("TransferCode")
+                        .IsUnique()
+                        .HasFilter("[TransferCode] IS NOT NULL");
+
+                    b.ToTable("Users");
                 });
 
             modelBuilder.Entity("LteCar.Server.Data.UserCarSetup", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<int>("CarId")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<string>("CarSecret")
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<int>("UserId")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -182,86 +311,92 @@ namespace LteCar.Server.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("UserSetups", (string)null);
+                    b.ToTable("UserSetups");
                 });
 
             modelBuilder.Entity("LteCar.Server.Data.UserChannel", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<int>("Accuracy")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<float?>("CalibrationMax")
-                        .HasColumnType("REAL");
+                        .HasColumnType("real");
 
                     b.Property<float?>("CalibrationMin")
-                        .HasColumnType("REAL");
+                        .HasColumnType("real");
 
                     b.Property<int>("ChannelId")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<bool>("IsAxis")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("bit");
 
                     b.Property<string>("Name")
                         .HasMaxLength(64)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(64)");
 
                     b.Property<int>("UserChannelDeviceId")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
                     b.HasIndex("UserChannelDeviceId", "IsAxis", "ChannelId")
                         .IsUnique();
 
-                    b.ToTable("UserChannel", (string)null);
+                    b.ToTable("UserChannel");
                 });
 
             modelBuilder.Entity("LteCar.Server.Data.UserChannelDevice", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<string>("DeviceName")
                         .IsRequired()
                         .HasMaxLength(512)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(512)");
 
                     b.Property<int>("UserId")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
                     b.HasIndex("UserId", "DeviceName")
                         .IsUnique();
 
-                    b.ToTable("UserChannelDevice", (string)null);
+                    b.ToTable("UserChannelDevice");
                 });
 
             modelBuilder.Entity("LteCar.Server.Data.UserSetupFlowNodeBase", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<string>("NodeType")
                         .IsRequired()
                         .HasMaxLength(34)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(34)");
 
                     b.Property<float>("PositionX")
-                        .HasColumnType("REAL");
+                        .HasColumnType("real");
 
                     b.Property<float>("PositionY")
-                        .HasColumnType("REAL");
+                        .HasColumnType("real");
 
                     b.Property<int>("UserSetupId")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -276,45 +411,49 @@ namespace LteCar.Server.Migrations
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<int>("NodeId")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<string>("ParameterName")
                         .IsRequired()
                         .HasMaxLength(100)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(100)");
 
                     b.Property<string>("ParameterValue")
                         .HasMaxLength(500)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(500)");
 
                     b.HasKey("Id");
 
                     b.HasIndex("NodeId", "ParameterName")
                         .IsUnique();
 
-                    b.ToTable("UserSetupFunctionNodeParameter", (string)null);
+                    b.ToTable("UserSetupFunctionNodeParameter");
                 });
 
             modelBuilder.Entity("LteCar.Server.Data.UserSetupLink", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<string>("SourcePort")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<string>("TargetPort")
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(max)");
 
                     b.Property<int>("UserSetupFromNodeId")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<int>("UserSetupToNodeId")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -322,26 +461,28 @@ namespace LteCar.Server.Migrations
 
                     b.HasIndex("UserSetupToNodeId");
 
-                    b.ToTable("UserSetupLink", (string)null);
+                    b.ToTable("UserSetupLink");
                 });
 
             modelBuilder.Entity("LteCar.Server.Data.UserSetupTelemetry", b =>
                 {
                     b.Property<int>("Id")
                         .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
+
+                    SqlServerPropertyBuilderExtensions.UseIdentityColumn(b.Property<int>("Id"));
 
                     b.Property<int>("CarTelemetryId")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<int>("Order")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<int?>("OverrideTicks")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.Property<int>("UserSetupId")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.HasKey("Id");
 
@@ -349,7 +490,7 @@ namespace LteCar.Server.Migrations
 
                     b.HasIndex("UserSetupId");
 
-                    b.ToTable("UserSetupTelemetries", (string)null);
+                    b.ToTable("UserSetupTelemetries");
                 });
 
             modelBuilder.Entity("LteCar.Server.Data.UserSetupCarChannelNode", b =>
@@ -357,7 +498,7 @@ namespace LteCar.Server.Migrations
                     b.HasBaseType("LteCar.Server.Data.UserSetupFlowNodeBase");
 
                     b.Property<int>("CarChannelId")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.HasIndex("CarChannelId");
 
@@ -373,7 +514,7 @@ namespace LteCar.Server.Migrations
                     b.Property<string>("SetupFunctionName")
                         .IsRequired()
                         .HasMaxLength(100)
-                        .HasColumnType("TEXT");
+                        .HasColumnType("nvarchar(100)");
 
                     b.HasIndex("UserSetupId");
 
@@ -385,7 +526,7 @@ namespace LteCar.Server.Migrations
                     b.HasBaseType("LteCar.Server.Data.UserSetupFlowNodeBase");
 
                     b.Property<int>("TelemetryId")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.HasIndex("TelemetryId");
 
@@ -399,7 +540,7 @@ namespace LteCar.Server.Migrations
                     b.HasBaseType("LteCar.Server.Data.UserSetupFlowNodeBase");
 
                     b.Property<int>("UserChannelId")
-                        .HasColumnType("INTEGER");
+                        .HasColumnType("int");
 
                     b.HasIndex("UserChannelId");
 
@@ -408,51 +549,12 @@ namespace LteCar.Server.Migrations
                     b.HasDiscriminator().HasValue("U");
                 });
 
-            modelBuilder.Entity("LteCar.Server.Data.Car", b =>
-                {
-                    b.OwnsOne("LteCar.Onboard.VideoSettings", "VideoSettings", b1 =>
-                        {
-                            b1.Property<int>("CarId")
-                                .HasColumnType("INTEGER");
-
-                            b1.Property<int?>("Bitrate")
-                                .HasColumnType("INTEGER")
-                                .HasColumnName("VideoBitrate");
-
-                            b1.Property<float?>("Brightness")
-                                .HasColumnType("REAL")
-                                .HasColumnName("VideoBrightness");
-
-                            b1.Property<int?>("Framerate")
-                                .HasColumnType("INTEGER")
-                                .HasColumnName("VideoFramerate");
-
-                            b1.Property<int?>("Height")
-                                .HasColumnType("INTEGER")
-                                .HasColumnName("VideoHeight");
-
-                            b1.Property<int?>("Width")
-                                .HasColumnType("INTEGER")
-                                .HasColumnName("VideoWidth");
-
-                            b1.HasKey("CarId");
-
-                            b1.ToTable("Cars", (string)null);
-
-                            b1.WithOwner()
-                                .HasForeignKey("CarId");
-                        });
-
-                    b.Navigation("VideoSettings")
-                        .IsRequired();
-                });
-
             modelBuilder.Entity("LteCar.Server.Data.CarChannel", b =>
                 {
                     b.HasOne("LteCar.Server.Data.Car", "Car")
                         .WithMany("Functions")
                         .HasForeignKey("CarId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.ClientCascade)
                         .IsRequired();
 
                     b.Navigation("Car");
@@ -462,6 +564,17 @@ namespace LteCar.Server.Migrations
                 {
                     b.HasOne("LteCar.Server.Data.Car", "Car")
                         .WithMany()
+                        .HasForeignKey("CarId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("Car");
+                });
+
+            modelBuilder.Entity("LteCar.Server.Data.CarVideoStream", b =>
+                {
+                    b.HasOne("LteCar.Server.Data.Car", "Car")
+                        .WithMany("VideoStreams")
                         .HasForeignKey("CarId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -483,13 +596,13 @@ namespace LteCar.Server.Migrations
                     b.HasOne("LteCar.Server.Data.Car", "Car")
                         .WithMany("UserCarSetups")
                         .HasForeignKey("CarId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.ClientCascade)
                         .IsRequired();
 
                     b.HasOne("LteCar.Server.Data.User", "User")
                         .WithMany("CarSetups")
                         .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.ClientCascade)
                         .IsRequired();
 
                     b.Navigation("Car");
@@ -502,7 +615,7 @@ namespace LteCar.Server.Migrations
                     b.HasOne("LteCar.Server.Data.UserChannelDevice", "UserChannelDevice")
                         .WithMany("Channels")
                         .HasForeignKey("UserChannelDeviceId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.ClientCascade)
                         .IsRequired();
 
                     b.Navigation("UserChannelDevice");
@@ -513,7 +626,7 @@ namespace LteCar.Server.Migrations
                     b.HasOne("LteCar.Server.Data.User", "User")
                         .WithMany("UserChannelDevices")
                         .HasForeignKey("UserId")
-                        .OnDelete(DeleteBehavior.Cascade)
+                        .OnDelete(DeleteBehavior.ClientCascade)
                         .IsRequired();
 
                     b.Navigation("User");
@@ -535,13 +648,13 @@ namespace LteCar.Server.Migrations
                     b.HasOne("LteCar.Server.Data.UserSetupFlowNodeBase", "UserSetupFromNode")
                         .WithMany()
                         .HasForeignKey("UserSetupFromNodeId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.ClientCascade)
                         .IsRequired();
 
                     b.HasOne("LteCar.Server.Data.UserSetupFlowNodeBase", "UserSetupToNode")
                         .WithMany()
                         .HasForeignKey("UserSetupToNodeId")
-                        .OnDelete(DeleteBehavior.Restrict)
+                        .OnDelete(DeleteBehavior.ClientCascade)
                         .IsRequired();
 
                     b.Navigation("UserSetupFromNode");
@@ -641,6 +754,8 @@ namespace LteCar.Server.Migrations
                     b.Navigation("Functions");
 
                     b.Navigation("UserCarSetups");
+
+                    b.Navigation("VideoStreams");
                 });
 
             modelBuilder.Entity("LteCar.Server.Data.CarChannel", b =>

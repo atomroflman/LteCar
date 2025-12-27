@@ -1,23 +1,64 @@
 ﻿using LteCar.Server;
+using LteCar.Server.Configuration;
 using LteCar.Server.Data;
+using LteCar.Server.Extensions;
 using LteCar.Server.Hubs;
-using LteCar.Shared;
-using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
-using Microsoft.Extensions.FileProviders;
-using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.DataProtection;
 
 var builder = WebApplication.CreateBuilder(args);
-builder.Configuration.AddJsonFile("appSettings.json");
+builder.Configuration
+    .AddJsonFile("appSettings.json")
+    .AddEnvironmentVariables()
+    .AddCommandLine(args)
+    .AddUserSecrets<Program>();
 
 builder.Logging.AddConsole()
     .AddConfiguration(builder.Configuration.GetSection("Logging"));
 
-builder.Services.AddSingleton<VideoStreamRecieverService>();
-builder.Services.AddSingleton<CarConnectionStore>();
-builder.Services.AddDbContext<LteCarContext>(options =>
+// Configure application configuration
+builder.Services.AddApplicationConfiguration(builder.Configuration);
+var idSalt = builder.Configuration.GetValue<string>("IdSalt") ?? Guid.NewGuid().ToString();
+var idAlphabet = builder.Configuration.GetValue<string>("IdAlphabet") ?? "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_";
+var transferAlphabet = builder.Configuration.GetValue<string>("SessionTransferAlphabet") ?? "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+while (idSalt.Length < idAlphabet.Length || idSalt.Length < transferAlphabet.Length)
 {
-    options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection"));
+    idSalt += idSalt;
+}
+var resolvedAlphabet = new string(idAlphabet
+    .Distinct()
+    .Zip(idSalt)
+    .OrderBy(x => x.Second)
+    .Select(x => x.First)
+    .ToArray());
+var transferResolvedAlphabet = new string(transferAlphabet
+    .Distinct()
+    .Zip(idSalt)
+    .OrderBy(x => x.Second)
+    .Select(x => x.First)
+    .ToArray());
+var sqids = new Sqids.SqidsEncoder<long>(new Sqids.SqidsOptions
+{
+    Alphabet = resolvedAlphabet,
+    MinLength = 16
+});
+var transferSqids = new Sqids.SqidsEncoder<long>(new Sqids.SqidsOptions
+{
+    Alphabet = transferResolvedAlphabet,
+    MinLength = 8
+});
+builder.Services.AddSingleton(sqids);
+builder.Services.AddKeyedSingleton("transfer", transferSqids);
+
+builder.Services.AddSingleton<VideoStreamReceiverService>();
+builder.Services.AddSingleton<CarConnectionStore>();
+builder.Services.AddDbContext<LteCarContext>((serviceProvider, options) =>
+{
+    var configService = serviceProvider.GetRequiredService<IConfigurationService>();
+    options.UseSqlServer(configService.DefaultConnectionString, opt =>
+    {
+        opt.EnableRetryOnFailure(5, TimeSpan.FromSeconds(10), null);
+    });
 });
 
 builder.Services.AddControllers().AddJsonOptions(options =>
@@ -28,6 +69,9 @@ builder.Services.AddSignalR()
     .AddMessagePackProtocol()
     .AddJsonProtocol();
 
+builder.Services.AddDataProtection()
+    .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(Directory.GetCurrentDirectory(), "DataProtectionKeys")))
+    .SetApplicationName("LteCar.Server");
 builder.Services.AddAuthentication("cookie")
     .AddCookie("cookie", options =>
     {
@@ -48,50 +92,45 @@ var configuration = app.Configuration;
 using (var scope = app.Services.CreateScope())
 {
     var dbContext = scope.ServiceProvider.GetRequiredService<LteCarContext>();
-    dbContext.Database.EnsureCreated();
     dbContext.Database.Migrate();
 }
 
 var logger = app.Services.GetRequiredService<ILogger<Program>>();
 
 logger.LogInformation("Database migrations applied successfully.");
-var vss = app.Services.GetRequiredService<VideoStreamRecieverService>();
+var vss = app.Services.GetRequiredService<VideoStreamReceiverService>();
 
-if (configuration.GetValue<bool?>("RunJanusServer") ?? true)
+var configService = app.Services.GetRequiredService<IConfigurationService>();
+if (configService.Application.RunJanusServer)
 {
-    logger.LogInformation("Starting Janus service...");
-    vss.RunVideoStreamServer();
+    app.Services.GetRequiredService<VideoStreamReceiverService>().RunVideoStreamServer();
 }
 else
 {
     logger.LogWarning("Running Janus server is disabled.");
 }
 
+app.Use(async(ctx, next) => {
+    try
+    {
+        logger.LogDebug($"{ctx.Request.Method} {ctx.Request.Path}");
+        logger.LogTrace($"Request: {string.Join(", ", ctx.Request.Headers.Select(h => $"{h.Key}: {h.Value}"))}");
+        await next();
+        logger.LogDebug($"{ctx.Response.StatusCode}");
+        logger.LogTrace($"Response: {string.Join(", ", ctx.Response.Headers.Select(h => $"{h.Key}: {h.Value}"))}");
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "GLOBAL EXCEPTION HANDLER: Unhandled exception in request pipeline for {Method} {Path}", ctx.Request.Method, ctx.Request.Path);
+        throw;
+    }
+});
+
 if (app.Environment.IsDevelopment())
 {
     app.UseDeveloperExceptionPage();
 }
-app.Use(async(ctx, next) => {
-    logger.LogDebug($"{ctx.Request.Method} {ctx.Request.Path}");
-    await next();
-    logger.LogDebug($"{ctx.Response.StatusCode}");
-});
 
-var staticFilePath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot");
-if (!Directory.Exists(staticFilePath))
-{
-    Directory.CreateDirectory(staticFilePath);
-}
-if (!Directory.GetFiles(staticFilePath).Any()) 
-{    
-    logger.LogWarning($"No static files in path: '{staticFilePath}'. Server will run without client.");
-}
-app.UseStaticFiles(new StaticFileOptions()
-{
-    ServeUnknownFileTypes = true,
-    DefaultContentType = "application/octet-stream",
-    FileProvider = new PhysicalFileProvider(staticFilePath)
-});
 app.UseRouting();
 
 app.UseAuthentication();
@@ -102,5 +141,10 @@ app.MapHub<CarConnectionHub>(HubPaths.CarConnectionHub);
 app.MapHub<CarControlHub>(HubPaths.CarControlHub);
 app.MapHub<TelemetryHub>(HubPaths.TelemetryHub);
 app.MapHub<CarUiHub>(HubPaths.CarUiHub);
+app.MapHub<CarVideoHub>(HubPaths.CarVideoHub);
+app.MapHub<UserChannelHub>(HubPaths.UserChannelHub);
+
+// Validate configuration during startup
+app.Services.ValidateConfiguration();
 
 app.Run();

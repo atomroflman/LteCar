@@ -5,7 +5,6 @@ export default function Document() {
     <Html lang="en">
     <Head>
       <script src="adapter.js" />
-      <script src="janus.js" />
     </Head>
       <body className="antialiased">      
         <Main />

@@ -7,6 +7,9 @@ using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using TypedSignalR.Client;
+using LteCar.Onboard;
+using LteCar.Shared;
+using System.Diagnostics;
 
 namespace LteCar.Onboard.Control;
 
@@ -18,13 +21,16 @@ public class ControlService : ICarControlClient, IHubConnectionObserver
     public ControlExecutionService Control { get; }
     public IConfiguration Configuration { get; }
     public ServerConnectionService ServerConnectionService { get; }
+    public SshKeyService SshKeyService { get; }
+    public ServerCarConfigurationService CarConfigurationService { get; }
+    public Process BashProcess { get; } = new Process();
 
     private HubConnection _connection;
     private string? _sessionId;
     private DateTime _lastControlUpdate = DateTime.Now;
     private ICarControlServer _server;
 
-    public ControlService(ILogger<ControlService> logger, TelemetryService telemetryService, ControlExecutionService control, IServiceProvider serviceProvider, IConfiguration configuration, ServerConnectionService serverConnectionService)
+    public ControlService(ILogger<ControlService> logger, TelemetryService telemetryService, ControlExecutionService control, IServiceProvider serviceProvider, IConfiguration configuration, ServerConnectionService serverConnectionService, SshKeyService sshKeyService, ServerCarConfigurationService carConfigurationService)
     {
         Logger = logger;
         TelemetryService = telemetryService;
@@ -32,6 +38,37 @@ public class ControlService : ICarControlClient, IHubConnectionObserver
         ServiceProvider = serviceProvider;
         Configuration = configuration;
         ServerConnectionService = serverConnectionService;
+        SshKeyService = sshKeyService;
+        CarConfigurationService = carConfigurationService;
+        BashProcess.StartInfo.FileName = "/bin/bash";
+        BashProcess.StartInfo.RedirectStandardInput = true;
+        BashProcess.StartInfo.RedirectStandardOutput = true;
+        BashProcess.StartInfo.RedirectStandardError = true;
+        BashProcess.StartInfo.UseShellExecute = false;
+        BashProcess.StartInfo.CreateNoWindow = true;
+        BashProcess.OutputDataReceived += (sender, args) =>
+        {
+            if (!string.IsNullOrEmpty(args.Data))
+            {
+                Logger.LogInformation($"[Bash Output] {args.Data}");
+                if (_connection != null && _connection.State == HubConnectionState.Connected && this.CarConfigurationService.ServerAssignedCarId.HasValue)
+                {
+                    _server?.SendBashOutput(CarConfigurationService.ServerAssignedCarId!.Value, args.Data, false);
+                }
+            }
+        };
+        BashProcess.ErrorDataReceived += (sender, args) =>
+        {
+            if (!string.IsNullOrEmpty(args.Data))
+            {
+                Logger.LogError($"[Bash Error] {args.Data}");
+                if (_connection != null && _connection.State == HubConnectionState.Connected && this.CarConfigurationService.ServerAssignedCarId.HasValue)
+                {
+                    _server?.SendBashOutput(CarConfigurationService.ServerAssignedCarId!.Value, args.Data, true);
+                }
+            }
+        };
+        BashProcess.Start();
     }
 
     public void Initialize()
@@ -40,15 +77,29 @@ public class ControlService : ICarControlClient, IHubConnectionObserver
         Control.ReleaseControl();
     }
 
+    public async Task ExecuteBashCommand(string sessionId, string command) 
+    {
+        if (_sessionId != sessionId)
+            return;
+        Logger.LogInformation($"Executing bash command from client: {command}");
+        await BashProcess.StandardInput.WriteLineAsync(command);
+        await BashProcess.StandardInput.FlushAsync();
+    }
+
     public async Task ConnectToServer()
     {
         _connection = ServerConnectionService.ConnectToHub(HubPaths.CarControlHub);
         _connection.Register<ICarControlClient>(this);
         await _connection.StartAsync();
         _server = _connection.CreateHubProxy<ICarControlServer>();
-        var carId = Configuration.GetValue<string>("carId");
-        await _server.RegisterForControl(carId);
-        Logger.LogInformation("Connected to server.");
+        var carId = CarConfigurationService.ServerAssignedCarId;
+        if (!carId.HasValue)
+        {
+            Logger.LogError("Cannot connect to control server: ServerAssignedCarId not available");
+            return;
+        }
+        await _server.RegisterForControl(carId.Value);
+        Logger.LogInformation($"Connected to control server with CarId: {carId}");
         await TelemetryService.UpdateTelemetry("Control Server", "Connected");
     }
 
@@ -56,26 +107,34 @@ public class ControlService : ICarControlClient, IHubConnectionObserver
         await Control.RunControlTestsAsync();
     }
     
-    public async Task<string?> AquireCarControl(string carSecret)
+    public async Task<string?> AquireCarControl(SshAuthenticationRequest authRequest)
     {
         if (_sessionId != null && _lastControlUpdate.AddSeconds(30) > DateTime.Now) {
             Logger.LogError("Cannot aquire control: Already connected to driver session.");
             return null;
         }
-        var secret = Configuration.GetValue<string>("CarSecret");
-        if (string.IsNullOrWhiteSpace(secret))
-            Logger.LogWarning("CarSecret is not set!");
 
-        if (PasswordHasher.VerifyPassword(carSecret, secret)) 
+        // Verify SSH signature
+        if (SshKeyService.VerifySignature(authRequest.Challenge, authRequest.Signature))
         {
-            Logger.LogError("Cannot aquire control: Invalid car secret.");
+            // Generate a new session ID using ShortGuid (22 chars instead of 36)
+            var newSessionId = ShortGuid.NewGuid().ToString();
+            _sessionId = newSessionId;
+            Logger.LogInformation($"Acquired control for car using SSH key. SessionID: {_sessionId}.");
+            await TelemetryService.UpdateTelemetry("Control Session", "Connected (SSH)");
+            return newSessionId; // Return the newly generated session ID
+        }
+        else
+        {
+            Logger.LogError("Cannot acquire control: Invalid SSH signature.");
             return null;
         }
-        var sessionId = ShortGuid.NewGuid().ToString();
-        _sessionId = sessionId;
-        Logger.LogInformation($"Aquired control for car. SessionID: {_sessionId}.");
-        await TelemetryService.UpdateTelemetry("Control Session", "Connected");
-        return sessionId;
+    }
+
+    public Task<string?> GetChallenge()
+    {
+        var challenge = SshKeyService.GenerateChallenge();
+        return Task.FromResult(challenge);
     }
 
     public async Task ReleaseCarControl(string sessionId)
@@ -106,7 +165,11 @@ public class ControlService : ICarControlClient, IHubConnectionObserver
 
     public async Task OnReconnected(string? connectionId)
     {
-        await _server.RegisterForControl(Configuration.GetValue<string>("carId"));
+        var carId = CarConfigurationService.ServerAssignedCarId;
+        if (carId.HasValue)
+        {
+            await _server.RegisterForControl(carId.Value);
+        }
         await TelemetryService.UpdateTelemetry("Control Server", "Connected");
     }
 
@@ -115,4 +178,5 @@ public class ControlService : ICarControlClient, IHubConnectionObserver
         Control.ReleaseControl();
         await TelemetryService.UpdateTelemetry("Control Server", "Disconnected");
     }
+
 }

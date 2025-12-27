@@ -1,9 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using LteCar.Server.Data;
-using System.Threading.Tasks;
-using System.Linq;
-using System.Security.Claims;
 
 namespace LteCar.Server.Controllers
 {
@@ -19,34 +16,28 @@ namespace LteCar.Server.Controllers
         }
 
         [HttpGet("setup/{carId}")]
-        public async Task<IActionResult> GetSetup(string carId)
+        public async Task<IActionResult> GetSetup(int carId)
         {
             var user = await GetCurrentUserAsync();
             if (user == null)
                 return Unauthorized("User not found");
 
             var car = await _context.Cars
-                .FirstOrDefaultAsync(c => c.CarId == carId);
+                .FirstOrDefaultAsync(c => c.Id == carId);
             if (car == null)
                 return NotFound("Car not found");
             var setup = await _context.UserSetups
-                .FirstOrDefaultAsync(u => u.UserId == user.Id && u.Car.CarId == carId);
+                .FirstOrDefaultAsync(u => u.UserId == user.Id && u.CarId == carId);
 
             if (setup == null)
             {
-                setup = new UserCarSetup
-                {
-                    CarId = car.Id,
-                    UserId = user.Id
-                };
-                _context.UserSetups.Add(setup);
-                _context.SaveChanges();
+                return NotFound("Setup not found");
             }
 
             return Ok(new
             {
                 id = setup.Id,
-                carId = car.CarId,
+                carId = car.Id,
                 userId = user.Id,
             });
         }
@@ -57,6 +48,20 @@ namespace LteCar.Server.Controllers
         {
             var types = await _context.SetupFilterTypes.ToListAsync();
             return Ok(types);
+        }
+
+        // Prüft ob der Benutzer Zugriff auf die Konfiguration eines Fahrzeugs hat
+        [HttpGet("has-config-access/{carId}")]
+        public async Task<IActionResult> HasConfigAccess(int carId)
+        {
+            var user = await GetCurrentUserAsync();
+            if (user == null)
+                return Unauthorized("User not found");
+
+            var hasAccess = await _context.UserSetups
+                .AnyAsync(u => u.UserId == user.Id && u.CarId == carId);
+
+            return Ok(new { hasAccess });
         }
 
         // Gibt alle Gamepads des Users zurück
@@ -90,6 +95,7 @@ namespace LteCar.Server.Controllers
             }).ToListAsync());
         }
 
+        static object _registerGamepadLock = new object();
 
         [HttpPost("register-gamepad")]
         public async Task<IActionResult> RegisterUserGamepad([FromBody] RegisterGamepadRequest req)
@@ -103,83 +109,86 @@ namespace LteCar.Server.Controllers
                 return BadRequest("Axes and buttons must be non-negative");
             if (req.Axes == 0 && req.Buttons == 0)
                 return BadRequest("At least one axis or button must be defined");
-            var exists = _context.Set<UserChannelDevice>()
-                .FirstOrDefault(g => g.UserId == user.Id && g.DeviceName == req.DeviceName);
-            if (exists is not null)
+            lock (_registerGamepadLock)
+            {
+                var exists = _context.Set<UserChannelDevice>()
+                    .FirstOrDefault(g => g.UserId == user.Id && g.DeviceName == req.DeviceName);
+                if (exists is not null)
+                    return Ok(new
+                    {
+                        id = exists.Id,
+                        name = exists.DeviceName,
+                        axes = _context.Set<UserChannel>()
+                            .Where(c => c.UserChannelDeviceId == exists.Id && c.IsAxis)
+                            .Select(c => new
+                            {
+                                id = c.Id,
+                                channelId = c.ChannelId,
+                                name = c.Name,
+                                calibrationMin = c.CalibrationMin,
+                                calibrationMax = c.CalibrationMax,
+                                accuracy = c.Accuracy
+                            }),
+                        buttons = _context.Set<UserChannel>()
+                            .Where(c => c.UserChannelDeviceId == exists.Id && !c.IsAxis)
+                            .Select(c => new
+                            {
+                                id = c.Id,
+                                name = c.Name,
+                                channelId = c.ChannelId
+                            })
+                    });
+                var gamepad = new UserChannelDevice
+                {
+                    UserId = user.Id,
+                    DeviceName = req.DeviceName,
+                };
+                _context.Set<UserChannelDevice>().Add(gamepad);
+                for (int i = 0; i < req.Axes; i++)
+                {
+                    _context.Set<UserChannel>().Add(new UserChannel
+                    {
+                        UserChannelDevice = gamepad,
+                        CalibrationMax = 1,
+                        CalibrationMin = -1,
+                        IsAxis = true,
+                        ChannelId = i,
+                        Name = $"Axis {i + 1}"
+                    });
+                }
+                for (int i = 0; i < req.Buttons; i++)
+                {
+                    _context.Set<UserChannel>().Add(new UserChannel
+                    {
+                        UserChannelDevice = gamepad,
+                        IsAxis = false,
+                        ChannelId = i,
+                        Name = $"Button {i + 1}"
+                    });
+                }
+                _context.SaveChanges();
                 return Ok(new
                 {
-                    id = exists.Id,
-                    name = exists.DeviceName,
+                    id = gamepad.Id,
+                    name = gamepad.DeviceName,
                     axes = _context.Set<UserChannel>()
-                        .Where(c => c.UserChannelDeviceId == exists.Id && c.IsAxis)
+                        .Where(c => c.UserChannelDeviceId == gamepad.Id && c.IsAxis)
                         .Select(c => new
                         {
                             id = c.Id,
-                            channelId = c.ChannelId,
                             name = c.Name,
                             calibrationMin = c.CalibrationMin,
-                            calibrationMax = c.CalibrationMax,
-                            accuracy = c.Accuracy
+                            calibrationMax = c.CalibrationMax
                         }),
                     buttons = _context.Set<UserChannel>()
-                        .Where(c => c.UserChannelDeviceId == exists.Id && !c.IsAxis)
+                        .Where(c => c.UserChannelDeviceId == gamepad.Id && !c.IsAxis)
                         .Select(c => new
                         {
                             id = c.Id,
-                            name = c.Name,
-                            channelId = c.ChannelId
+                                name = c.Name
                         })
                 });
-            var gamepad = new UserChannelDevice
-            {
-                UserId = user.Id,
-                DeviceName = req.DeviceName,
-            };
-            _context.Set<UserChannelDevice>().Add(gamepad);
-            for (int i = 0; i < req.Axes; i++)
-            {
-                _context.Set<UserChannel>().Add(new UserChannel
-                {
-                    UserChannelDevice = gamepad,
-                    CalibrationMax = 1,
-                    CalibrationMin = -1,
-                    IsAxis = true,
-                    ChannelId = i,
-                    Name = $"Axis {i + 1}"
-                });
             }
-            for (int i = 0; i < req.Buttons; i++)
-            {
-                _context.Set<UserChannel>().Add(new UserChannel
-                {
-                    UserChannelDevice = gamepad,
-                    IsAxis = false,
-                    ChannelId = i,
-                    Name = $"Button {i + 1}"
-                });
-            }
-            _context.SaveChanges();
-            return Ok(new
-            {
-                id = gamepad.Id,
-                name = gamepad.DeviceName,
-                axes = _context.Set<UserChannel>()
-                    .Where(c => c.UserChannelDeviceId == gamepad.Id && c.IsAxis)
-                    .Select(c => new
-                    {
-                        id = c.Id,
-                        name = c.Name,
-                        calibrationMin = c.CalibrationMin,
-                        calibrationMax = c.CalibrationMax
-                    }),
-                buttons = _context.Set<UserChannel>()
-                    .Where(c => c.UserChannelDeviceId == gamepad.Id && !c.IsAxis)
-                    .Select(c => new
-                    {
-                        id = c.Id,
-                        name = c.Name
-                    })
-            });
         }
 
         [HttpPost("gamepad-axis-accuracy")]

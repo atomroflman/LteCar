@@ -1,0 +1,5 @@
+channelMap.hash
+*.txt
+channelMap.server.json
+appSettings.development.json
+ssh_key*

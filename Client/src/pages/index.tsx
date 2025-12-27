@@ -2,8 +2,11 @@ import React, { useEffect, useState } from "react";
 import Image from "next/image";
 import { Geist, Geist_Mono } from "next/font/google";
 import VideoStream from "@/components/video-stream";
+import VideoSettingsControl from "@/components/video-settings";
+import { useControlFlowStore } from "@/components/control-flow-store";
 import CarControl from "@/components/car-control";
 import Telemetry from "@/components/telemetry";
+import SessionTransfer from "@/components/session-transfer";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -18,6 +21,7 @@ const geistMono = Geist_Mono({
 export default function Home() {
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const selectedCarId = useControlFlowStore(state => state.carId);
 
   useEffect(() => {
     fetch("/api/user/me")
@@ -44,12 +48,14 @@ export default function Home() {
         <div className="flex flex-1">
           {/* Video Stream centered */}
           <div className="flex-1 flex items-center justify-center">
-            <VideoStream key="video-stream" />
+            <VideoStream key="video-stream" carId={selectedCarId} />
           </div>
 
-          {/* Car Control on the right */}
-          <div className="w-64 border-l border-gray-300">
+          {/* Car Control and Video settings on the right */}
+          <div className="w-64 border-l border-gray-300 flex flex-col">
             <CarControl />
+            <SessionTransfer />
+            <VideoSettingsControl />
           </div>
         </div>
 

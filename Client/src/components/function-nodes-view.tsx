@@ -1,6 +1,7 @@
 import React from "react";
 import { filterFunctionRegistry } from "./filters/filter-function-registry";
 import { useControlFlowStore } from "./control-flow-store";
+import CollapsibleSection from "./collapsible-section";
 
 export default function FunctionNodesView({ hideFlowButtons }: { hideFlowButtons?: boolean }) {
   const controlFlow = useControlFlowStore();
@@ -10,15 +11,14 @@ export default function FunctionNodesView({ hideFlowButtons }: { hideFlowButtons
   const [outputPorts, setOutputPorts] = React.useState<Record<string, number>>({});
 
   return (
-    <div className="bg-zinc-900 rounded-lg p-2 border border-zinc-800 text-xs mt-2">
-      <div className="font-bold mb-2 text-zinc-200 text-xs">Filter/Function Nodes</div>
+    <CollapsibleSection title="Filter/Function Nodes">
       {functionNames.length === 0 && (
         <div className="text-zinc-400 text-xs">Keine Funktionen registriert.</div>
       )}
       <ul className="space-y-2">
         {functionNames.map((fn) => {
           return (
-              <div className="flex items-center justify-between">
+              <div key={fn} className="flex items-center justify-between">
                 <span className="font-mono text-zinc-100 text-xs">{fn}</span>
                 {!hideFlowButtons && (
                   <button
@@ -39,6 +39,6 @@ export default function FunctionNodesView({ hideFlowButtons }: { hideFlowButtons
           );
         })}
       </ul>
-    </div>
+    </CollapsibleSection>
   );
 }

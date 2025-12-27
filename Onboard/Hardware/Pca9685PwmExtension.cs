@@ -1,97 +1,124 @@
-using System.Diagnostics;
+using System;
+using System.Device.I2c;
+using System.Threading.Tasks;
 using Microsoft.Extensions.Logging;
 
 namespace LteCar.Onboard.Hardware
 {
-
     /// <summary>
-    /// Maps normalized float values (-1 to 1) to PCA9685 PWM outputs using i2cset CLI calls.
+    /// Maps normalized float values (-1 to 1) to PCA9685 PWM outputs using direct I2C access.
     /// </summary>
-    public class Pca9685PwmExtension : IModuleManager
+    public class Pca9685PwmExtension : IModuleManager, IDisposable
     {
         private bool _initialized;
+        private I2cDevice? _device;
+        private readonly object _initLock = new();
+        private readonly object _deviceLock = new();
         private const int PCA9685_DEFAULT_ADDRESS = 0x40; // Default I2C address for PCA9685
 
         public ILogger<Pca9685PwmExtension> Logger { get; }
-        public Bash Bash { get; }
         public int BoardAddress { get; set; }
         public int I2cBus { get; set; } = 1; // Default I2C bus
-        public int BoardI2cAddress
-        {
-            get => BoardAddress + PCA9685_DEFAULT_ADDRESS;
-        }
+        public int BoardI2cAddress => BoardAddress + PCA9685_DEFAULT_ADDRESS;
 
-        public Pca9685PwmExtension(ILogger<Pca9685PwmExtension> logger, Bash bash)
+        public Pca9685PwmExtension(ILogger<Pca9685PwmExtension> logger)
         {
             Logger = logger;
-            Bash = bash;
         }
 
-        private bool CheckI2cSetAvailable()
+        private I2cDevice Device => _device ?? throw new InvalidOperationException("PCA9685 device not initialized.");
+
+        private void EnsureInitialized()
         {
-            try
+            if (_initialized)
+                return;
+
+            lock (_initLock)
             {
-                var process = Process.Start(new ProcessStartInfo
-                {
-                    FileName = "which",
-                    Arguments = "i2cset",
-                    RedirectStandardOutput = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true
-                });
-                process.WaitForExit();
-                string output = process.StandardOutput.ReadToEnd().Trim();
-                return !string.IsNullOrWhiteSpace(output) && File.Exists(output);
-            }
-            catch
-            {
-                return false;
+                if (_initialized)
+                    return;
+
+                if (BoardAddress < 0 || BoardAddress > 127)
+                    throw new ArgumentOutOfRangeException(nameof(BoardAddress), "Board address must be between 0 and 127.");
+                if (I2cBus < 0 || I2cBus > 15)
+                    throw new ArgumentOutOfRangeException(nameof(I2cBus), "I2C bus number must be between 0 and 15.");
+
+                var settings = new I2cConnectionSettings(I2cBus, BoardI2cAddress);
+                _device = I2cDevice.Create(settings);
+
+                WriteRegisterUnchecked(0x00, 0x10); // Sleep
+                WriteRegisterUnchecked(0xFE, 0x79); // Prescale for ~50Hz
+                WriteRegisterUnchecked(0x00, 0x20); // Wake up, auto increment
+
+                _initialized = true;
+                Logger.LogInformation("PCA9685 initialized on I2C bus {I2cBus} at address 0x{BoardAddress:X2} (@I2C: {BoardI2cAddress})", I2cBus, BoardAddress, BoardI2cAddress);
             }
         }
 
-        private async Task Initialize()
+        private void WriteRegisterUnchecked(byte register, byte value)
         {
-            if (!CheckI2cSetAvailable())
-                Logger.LogWarning("i2cset command is not available. Please install i2c-tools.");
+            Span<byte> buffer = stackalloc byte[2];
+            buffer[0] = register;
+            buffer[1] = value;
 
-            if (BoardAddress < 0 || BoardAddress > 127)
-                throw new ArgumentOutOfRangeException(nameof(BoardAddress), "Board address must be between 0 and 127.");
+            lock (_deviceLock)
+            {
+                Device.Write(buffer);
+            }
+        }
 
-            if (I2cBus < 0 || I2cBus > 15)
-                throw new ArgumentOutOfRangeException(nameof(I2cBus), "I2C bus number must be between 0 and 15.");
-            await Bash.ExecuteAsync($"i2cset -y {I2cBus} {BoardI2cAddress} 0x00 0x10"); // Set MODE1 register to 0x10 (sleep mode)
-            await Bash.ExecuteAsync($"i2cset -y {I2cBus} {BoardI2cAddress} 0xFE 0x79"); // Set PRE_SCALE register for 50Hz (0x79)
-            await Bash.ExecuteAsync($"i2cset -y {I2cBus} {BoardI2cAddress} 0x00 0x20"); // Set MODE1 register to 0x20 (wake up, auto increment enabled)
-            Logger.LogInformation("PCA9685 initialized on I2C bus {I2cBus} at address 0x{BoardAddress:X2} (@I2C: {BoardI2cAddress})", I2cBus, BoardAddress, BoardI2cAddress);
+        internal void WriteChannelRegisters(int regBase, byte onLow, byte onHigh, byte offLow, byte offHigh)
+        {
+            EnsureInitialized();
+
+            Span<byte> buffer = stackalloc byte[5];
+            buffer[0] = (byte)regBase;
+            buffer[1] = onLow;
+            buffer[2] = onHigh;
+            buffer[3] = offLow;
+            buffer[4] = offHigh;
+
+            lock (_deviceLock)
+            {
+                Device.Write(buffer);
+            }
         }
 
         public T GetModule<T>(int address) where T : class, IModule
         {
-            if (!_initialized)
-            {
-                Initialize().Wait();
-                _initialized = true;
-            }
+            EnsureInitialized();
+
             Logger.LogInformation("Creating PWM module of type {ModuleType} at address {Address}", typeof(T).Name, address);
             if (!typeof(T).IsAssignableTo(typeof(IPwmModule)))
                 throw new InvalidOperationException($"Module type {typeof(T).Name} is not a PWM module. Only IPwmModule is supported.");
             if (address < 0 || address > 15)
                 throw new ArgumentOutOfRangeException(nameof(address), "Address must be between 0 and 15.");
-            return new Pca9685PwmExtensionPwmModule(this, address) as T;
+
+            return new Pca9685PwmExtensionPwmModule(this, address) as T ?? throw new InvalidOperationException("Failed to create PWM module.");
+        }
+
+        public void Dispose()
+        {
+            lock (_deviceLock)
+            {
+                _device?.Dispose();
+                _device = null;
+                _initialized = false;
+            }
         }
     }
 
     public class Pca9685PwmExtensionPwmModule : IPwmModule
     {
-        // TODO: Add otions to configure servo pulse width limits
-        private const int SERVO_MIN_PULSE = 105; // Minimum pulse width in microseconds
-        private const int SERVO_MAX_PULSE = 550; // Maximum pulse width in microseconds
-        private const int PWM_FREQUENCY = 50; // PWM frequency in Hz
+        private const int SERVO_MIN_PULSE = 105; // Minimum pulse width in counts
+        private const int SERVO_MAX_PULSE = 550; // Maximum pulse width in counts
+        private const int PWM_RESOLUTION = 4096;
+        private const float PWM_FREQUENCY = 50f; // PWM frequency in Hz
 
         private readonly Pca9685PwmExtension _extension;
         private readonly int _channel;
         private readonly int _regBase;
-        private float _lastValue = 0;
+        private float _lastValue;
 
         public Pca9685PwmExtensionPwmModule(Pca9685PwmExtension extension, int channel)
         {
@@ -100,54 +127,53 @@ namespace LteCar.Onboard.Hardware
             _regBase = 0x06 + 4 * channel; // Base register for the channel
         }
 
-        public async Task SetServoPosition(float position)
+        public Task SetServoPosition(float position)
         {
             position = Math.Clamp(position, -1f, 1f);
-            var pwmValue = (int)Math.Round((SERVO_MAX_PULSE - SERVO_MIN_PULSE) * ((position + 1) / 2) + SERVO_MIN_PULSE);
-            await SendPwmUpdate(pwmValue);
+            var pwmValue = (int)Math.Round((SERVO_MAX_PULSE - SERVO_MIN_PULSE) * ((position + 1f) / 2f) + SERVO_MIN_PULSE);
+            SendPwmUpdate(pwmValue);
+            _lastValue = position;
+            return Task.CompletedTask;
         }
 
-        public async Task SetPwmCyclePercentage(float value)
+        public Task SetPwmCyclePercentage(float value)
         {
             value = Math.Clamp(value, 0f, 1f);
-
-            // Map value (0..1) to PWM value (0..4095)
-            int pwmValue = (int)(value * 4095);
-            await SendPwmUpdate(pwmValue);
+            int pwmValue = (int)Math.Round(value * (PWM_RESOLUTION - 1));
+            SendPwmUpdate(pwmValue);
+            _lastValue = value;
+            return Task.CompletedTask;
         }
-        
-        /// <summary>
-        /// Setzt die Pulsbreite (High-Zeit) in Millisekunden für einen PWM-Kanal.
-        /// Die Periode ist durch die Frequenz (z.B. 20ms bei 50Hz) festgelegt.
-        /// </summary>
-        /// <param name="pulseWidthMs">Pulsbreite in Millisekunden (z.B. 1.5 für 1,5ms)</param>
-        public async Task SetPulseWidthMilliseconds(float pulseWidthMs)
+
+        public Task SetPulseWidthMilliseconds(float pulseWidthMs)
         {
-            // PCA9685 arbeitet mit 4096 Steps pro Periode
-            // Periode = 1000ms / Frequenz (z.B. 20ms bei 50Hz)
             float periodMs = 1000f / PWM_FREQUENCY;
             if (pulseWidthMs < 0 || pulseWidthMs > periodMs)
                 throw new ArgumentOutOfRangeException(nameof(pulseWidthMs), $"Pulse width must be between 0 and {periodMs} ms.");
-            int pwmValue = (int)Math.Round(4095 * (pulseWidthMs / periodMs));
-            await SendPwmUpdate(pwmValue);
+
+            int pwmValue = (int)Math.Round((PWM_RESOLUTION - 1) * (pulseWidthMs / periodMs));
+            SendPwmUpdate(pwmValue);
+            _lastValue = pwmValue / (PWM_RESOLUTION - 1f);
+            return Task.CompletedTask;
         }
 
-        private async Task SendPwmUpdate(int pwmValue)
+        private void SendPwmUpdate(int pwmValue)
         {
+            pwmValue = Math.Clamp(pwmValue, 0, PWM_RESOLUTION - 1);
+            byte onLow = 0x00;
+            byte onHigh = 0x00;
+            byte offLow = (byte)(pwmValue & 0xFF);
+            byte offHigh = (byte)((pwmValue >> 8) & 0x0F);
+
             _extension.Logger?.LogDebug(
                "Setting channel {Channel} to PWM {PWM} (Input={Input}) on Register 0x{Reg:X2}",
-               _channel, pwmValue, pwmValue, _regBase
+               _channel,
+               pwmValue,
+               pwmValue,
+               _regBase
            );
-            // ON time is always 0 (start of cycle), OFF time sets pulse width
-            int onLow = 0x00;
-            int onHigh = 0x00;
-            int offLow = pwmValue & 0xFF;
-            int offHigh = (pwmValue >> 8) & 0x0F;
 
-            await _extension.Bash.ExecuteAsync($"i2cset -y {_extension.I2cBus} {_extension.BoardI2cAddress} {_regBase} 0x{onLow:X2}");
-            await _extension.Bash.ExecuteAsync($"i2cset -y {_extension.I2cBus} {_extension.BoardI2cAddress} {_regBase + 1} 0x{onHigh:X2}");
-            await _extension.Bash.ExecuteAsync($"i2cset -y {_extension.I2cBus} {_extension.BoardI2cAddress} {_regBase + 2} 0x{offLow:X2}");
-            await _extension.Bash.ExecuteAsync($"i2cset -y {_extension.I2cBus} {_extension.BoardI2cAddress} {_regBase + 3} 0x{offHigh:X2}");
+            _extension.WriteChannelRegisters(_regBase, onLow, onHigh, offLow, offHigh);
         }
 
         public Task<float> GetPwmValue() => Task.FromResult(_lastValue);

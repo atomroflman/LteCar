@@ -55,17 +55,18 @@ export type GamepadStoreState = {
     pollFps: number;
     setPollFps: (fps: number) => void;
     knownGamepads: Record<string, UserGamepadDatabase>;
+    setKnownGamepads: (gamepads: Record<string, UserGamepadDatabase>) => void;
     setChannelAccuracy: (gamepadId: string, channelIndex: number, accuracy: number) => void;
     loadInitialGamepads: () => Promise<void>;
     pollGamepads: () => void;
     stopPolling: () => void;
-    onChannelChange?: (gamepadId: string, channelType: "axis" | "button", channelIndex: number, value: number, dbId: number) => void;
-    setOnChannelChange: (cb: (gamepadId: string, channelType: "axis" | "button", channelIndex: number, value: number, dbId: number) => void) => void;
+    onChannelChange?: (gamepadId: string, channelType: "axis" | "button" | "key", channelIndex: number, value: number, dbId: number) => void;
+    setOnChannelChange: (cb: (gamepadId: string, channelType: "axis" | "button" | "key", channelIndex: number, value: number, dbId: number) => void) => void;
 };
 
 export const useGamepadStore = create<GamepadStoreState>((set, get) => {
     let pollReference: number | undefined;
-    function channelUpdated(gamepadId: string, channelType: "axis" | "button", channelIndex: number, value: number, dbId: number): void {
+    function channelUpdated(gamepadId: string, channelType: "axis" | "button" | "key", channelIndex: number, value: number, dbId: number): void {
         const store = get();
         const known = store.knownGamepads[gamepadId];
         if (!known) return;
@@ -92,6 +93,9 @@ export const useGamepadStore = create<GamepadStoreState>((set, get) => {
         gamepadsLoaded: false,
         onChannelChange: undefined,
         pollFps: 15,
+        setKnownGamepads: (gamepads: Record<string, UserGamepadDatabase>) => {
+            set({ knownGamepads: gamepads });
+        },
         setChannelAccuracy: (gamepadId: string, channelIndex: number, accuracy: number) => {
             const known = get().knownGamepads;
             if (known[gamepadId]) {
