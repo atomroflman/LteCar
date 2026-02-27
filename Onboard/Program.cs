@@ -1,4 +1,4 @@
-﻿using System.Text.Json;
+using System.Text.Json;
 using System.Security.Cryptography;
 using System.Text;
 using System.Net;
@@ -270,10 +270,13 @@ else
     logger.LogInformation("SSH key already downloaded - HTTP server not started");
 }
 
+// Initialize telemetry
+var telemetryService = serviceProvider.GetRequiredService<TelemetryService>();
+await telemetryService.ConnectToServer();
+
 // Application loop
 await Task.Run(async () =>
 {
-    var telemetryService = serviceProvider.GetRequiredService<TelemetryService>();
     while (true)
     {
         await Task.WhenAll(telemetryService.Tick(), Task.Delay(100));

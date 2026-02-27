@@ -10,4 +10,14 @@ public class TelemetryHub : Hub<ITelemetryClient>, ITelemetryServer
     {
         return Clients.Groups(carId).UpdateTelemetry(valueName, value);
     }
+
+    public Task SubscribeToCarTelemetry(string carId)
+    {
+        return Groups.AddToGroupAsync(Context.ConnectionId, carId);
+    }
+
+    public Task UnsubscribeFromCarTelemetry(string carId)
+    {
+        return Groups.RemoveFromGroupAsync(Context.ConnectionId, carId);
+    }
 }

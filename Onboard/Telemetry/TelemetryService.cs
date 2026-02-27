@@ -39,7 +39,6 @@ public class TelemetryService : IHubConnectionObserver, ITelemetryClient
         await _connection.StartAsync();
         _server = _connection.CreateHubProxy<ITelemetryServer>();
         _connection.Register<ITelemetryClient>(this);
-        // _connection.RegisterObserver(this);
         var carId = CarConfigurationService.ServerAssignedCarId;
         _carId = carId?.ToString();
         if (string.IsNullOrEmpty(_carId))
@@ -47,6 +46,11 @@ public class TelemetryService : IHubConnectionObserver, ITelemetryClient
             Logger.LogWarning("ServerAssignedCarId not available yet. Telemetry updates will fail until CarId is set.");
         }
         Logger.LogInformation($"Connected to telemetry server with CarId: {_carId}");
+
+        foreach (var channel in ChannelMap.TelemetryChannels)
+        {
+            await SubscribeToTelemetryChannel(channel.Key);
+        }
     }
 
     public Task<IEnumerable<string>> GetAvailableTelemetryChannels() 
@@ -81,16 +85,18 @@ public class TelemetryService : IHubConnectionObserver, ITelemetryClient
 
     public async Task Tick()
     {
+        _tick++;
         foreach (var reader in _telemetryReaders)
         {
-            if (_tick % reader.Value.ReadIntervalTicks == 0)
+            var interval = reader.Value.ReadIntervalTicks;
+            if (interval <= 0 || _tick % interval == 0)
             {
                 try
                 {
                     var value = await reader.Value.ReadTelemetry();
                     if (value != null)
                     {
-                        Logger.LogInformation("Telemetry from {Channel}: {Value}", reader.Key, value);
+                        Logger.LogDebug("Telemetry from {Channel}: {Value}", reader.Key, value);
                         await UpdateTelemetry(reader.Key, value);
                     }
                 }

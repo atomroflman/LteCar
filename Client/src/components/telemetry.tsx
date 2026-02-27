@@ -1,80 +1,67 @@
-import React, { useEffect, useState } from "react";
-import * as signalR from "@microsoft/signalr";
+import React, { useEffect } from "react";
+import { useTelemetryStore } from "./telemetry-store";
 
-interface TelemetryData {
-    name: string;
-    value: string;
+interface TelemetryProps {
+  carId: number | undefined;
 }
 
-const Telemetry: React.FC = () => {
-    const [telemetry, setTelemetry] = useState<TelemetryData[]>([]);
-    const [isConnected, setIsConnected] = useState(false);
+const Telemetry: React.FC<TelemetryProps> = ({ carId }) => {
+  const entries = useTelemetryStore((s) => s.entries);
+  const isConnected = useTelemetryStore((s) => s.isConnected);
+  const subscribe = useTelemetryStore((s) => s.subscribe);
+  const unsubscribe = useTelemetryStore((s) => s.unsubscribe);
 
-    useEffect(() => {
-        // Create a connection to the SignalR hub
-        const connection = new signalR.HubConnectionBuilder()
-            .withUrl("/hubs/telemetry")
-            .withAutomaticReconnect()
-            .build();
+  useEffect(() => {
+    if (carId) {
+      subscribe(carId);
+    } else {
+      unsubscribe();
+    }
+    return () => { unsubscribe(); };
+  }, [carId]);
 
-        // Start the connection and handle telemetry updates
-        connection
-            .start()
-            .then(() => {
-                console.log("Connected to SignalR hub");
-                setIsConnected(true);
-
-                connection.on("UpdateTelemetry", (valueName: string, value: string) => {
-                    setTelemetry((prev) => {
-                        // Update the telemetry data, replacing existing values by name
-                        const updated = [...prev];
-                        const index = updated.findIndex((item) => item.name === valueName);
-                        if (index !== -1) {
-                            updated[index].value = value;
-                        } else {
-                            updated.push({ name: valueName, value });
-                        }
-                        return updated;
-                    });
-                });
-            })
-            .catch((err) => {
-                console.error("Error connecting to SignalR hub:", err);
-                setIsConnected(false);
-            });
-
-        // Handle disconnection
-        connection.onclose(() => {
-            console.warn("Disconnected from SignalR hub");
-            setIsConnected(false);
-        });
-
-        // Cleanup on component unmount
-        return () => {
-            connection.stop().catch((err) => console.error("Error disconnecting:", err));
-        };
-    }, []);
-
+  if (!carId) {
     return (
-        <div>
-            {!isConnected && (
-                <div className="text-red-500 font-bold p-4">
-                    Not connected to the telemetry hub.
-                </div>
-            )}
-            <div className="grid grid-cols-2 gap-4 p-4">
-                {telemetry.map((item, index) => (
-                    <div
-                        key={index}
-                        className="border p-2 rounded shadow-sm bg-gray-100 flex justify-between"
-                    >
-                        <span className="font-bold">{item.name}</span>
-                        <span>{item.value}</span>
-                    </div>
-                ))}
-            </div>
-        </div>
+      <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400 text-sm">
+        Kein Fahrzeug ausgewählt
+      </div>
     );
+  }
+
+  return (
+    <div className="flex items-center h-full px-4 gap-6 overflow-x-auto">
+      <div className="flex items-center gap-1.5 shrink-0">
+        <span
+          className={`inline-block w-2 h-2 rounded-full ${
+            isConnected ? "bg-green-500" : "bg-red-500"
+          }`}
+        />
+        <span className="text-xs text-gray-500 dark:text-gray-400">
+          Telemetrie
+        </span>
+      </div>
+
+      {entries.length === 0 && isConnected && (
+        <span className="text-xs text-gray-400 dark:text-gray-500">
+          Warte auf Daten...
+        </span>
+      )}
+
+      {entries.map((item) => (
+        <div
+          key={item.name}
+          className="flex items-center gap-2 shrink-0 bg-gray-100 dark:bg-gray-800 rounded px-3 py-1.5"
+        >
+          <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wide">
+            {item.name}
+          </span>
+          <span className="text-sm font-mono font-semibold text-gray-900 dark:text-gray-100">
+            {item.value}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
 };
 
 export default Telemetry;

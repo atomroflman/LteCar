@@ -59,8 +59,8 @@ export default function Home() {
           </div>
         </div>
 
-        <div className="h-20 border-t border-gray-300">
-          <Telemetry />
+        <div className="h-14 border-t border-gray-200 dark:border-gray-700">
+          <Telemetry carId={selectedCarId} />
         </div>
       </div>
   );
