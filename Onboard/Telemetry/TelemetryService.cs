@@ -45,12 +45,11 @@ public class TelemetryService : IHubConnectionObserver, ITelemetryClient
         {
             Logger.LogWarning("ServerAssignedCarId not available yet. Telemetry updates will fail until CarId is set.");
         }
-        Logger.LogInformation($"Connected to telemetry server with CarId: {_carId}");
-
-        foreach (var channel in ChannelMap.TelemetryChannels)
+        else
         {
-            await SubscribeToTelemetryChannel(channel.Key);
+            await _server.RegisterAsOnboard(_carId);
         }
+        Logger.LogInformation($"Connected to telemetry server with CarId: {_carId}");
     }
 
     public Task<IEnumerable<string>> GetAvailableTelemetryChannels() 

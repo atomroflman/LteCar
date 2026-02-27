@@ -48,6 +48,32 @@ namespace LteCar.Server.Controllers
             }));
         }
 
+        [HttpGet("{id}/telemetry")]
+        public async Task<IActionResult> GetCarTelemetryChannels(int id)
+        {
+            var user = await GetCurrentUserAsync();
+            if (user == null) return Unauthorized();
+
+            var setup = await _context.UserSetups
+                .FirstOrDefaultAsync(s => s.UserId == user.Id && s.CarId == id);
+
+            var channels = await _context.CarTelemetry.Where(c => c.CarId == id).ToListAsync();
+
+            var subscribedIds = setup != null
+                ? await _context.UserSetupTelemetries
+                    .Where(t => t.UserSetupId == setup.Id)
+                    .Select(t => t.CarTelemetryId)
+                    .ToListAsync()
+                : new List<int>();
+
+            return Ok(channels.Select(c => new
+            {
+                id = c.Id,
+                channelName = c.ChannelName,
+                subscribed = subscribedIds.Contains(c.Id),
+            }));
+        }
+
         [HttpGet("{carid}/setup")]
         public async Task<IActionResult> GetCarSetup(int carid)
         {
