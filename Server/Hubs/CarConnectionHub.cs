@@ -113,6 +113,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
                 channelDb = new CarChannel() { ChannelName = channel.Key, CarId = car.Id };
                 dbContext.CarChannels.Add(channelDb);
             }
+            channelDb.MaxResendInterval = channel.Value.MaxResendInterval;
         }
         // Remove missing control channels
         foreach (var channel in dbContext.CarChannels.Where(c => c.CarId == car.Id))
@@ -212,7 +213,8 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
                 dbContext.CarChannels.Add(db);
                 await dbContext.SaveChangesAsync();
             }
-            controlIds[kv.Key] = db.Id; // numeric id from DB identity
+            db.MaxResendInterval = kv.Value.MaxResendInterval;
+            controlIds[kv.Key] = db.Id;
         }
         // Remove stale
         foreach (var stale in dbContext.CarChannels.Where(c => c.CarId == car.Id).ToList())

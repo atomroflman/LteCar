@@ -11,6 +11,7 @@ namespace LteCar.Server.Data
         public string ChannelName { get; set; }
         public bool IsEnabled { get; set; }
         public bool RequiresAxis { get; set; }
+        public int? MaxResendInterval { get; set; }
         public int CarId { get; set; }
         public Car Car { get; set; }
         public ICollection<UserSetupCarChannelNode> SetupNodes { get; set; }

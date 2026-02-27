@@ -148,6 +148,7 @@ public partial class FlowController : ControllerBase
                     return result;
                 result.Label = output.DisplayName ?? output.ChannelName;
                 result.RepresentingId = carChannel.CarChannelId;
+                result.MaxResendInterval = output.MaxResendInterval;
                 result.Type = "output";
                 break;
             case UserSetupFunctionNode fn:

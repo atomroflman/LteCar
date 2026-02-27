@@ -43,7 +43,8 @@ namespace LteCar.Server.Controllers
                 displayName = cf.DisplayName,
                 channelName = cf.ChannelName,
                 isEnabled = cf.IsEnabled,
-                requiresAxis = cf.RequiresAxis
+                requiresAxis = cf.RequiresAxis,
+                maxResendInterval = cf.MaxResendInterval
             }));
         }
 

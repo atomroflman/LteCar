@@ -37,24 +37,25 @@ public class ControlExecutionService
         {
             var controlType = GetControlType(channel.Value.ControlType);
             Logger.LogDebug($"Got type {controlType.Name} for channel {channel.Key}.");
-            var control = ServiceProvider.GetService(controlType) as ControlTypeBase;
-            if (control == null)
+            var baseControl = ServiceProvider.GetService(controlType) as ControlTypeBase;
+            if (baseControl == null)
                 throw new Exception($"ControlType '{channel.Value.ControlType}' can not be instantiated");
             
             var pinManagerName = channel.Value.PinManager;
             if (string.IsNullOrWhiteSpace(pinManagerName))
-                pinManagerName = "default"; // Default pin manager if not specified
+                pinManagerName = "default";
             var pinManager = ServiceProvider.GetRequiredService<IModuleManagerFactory>().Create(pinManagerName);
             if (pinManager == null)
                 throw new Exception($"Pin manager '{pinManagerName}' not found in ChannelMap.");
-            control.PinManager = pinManager;
-            control.Name = channel.Key;
-            control.Options = channel.Value.Options;
-            control.TestDisabled = channel.Value.TestDisabled;
-            control.Address = channel.Value.Address;
-            if (channel.Value.MaxResendInterval is not null)
+            baseControl.PinManager = pinManager;
+            baseControl.Name = channel.Key;
+            baseControl.Options = channel.Value.Options;
+            baseControl.TestDisabled = channel.Value.TestDisabled;
+            baseControl.Address = channel.Value.Address;
+            IControlType control = baseControl;
+            if (channel.Value.MaxResendInterval is { } resendMs)
             {
-                control = new ResendRequiredContolDecorator(control, TimeSpan.FromMilliseconds(channel.Value.MaxResendInterval), TimeSpan.FromMilliseconds(channel.Value.MaxResendInterval) / 3);
+                control = new ResendRequiredContolDecorator(baseControl, TimeSpan.FromMilliseconds(resendMs), TimeSpan.FromMilliseconds(resendMs) / 3);
             }
             control.Initialize();
             _controls.Add(channel.Key, control);

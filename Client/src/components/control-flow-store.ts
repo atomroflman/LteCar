@@ -10,11 +10,12 @@ export type ControlFlowNode = {
   type: string;
   data: any;
   position: { x: number; y: number };
-  nodeTypeName: string; // Name of Db Node Type für evaluation
+  nodeTypeName: string;
   latestValue?: number | number[];
-  params: Record<string, any>; // explizit als Objekt
-  inputPorts?: number; // Anzahl Eingänge
-  outputPorts?: number; // Anzahl Ausgänge
+  params: Record<string, any>;
+  inputPorts?: number;
+  outputPorts?: number;
+  maxResendInterval?: number;
 };
 
 export type FunctionMetadata = {
@@ -92,6 +93,18 @@ export type ControlFlowState = {
   getSshKeyDownloadUrl: (carId: number, vehicleIp: string) => Promise<string | null>;
 };
 
+const _resendTimers = new Map<number, ReturnType<typeof setInterval>>();
+const _lastSentValues = new Map<number, number>();
+const _channelResendIntervals = new Map<number, number>();
+
+function clearAllResendTimers() {
+  for (const timer of _resendTimers.values()) {
+    clearInterval(timer);
+  }
+  _resendTimers.clear();
+  _lastSentValues.clear();
+}
+
 export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
   nodeLatestValues: {},
   nodes: [],
@@ -120,6 +133,14 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
       const flowData = await flowRes.json() as {nodes: ControlFlowNode[], edges: ControlFlowEdge[]};
       console.log("Loaded flow data", flowData);
       
+      clearAllResendTimers();
+      _channelResendIntervals.clear();
+      for (const node of (flowData.nodes || [])) {
+        if (node.nodeTypeName === "UserSetupCarChannelNode" && node.representingId != null && node.maxResendInterval) {
+          _channelResendIntervals.set(node.representingId, node.maxResendInterval);
+        }
+      }
+
       set({
         nodes: flowData.nodes || [],
         edges: flowData.edges || [],
@@ -497,9 +518,22 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
     const { carId, carSession, connection, updatesEnabled, isInConfigMode } = get();
     console.log("send out", carId, carSession, connection?.state, "updatesEnabled:", updatesEnabled, "isInConfigMode:", isInConfigMode);
     
-    // Only send updates if updates are enabled (regardless of config mode)
     if (connection && carId && carSession && updatesEnabled) {
       await connection.invoke("UpdateChannel", carId, carSession, channelId, value);
+      _lastSentValues.set(channelId, value);
+
+      const resendMs = _channelResendIntervals.get(channelId);
+      if (resendMs && !_resendTimers.has(channelId)) {
+        const interval = Math.floor(resendMs / 2);
+        _resendTimers.set(channelId, setInterval(() => {
+          const { connection: conn, carId: cId, carSession: sess, updatesEnabled: enabled } = get();
+          const lastVal = _lastSentValues.get(channelId);
+          if (conn && cId && sess && enabled && lastVal !== undefined) {
+            conn.invoke("UpdateChannel", cId, sess, channelId, lastVal)
+              .catch((err: any) => console.error("Resend failed:", err));
+          }
+        }, interval));
+      }
     } else if (isInConfigMode && !updatesEnabled) {
       console.log("Updates disabled: In configuration mode (default off)");
     } else if (!updatesEnabled) {
@@ -758,6 +792,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
     }
   },
   async stopConnection() {
+    clearAllResendTimers();
     const { connection, carId, carSession } = get();
     try {
       if (connection && carId && carSession) {
@@ -911,7 +946,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
   setConfigMode: (isConfig: boolean) => {
     const state = get();
     if (isConfig) {
-      // Entering config mode: disable updates by default
+      clearAllResendTimers();
       set({ 
         isInConfigMode: true,
         updatesEnabled: false
@@ -928,6 +963,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
   },
 
   setUpdatesEnabled: (enabled: boolean) => {
+    if (!enabled) clearAllResendTimers();
     set({ updatesEnabled: enabled });
     console.log("Updates enabled:", enabled);
   },

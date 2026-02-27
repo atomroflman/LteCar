@@ -12,6 +12,7 @@ namespace LteCar.Server.Controllers
             public object? Metadata { get; set; }
             public string NodeTypeName { get; set; }
             public Dictionary<string, string?>? Params { get; set; }
+            public int? MaxResendInterval { get; set; }
         }
     }
 }
