@@ -1,4 +1,4 @@
-﻿using LteCar.Server;
+using LteCar.Server;
 using LteCar.Server.Configuration;
 using LteCar.Server.Data;
 using LteCar.Server.Extensions;
@@ -55,7 +55,7 @@ builder.Services.AddSingleton<CarConnectionStore>();
 builder.Services.AddDbContext<LteCarContext>((serviceProvider, options) =>
 {
     var configService = serviceProvider.GetRequiredService<IConfigurationService>();
-    options.UseSqlServer(configService.DefaultConnectionString, opt =>
+    options.UseNpgsql(configService.DefaultConnectionString, opt =>
     {
         opt.EnableRetryOnFailure(5, TimeSpan.FromSeconds(10), null);
     });

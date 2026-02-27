@@ -13,36 +13,44 @@ LteCar ist ein System zum Bau und Betrieb von ferngesteuerten Autos über LTE/In
 
 ## Installation
 
-### Server
+Es gibt ein einziges Installationsskript für Server und Onboard (Fahrzeug).
+Das Skript muss mit `sudo` von einem normalen Benutzer ausgeführt werden (nicht als root direkt).
 
-1. Voraussetzungen: Linux, Docker oder .NET 8, Node.js, Janus Gateway
-2. Repository klonen und Basisinstallation:
 ```bash
 git clone https://github.com/atomroflman/LteCar.git
 cd LteCar
-bash install-server.sh
+sudo bash install.sh
 ```
-3. Janus Gateway installieren (siehe `Server/bash/install-janus.sh` für Details).
-4. Server starten:
-```bash
-bash start-server.sh
-```
-    oder als Systemdienst (`Server/install.sh`).
 
-### Onboard (Fahrzeug)
+Das Skript fragt interaktiv ab, ob ein **Server** oder ein **Onboard-Client** installiert werden soll,
+und bietet am Ende optional die Einrichtung als systemd-Service an.
 
-1. Raspberry Pi vorbereiten.
-2. 
+### Was passiert bei der Installation?
+
+**Server-Modus:**
+- System-Pakete (Node.js, npm)
+- .NET 8 SDK (für den aktuellen Benutzer)
+- Janus Gateway (WebRTC)
+- Next.js Web-Client Build
+- .NET Server Build
+- Optional: systemd-Services `ltecar-server` + `ltecar-client`
+
+**Onboard-Modus:**
+- System-Pakete (GStreamer, Kamera-Bibliotheken)
+- .NET 8 SDK (für den aktuellen Benutzer)
+- WiringPi (GPIO)
+- .NET Onboard Build
+- Optional: systemd-Service `ltecar-onboard`
+
+### Logs & Verwaltung
+
 ```bash
-git clone https://github.com/atomroflman/LteCar.git
-cd LteCar
-sudo ./pi-install-car.sh
-```
-3. Konfiguration anpassen (siehe unten).
-4. Onboard-Software starten:
-```bash
-cd Onboard
-dotnet run
+# Logs
+ls /var/log/ltecar/
+
+# Services verwalten
+sudo systemctl status ltecar-server
+sudo systemctl restart ltecar-onboard
 ```
 
 ---

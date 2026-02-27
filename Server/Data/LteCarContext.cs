@@ -28,7 +28,7 @@ namespace LteCar.Server.Data
             }
 
             await using var command = connection.CreateCommand();
-            command.CommandText = "SELECT NEXT VALUE FOR [dbo].[UserSessionSeq]";
+            command.CommandText = "SELECT nextval('\"UserSessionSeq\"')";
 
             var result = await command.ExecuteScalarAsync();
 
