@@ -7,6 +7,7 @@ using LteCar.Server.Configuration;
 using LteCar.Server.Data;
 using LteCar.Server.Services;
 using LteCar.Shared;
+using LteCar.Shared.FileTransfer;
 using Microsoft.EntityFrameworkCore;
 
 namespace LteCar.Server.Hubs;
@@ -35,6 +36,7 @@ public class CarControlHub : Hub<ICarControlClient>, ICarControlServer
     {
         Logger.LogDebug($"Invoked: RegisterForControl({carId}) => saving Connection Id: {Context.ConnectionId}");
         _connectionMap.Add(carId.ToString(), Context.ConnectionId);
+        await Groups.AddToGroupAsync(Context.ConnectionId, $"Car-{carId}");
     }
     
     public async Task<string?> AquireCarControl(int carId, SshAuthenticationRequest authRequest)
@@ -172,5 +174,56 @@ public class CarControlHub : Hub<ICarControlClient>, ICarControlServer
         var controller = _context.Users.Where(u => u.ActiveVehicleId == carId)
             .FirstOrDefault();
         await CarUiHubContext.Clients.All.SendBashOutput(carId, output, isError);
+    }
+
+    /// <summary>
+    /// Browser asks car to approve a file upload. Car validates session.
+    /// On approval, server creates a temporary transfer record and returns the upload token.
+    /// </summary>
+    public async Task<FileUploadApproval?> RequestFileUpload(int carId, string sessionId, string filePath)
+    {
+        if (!_connectionMap.TryGetByKey(carId.ToString(), out var carClientId))
+            return null;
+
+        var approved = await Clients.Client(carClientId).ApproveFileUpload(sessionId, filePath);
+        if (!approved)
+            return null;
+
+        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
+        var transfer = new FileTransfer
+        {
+            CarId = carId,
+            FileName = filePath,
+            Status = FileTransferStatus.Uploading
+        };
+        dbContext.FileTransfers.Add(transfer);
+        await dbContext.SaveChangesAsync();
+
+        Logger.LogInformation("File upload approved for car {CarId}, path '{FilePath}', transfer {TransferId}",
+            carId, filePath, transfer.Id);
+
+        return new FileUploadApproval { Token = transfer.DownloadToken };
+    }
+
+    /// <summary>
+    /// Browser asks car for a file listing. Pure relay — car validates session.
+    /// </summary>
+    public async Task<ListFilesResponse?> ListFilesOnDevice(int carId, string sessionId, string path)
+    {
+        if (!_connectionMap.TryGetByKey(carId.ToString(), out var carClientId))
+            return null;
+
+        return await Clients.Client(carClientId).ListFiles(sessionId, path);
+    }
+
+    /// <summary>
+    /// Browser asks car to delete a file. Pure relay — car validates session and deletes locally.
+    /// </summary>
+    public async Task<bool> DeleteFileOnDevice(int carId, string sessionId, string filePath)
+    {
+        if (!_connectionMap.TryGetByKey(carId.ToString(), out var carClientId))
+            return false;
+
+        return await Clients.Client(carClientId).DeleteFile(sessionId, filePath);
     }
 }

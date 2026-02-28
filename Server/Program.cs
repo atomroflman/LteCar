@@ -101,6 +101,7 @@ logger.LogInformation("Database migrations applied successfully.");
 var vss = app.Services.GetRequiredService<VideoStreamReceiverService>();
 
 var configService = app.Services.GetRequiredService<IConfigurationService>();
+
 if (configService.Application.RunJanusServer)
 {
     app.Services.GetRequiredService<VideoStreamReceiverService>().RunVideoStreamServer();

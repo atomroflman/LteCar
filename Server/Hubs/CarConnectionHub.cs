@@ -4,8 +4,10 @@ using LteCar.Server.Configuration;
 using LteCar.Server.Data;
 using LteCar.Shared;
 using LteCar.Shared.Channels;
+using LteCar.Shared.FileTransfer;
 using LteCar.Shared.Video;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
 
 namespace LteCar.Server.Hubs;
 
@@ -335,5 +337,42 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
             Logger.LogError(ex, "FATAL ERROR in SyncChannelMap for car {CarId}", request?.CarId.ToString() ?? "UNKNOWN");
             throw;
         }
+    }
+
+    public async Task ReportFileTransferStatus(FileTransferStatusUpdate update)
+    {
+        Logger.LogInformation("Device reports transfer {Token} status: {Status}", update.Token, update.Status);
+
+        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
+        var transfer = await dbContext.FileTransfers
+            .FirstOrDefaultAsync(f => f.DownloadToken == update.Token);
+        if (transfer == null)
+        {
+            Logger.LogWarning("Transfer with token {Token} not found", update.Token);
+            return;
+        }
+
+        if (update.Status == FileTransferStatus.Completed)
+        {
+            if (string.IsNullOrEmpty(update.Sha256Hash) ||
+                !string.Equals(transfer.Sha256Hash, update.Sha256Hash, StringComparison.OrdinalIgnoreCase))
+            {
+                Logger.LogWarning("Hash mismatch for transfer {Token}: expected {Expected}, got {Actual}",
+                    update.Token, transfer.Sha256Hash, update.Sha256Hash);
+                return;
+            }
+
+            Logger.LogInformation("Transfer {Token} completed, hash verified. Cleaning up.", update.Token);
+
+            if (!string.IsNullOrEmpty(transfer.StoragePath) && File.Exists(transfer.StoragePath))
+                File.Delete(transfer.StoragePath);
+
+            dbContext.FileTransfers.Remove(transfer);
+            await dbContext.SaveChangesAsync();
+            return;
+        }
+
+        transfer.Status = update.Status;
+        await dbContext.SaveChangesAsync();
     }
 }

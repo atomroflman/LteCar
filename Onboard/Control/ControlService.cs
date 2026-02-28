@@ -1,6 +1,7 @@
 using CSharpVitamins;
 using LteCar.Onboard.Telemetry;
 using LteCar.Shared;
+using LteCar.Shared.FileTransfer;
 using LteCar.Server.Hubs;
 using LteCar.Shared.HubClients;
 using Microsoft.AspNetCore.SignalR.Client;
@@ -8,7 +9,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using TypedSignalR.Client;
 using LteCar.Onboard;
-using LteCar.Shared;
 using System.Diagnostics;
 
 namespace LteCar.Onboard.Control;
@@ -179,4 +179,100 @@ public class ControlService : ICarControlClient, IHubConnectionObserver
         await TelemetryService.UpdateTelemetry("Control Server", "Disconnected");
     }
 
+    private string FileTransferBasePath =>
+        Configuration.GetValue<string>("FileTransfer:BasePath") ?? "/var/data/ltecar/files";
+
+    public Task<bool> ApproveFileUpload(string sessionId, string filePath)
+    {
+        if (_sessionId != sessionId)
+            return Task.FromResult(false);
+
+        Logger.LogInformation("File upload approved: {FilePath}", filePath);
+        return Task.FromResult(true);
+    }
+
+    public Task<ListFilesResponse> ListFiles(string sessionId, string path)
+    {
+        var response = new ListFilesResponse { Path = path };
+
+        if (_sessionId != sessionId)
+        {
+            response.Error = "Invalid session";
+            return Task.FromResult(response);
+        }
+
+        var fullPath = Path.GetFullPath(Path.Combine(FileTransferBasePath, path.TrimStart('/')));
+        if (!fullPath.StartsWith(FileTransferBasePath))
+        {
+            response.Error = "Access denied";
+            return Task.FromResult(response);
+        }
+
+        if (!Directory.Exists(fullPath))
+        {
+            response.Error = "Directory not found";
+            return Task.FromResult(response);
+        }
+
+        foreach (var dir in Directory.GetDirectories(fullPath))
+        {
+            var info = new DirectoryInfo(dir);
+            response.Entries.Add(new FileListEntry
+            {
+                Name = info.Name,
+                FullPath = Path.GetRelativePath(FileTransferBasePath, dir),
+                IsDirectory = true,
+                LastModifiedUtc = info.LastWriteTimeUtc
+            });
+        }
+
+        foreach (var file in Directory.GetFiles(fullPath))
+        {
+            var info = new FileInfo(file);
+            response.Entries.Add(new FileListEntry
+            {
+                Name = info.Name,
+                FullPath = Path.GetRelativePath(FileTransferBasePath, file),
+                IsDirectory = false,
+                SizeBytes = info.Length,
+                LastModifiedUtc = info.LastWriteTimeUtc
+            });
+        }
+
+        return Task.FromResult(response);
+    }
+
+    public Task<bool> DeleteFile(string sessionId, string filePath)
+    {
+        if (_sessionId != sessionId)
+            return Task.FromResult(false);
+
+        var fullPath = Path.GetFullPath(Path.Combine(FileTransferBasePath, filePath.TrimStart('/')));
+        if (!fullPath.StartsWith(FileTransferBasePath))
+            return Task.FromResult(false);
+
+        if (File.Exists(fullPath))
+        {
+            File.Delete(fullPath);
+            Logger.LogInformation("File deleted: {FilePath}", fullPath);
+            return Task.FromResult(true);
+        }
+
+        if (Directory.Exists(fullPath))
+        {
+            Directory.Delete(fullPath, recursive: true);
+            Logger.LogInformation("Directory deleted: {FilePath}", fullPath);
+            return Task.FromResult(true);
+        }
+
+        return Task.FromResult(false);
+    }
+
+    public async Task FileReady(FileReadyNotification notification)
+    {
+        Logger.LogInformation("FileReady: token {Token}, file '{FileName}', {Size} bytes",
+            notification.Token, notification.FileName, notification.FileSizeBytes);
+        // TODO: download from /api/filetransfer/{token}/download, save to FileTransferBasePath, report status
+        await Task.CompletedTask;
+    }
 }

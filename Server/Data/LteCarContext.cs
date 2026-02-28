@@ -17,6 +17,7 @@ namespace LteCar.Server.Data
         public DbSet<UserCarSetup> UserSetups { get; set; }
         public DbSet<UserSetupTelemetry> UserSetupTelemetries { get; set; }
         public DbSet<SetupFilterType> SetupFilterTypes { get; set; }
+        public DbSet<FileTransfer> FileTransfers { get; set; }
 
         public async Task<long> GetNextUserSessionId() 
         {

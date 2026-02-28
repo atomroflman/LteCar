@@ -14,6 +14,8 @@ public class ApplicationConfiguration
 
     [Required]
     public JanusConfiguration JanusConfiguration { get; set; } = new();
+
+    public FileTransferConfiguration FileTransfer { get; set; } = new();
 }
 
 public class ConnectionStrings

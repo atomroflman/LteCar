@@ -7,6 +7,7 @@ public interface IConfigurationService
 {
     ApplicationConfiguration Application { get; }
     JanusConfiguration Janus { get; }
+    FileTransferConfiguration FileTransfer { get; }
     string DefaultConnectionString { get; }
 }
 
@@ -17,12 +18,14 @@ public class ConfigurationService : IConfigurationService
     public ConfigurationService(
         IOptions<ApplicationConfiguration> appConfig,
         IOptions<JanusConfiguration> janusConfig,
+        IOptions<FileTransferConfiguration> fileTransferConfig,
         ILogger<ConfigurationService> logger)
     {
         _logger = logger;
         
         Application = appConfig.Value;
         Janus = janusConfig.Value;
+        FileTransfer = fileTransferConfig.Value;
         
         ValidateConfiguration();
         LogConfiguration();
@@ -30,6 +33,7 @@ public class ConfigurationService : IConfigurationService
 
     public ApplicationConfiguration Application { get; }
     public JanusConfiguration Janus { get; }
+    public FileTransferConfiguration FileTransfer { get; }
     public string DefaultConnectionString => Application.ConnectionStrings.DefaultConnection;
 
     private void ValidateConfiguration()
@@ -73,5 +77,7 @@ public class ConfigurationService : IConfigurationService
         _logger.LogInformation("- JanusHostName: {HostName}", Janus.HostName);
         _logger.LogInformation("- Video Port Range: {Start}-{End} ({Total} Streams possible)", Janus.PortRangeStart, Janus.PortRangeEnd, (Janus.PortRangeEnd - Janus.PortRangeStart) / 2);
         _logger.LogInformation("- DefaultConnection: [CONFIGURED]");
+        _logger.LogInformation("- FileTransfer Throttle: {Rate} KB/s, MaxSize: {Max} MB, Storage: {Path}",
+            FileTransfer.ThrottleKBytesPerSecond, FileTransfer.MaxFileSizeMB, FileTransfer.StoragePath);
     }
 }

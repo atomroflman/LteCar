@@ -1,4 +1,5 @@
 using LteCar.Shared;
+using LteCar.Shared.FileTransfer;
 
 namespace LteCar.Server.Hubs;
 
@@ -11,4 +12,8 @@ public interface ICarControlServer
     Task<string?> GetChallenge(int carId);
     Task ExecuteBashCommand(int carId, string sessionId, string command);
     Task SendBashOutput(int carId, string output, bool isError);
+
+    Task<FileUploadApproval?> RequestFileUpload(int carId, string sessionId, string filePath);
+    Task<ListFilesResponse?> ListFilesOnDevice(int carId, string sessionId, string path);
+    Task<bool> DeleteFileOnDevice(int carId, string sessionId, string filePath);
 }
