@@ -121,6 +121,9 @@ if [ "$INSTALL_MODE" = "server" ]; then
         libglib2.0-dev libopus-dev libogg-dev \
         libini-config-dev libcollection-dev \
         cmake libusrsctp-dev zlib1g-dev libconfig-dev libwebsockets-dev
+    echo "Clearing tmp..."
+    # temp clear
+    rm -rf /tmp/*
 fi
 
 if [ "$INSTALL_POSTGRES" = true ]; then
@@ -148,6 +151,9 @@ if [ "$INSTALL_POSTGRES" = true ]; then
     fi
 
     echo "PostgreSQL ready: $PG_USER@localhost/$PG_DB"
+    echo "Clearing tmp..."
+    # temp clear
+    rm -rf /tmp/*
 fi
 
 if [ "$INSTALL_MODE" = "onboard" ]; then
@@ -187,6 +193,9 @@ if ! grep -q 'DOTNET_ROOT' "$RUN_USER_HOME/.bashrc"; then
 fi
 
 echo ".NET SDK ready: $(run_as_user "$DOTNET_ROOT/dotnet" --version)"
+echo "Clearing tmp..."
+# temp clear
+rm -rf /tmp/*
 
 # =====================================================================
 #  Phase 3 – Build (as regular user)
