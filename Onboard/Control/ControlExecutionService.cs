@@ -37,7 +37,7 @@ public class ControlExecutionService
         {
             var controlType = GetControlType(channel.Value.ControlType);
             Logger.LogDebug($"Got type {controlType.Name} for channel {channel.Key}.");
-            var control = ServiceProvider.GetService(controlType) as ControlTypeBase;
+            var control = ServiceProvider.GetService(controlType) as IControlType;
             if (control == null)
                 throw new Exception($"ControlType '{channel.Value.ControlType}' can not be instantiated");
             
@@ -54,7 +54,7 @@ public class ControlExecutionService
             control.Address = channel.Value.Address;
             if (channel.Value.MaxResendInterval is not null)
             {
-                control = new ResendRequiredContolDecorator(control, TimeSpan.FromMilliseconds(channel.Value.MaxResendInterval), TimeSpan.FromMilliseconds(channel.Value.MaxResendInterval) / 3);
+                control = new ResendRequiredContolDecorator(control, TimeSpan.FromMilliseconds((double)channel.Value.MaxResendInterval!.Value), TimeSpan.FromMilliseconds((double)channel.Value.MaxResendInterval!.Value) / 3);
             }
             control.Initialize();
             _controls.Add(channel.Key, control);
