@@ -14,4 +14,5 @@ public interface ICarControlClient
     Task<ListFilesResponse> ListFiles(string sessionId, string path);
     Task<bool> DeleteFile(string sessionId, string filePath);
     Task FileReady(FileReadyNotification notification);
+    Task<long> Ping();
 }

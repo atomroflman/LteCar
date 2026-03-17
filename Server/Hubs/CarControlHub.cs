@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Security.Claims;
+using System.Diagnostics;
 using Microsoft.AspNetCore.SignalR;
 using LteCar.Shared.HubClients;
 using Sqids;
@@ -225,5 +226,18 @@ public class CarControlHub : Hub<ICarControlClient>, ICarControlServer
             return false;
 
         return await Clients.Client(carClientId).DeleteFile(sessionId, filePath);
+    }
+
+    public async Task<PingCarResult?> PingCar(int carId)
+    {
+        if (!_connectionMap.TryGetByKey(carId.ToString(), out var carClientId))
+        {
+            Logger.LogDebug($"PingCar: Car {carId} not found in connection dictionary.");
+            return null;
+        }
+        var sw = Stopwatch.StartNew();
+        var carTimestamp = await Clients.Client(carClientId).Ping();
+        sw.Stop();
+        return new PingCarResult(carTimestamp, sw.Elapsed.TotalMilliseconds);
     }
 }

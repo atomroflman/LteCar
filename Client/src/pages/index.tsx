@@ -6,6 +6,7 @@ import VideoSettingsControl from "@/components/video-settings";
 import { useControlFlowStore } from "@/components/control-flow-store";
 import CarControl from "@/components/car-control";
 import Telemetry from "@/components/telemetry";
+import Ping from "@/components/ping";
 import SessionTransfer from "@/components/session-transfer";
 
 const geistSans = Geist({
@@ -56,6 +57,7 @@ export default function Home() {
             <CarControl />
             <SessionTransfer />
             <VideoSettingsControl />
+            <Ping />
           </div>
         </div>
 

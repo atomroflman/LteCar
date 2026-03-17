@@ -16,4 +16,5 @@ public interface ICarControlServer
     Task<FileUploadApproval?> RequestFileUpload(int carId, string sessionId, string filePath);
     Task<ListFilesResponse?> ListFilesOnDevice(int carId, string sessionId, string path);
     Task<bool> DeleteFileOnDevice(int carId, string sessionId, string filePath);
+    Task<PingCarResult?> PingCar(int carId);
 }

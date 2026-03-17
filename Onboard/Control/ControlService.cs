@@ -157,6 +157,11 @@ public class ControlService : ICarControlClient, IHubConnectionObserver
         return Task.CompletedTask;
     }
 
+    public Task<long> Ping()
+    {
+        return Task.FromResult(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+    }
+
     public async Task OnClosed(Exception? exception)
     {
         Control.ReleaseControl();
