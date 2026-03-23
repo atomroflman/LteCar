@@ -3,6 +3,7 @@ using LteCar.Server.Configuration;
 using LteCar.Server.Data;
 using LteCar.Server.Extensions;
 using LteCar.Server.Hubs;
+using LteCar.Server.Services;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.AspNetCore.DataProtection;
 
@@ -69,9 +70,12 @@ builder.Services.AddSignalR()
     .AddMessagePackProtocol()
     .AddJsonProtocol();
 
+var dataProtectionKeysPath = Path.Combine(Directory.GetCurrentDirectory(), "DataProtectionKeys");
+Directory.CreateDirectory(dataProtectionKeysPath);
 builder.Services.AddDataProtection()
-    .PersistKeysToFileSystem(new DirectoryInfo(Path.Combine(Directory.GetCurrentDirectory(), "DataProtectionKeys")))
-    .SetApplicationName("LteCar.Server");
+    .PersistKeysToFileSystem(new DirectoryInfo(dataProtectionKeysPath))
+    .SetApplicationName("LteCar.Server")
+    .SetDefaultKeyLifetime(TimeSpan.FromDays(90));
 builder.Services.AddAuthentication("cookie")
     .AddCookie("cookie", options =>
     {
@@ -79,13 +83,17 @@ builder.Services.AddAuthentication("cookie")
         options.LoginPath = "/";
         options.Cookie.HttpOnly = true;
         options.Cookie.SameSite = SameSiteMode.Lax;
-        options.Cookie.MaxAge = TimeSpan.MaxValue;
+        options.Cookie.IsEssential = true;
+        options.Cookie.MaxAge = TimeSpan.FromDays(3650);
+        options.SlidingExpiration = false;
         options.Events.OnRedirectToLogin = ctx =>
         {
             ctx.Response.StatusCode = StatusCodes.Status401Unauthorized;
             return Task.CompletedTask;
         };
     });
+
+builder.Services.AddUserCleanupService();
 
 var app = builder.Build();
 var configuration = app.Configuration;
