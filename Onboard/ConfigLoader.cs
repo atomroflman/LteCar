@@ -8,6 +8,7 @@ public class ConfigLoader
 {
     private readonly string _defaultConfigDir;
     private string _configDir;
+    private readonly string _configDirFile;
 
     public string ConfigDir => _configDir;
     public string ChannelMapPath => Path.Combine(_configDir, "channelMap.json");
@@ -19,7 +20,46 @@ public class ConfigLoader
     public ConfigLoader(string defaultConfigDir, string? customConfigDir = null)
     {
         _defaultConfigDir = defaultConfigDir;
-        _configDir = customConfigDir ?? FindConfigDir();
+        _configDirFile = Path.Combine(defaultConfigDir, ".configdir");
+        
+        var savedConfigDir = LoadSavedConfigDir();
+        _configDir = customConfigDir ?? savedConfigDir ?? FindConfigDir();
+        
+        if (customConfigDir != null && customConfigDir != savedConfigDir)
+        {
+            SaveConfigDir(customConfigDir);
+        }
+    }
+
+    private string? LoadSavedConfigDir()
+    {
+        try
+        {
+            if (File.Exists(_configDirFile))
+            {
+                var saved = File.ReadAllText(_configDirFile).Trim();
+                if (Directory.Exists(saved))
+                {
+                    AnsiConsole.MarkupLine($"[dim]Using saved config directory: {saved}[/]");
+                    return saved;
+                }
+            }
+        }
+        catch { }
+        return null;
+    }
+
+    public void SaveConfigDir(string path)
+    {
+        try
+        {
+            File.WriteAllText(_configDirFile, path);
+            AnsiConsole.MarkupLine($"[green]Config directory saved: {path}[/]");
+        }
+        catch (Exception ex)
+        {
+            AnsiConsole.MarkupLine($"[yellow]Could not save config directory: {ex.Message}[/]");
+        }
     }
 
     private string FindConfigDir()
@@ -79,6 +119,7 @@ public class ConfigLoader
                     var newPath = AnsiConsole.Ask<string>("Enter the config directory path:");
                     if (Directory.Exists(newPath))
                     {
+                        SaveConfigDir(newPath);
                         _configDir = newPath;
                         return await LoadConfigsAsync();
                     }
@@ -91,6 +132,7 @@ public class ConfigLoader
                     var defaultPath = Path.Combine(Directory.GetCurrentDirectory(), "channelMap.json");
                     if (File.Exists(defaultPath))
                     {
+                        SaveConfigDir(Directory.GetCurrentDirectory());
                         _configDir = Directory.GetCurrentDirectory();
                         AnsiConsole.MarkupLine($"[green]Using default directory: {_configDir}[/]");
                         break;
