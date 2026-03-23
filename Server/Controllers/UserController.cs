@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Authentication;
 using LteCar.Server.Data;
 using System.Security.Cryptography;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Logging;
 
 namespace LteCar.Server.Controllers;
 
@@ -15,12 +16,14 @@ public class UserController : ControllerBase
 {
     private readonly LteCarContext DbContext;
     private readonly IServiceProvider ServiceProvider;
+    private readonly ILogger<UserController> Logger;
     private static readonly TimeSpan CodeValidity = TimeSpan.FromMinutes(5);
 
-    public UserController(LteCarContext context, IServiceProvider serviceProvider) : base(context)
+    public UserController(LteCarContext context, IServiceProvider serviceProvider, ILogger<UserController> logger) : base(context)
     {
         DbContext = context;
         ServiceProvider = serviceProvider;
+        Logger = logger;
     }
 
     [HttpGet("me")]
@@ -33,30 +36,39 @@ public class UserController : ControllerBase
         }
 
         var idEncoder = ServiceProvider.GetRequiredService<Sqids.SqidsEncoder<long>>();
-        var userSessionId = string.IsNullOrEmpty(sessionToken)
-            ? DbContext.Users.Count() > 0 ? DbContext.Users.Max(u => u.SessionId) + 1 : 1
-            : idEncoder.Decode(sessionToken).FirstOrDefault();
-
-        User? user = await DbContext.Users.FirstOrDefaultAsync(u => u.SessionId == userSessionId);
-
-        if (user != null)
+        
+        if (!string.IsNullOrEmpty(sessionToken))
         {
-            user.LastSeen = DateTime.Now;
-            await DbContext.SaveChangesAsync();
-            return Ok(new
+            var sessionId = idEncoder.Decode(sessionToken).FirstOrDefault();
+            var user = await DbContext.Users.FirstOrDefaultAsync(u => u.SessionId == sessionId);
+            
+            if (user != null)
             {
-                authenticated = true,
-                userId = user.Id,
-                sessionToken
-            });
+                user.LastSeen = DateTime.UtcNow;
+                await DbContext.SaveChangesAsync();
+                return Ok(new
+                {
+                    authenticated = true,
+                    userId = user.Id,
+                    sessionToken,
+                    userName = user.Name,
+                    hasControlledCar = user.HasControlledCar,
+                    loginName = user.LoginName
+                });
+            }
+            
+            Logger.LogWarning("Session token exists but user not found in DB. SessionId: {SessionId}", sessionId);
         }
-
+        
+        var nextSessionId = await DbContext.GetNextUserSessionId();
+        var newSessionToken = idEncoder.Encode(nextSessionId);
+        
         var newUser = new User
         {
-            LastSeen = DateTime.Now,
-            SessionId = userSessionId,
+            LastSeen = DateTime.UtcNow,
+            SessionId = nextSessionId,
+            Name = $"User_{nextSessionId}"
         };
-        var newSessionToken = idEncoder.Encode(newUser.SessionId);
         DbContext.Users.Add(newUser);
         await DbContext.SaveChangesAsync();
 
@@ -70,10 +82,117 @@ public class UserController : ControllerBase
         {
             authenticated = true,
             userId = newUser.Id,
-            sessionToken = newSessionToken
+            sessionToken = newSessionToken,
+            userName = newUser.Name,
+            hasControlledCar = newUser.HasControlledCar,
+            loginName = newUser.LoginName
         });
     }
 
+    [HttpPost("login")]
+    public async Task<IActionResult> Login([FromBody] LoginRequest model)
+    {
+        if (string.IsNullOrWhiteSpace(model.UserName) || string.IsNullOrWhiteSpace(model.Password))
+        {
+            return BadRequest(new { message = "Username and password are required" });
+        }
+
+        var existingUser = await DbContext.Users
+            .FirstOrDefaultAsync(u => u.LoginName == model.UserName || u.Name == model.UserName);
+
+        if (existingUser != null && existingUser.PasswordHash != null)
+        {
+            if (!existingUser.ValidatePassword(model.Password))
+            {
+                return Unauthorized(new { message = "Invalid password" });
+            }
+            
+            existingUser.LastSeen = DateTime.UtcNow;
+            existingUser.LastLogin = DateTime.UtcNow;
+            await DbContext.SaveChangesAsync();
+            
+            var idEncoder = ServiceProvider.GetRequiredService<Sqids.SqidsEncoder<long>>();
+            var sessionToken = idEncoder.Encode(existingUser.SessionId);
+            
+            var claims = new[] { new Claim(ClaimTypes.NameIdentifier, sessionToken) };
+            var identity = new ClaimsIdentity(claims, "cookie");
+            var principal = new ClaimsPrincipal(identity);
+            await HttpContext.SignInAsync("cookie", principal);
+            
+            return Ok(new
+            {
+                authenticated = true,
+                userId = existingUser.Id,
+                sessionToken,
+                userName = existingUser.Name,
+                hasControlledCar = existingUser.HasControlledCar,
+                loginName = existingUser.LoginName
+            });
+        }
+        
+        var nextSessionId = await DbContext.GetNextUserSessionId();
+        var newUser = new User
+        {
+            LastSeen = DateTime.UtcNow,
+            LastLogin = DateTime.UtcNow,
+            SessionId = nextSessionId,
+            Name = model.UserName,
+            LoginName = model.UserName
+        };
+        newUser.SetPassword(model.Password);
+        
+        DbContext.Users.Add(newUser);
+        await DbContext.SaveChangesAsync();
+        
+        var newIdEncoder = ServiceProvider.GetRequiredService<Sqids.SqidsEncoder<long>>();
+        var newSessionToken = newIdEncoder.Encode(newUser.SessionId);
+        
+        var newClaims = new[] { new Claim(ClaimTypes.NameIdentifier, newSessionToken) };
+        var newIdentity = new ClaimsIdentity(newClaims, "cookie");
+        var newPrincipal = new ClaimsPrincipal(newIdentity);
+        await HttpContext.SignInAsync("cookie", newPrincipal);
+        
+        return Ok(new
+        {
+            authenticated = true,
+            userId = newUser.Id,
+            sessionToken = newSessionToken,
+            userName = newUser.Name,
+            hasControlledCar = newUser.HasControlledCar,
+            loginName = newUser.LoginName
+        });
+    }
+
+    [HttpPost("logout")]
+    public async Task<IActionResult> Logout()
+    {
+        await HttpContext.SignOutAsync("cookie");
+        return Ok(new { message = "Logged out successfully" });
+    }
+
+    [HttpPost("claim-anonymous-session")]
+    public async Task<IActionResult> ClaimAnonymousSession()
+    {
+        var loggedInUser = await GetCurrentUserAsync();
+        if (loggedInUser == null)
+        {
+            return Unauthorized(new { message = "You must be logged in to claim a session" });
+        }
+
+        if (loggedInUser.LoginName != null)
+        {
+            return BadRequest(new { message = "Your session is already associated with a login" });
+        }
+
+        return Ok(new
+        {
+            message = "Session already claimed",
+            userId = loggedInUser.Id,
+            userName = loggedInUser.Name,
+            hasControlledCar = loggedInUser.HasControlledCar,
+            loginName = loggedInUser.LoginName
+        });
+    }
 
     [HttpPost("generate-transfer-code")]
     public async Task<IActionResult> GenerateTransferCode()
@@ -134,6 +253,27 @@ public class UserController : ControllerBase
         {
             message = "Session transferred successfully"
         });
+    }
+
+    private async Task<User?> GetCurrentUserAsync()
+    {
+        if (User.Identity?.IsAuthenticated != true)
+            return null;
+
+        var sessionToken = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(sessionToken))
+            return null;
+        
+        var idEncoder = ServiceProvider.GetRequiredService<Sqids.SqidsEncoder<long>>();
+        var sessionId = idEncoder.Decode(sessionToken).FirstOrDefault();
+
+        return await DbContext.Users.FirstOrDefaultAsync(u => u.SessionId == sessionId);
+    }
+
+    public class LoginRequest
+    {
+        public string UserName { get; set; } = string.Empty;
+        public string Password { get; set; } = string.Empty;
     }
 
     public class ApplyTransferRequest
