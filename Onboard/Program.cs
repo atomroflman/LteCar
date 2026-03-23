@@ -92,6 +92,7 @@ serviceCollection.AddSingleton<VideoStreamService>();
 serviceCollection.AddSingleton<ServerCarConfigurationService>();
 serviceCollection.AddSingleton<ControlService>();
 serviceCollection.AddSingleton<TelemetryService>();
+serviceCollection.AddSingleton<BashToolService>();
 
 serviceCollection.AddSingleton<SshKeyService>();
 serviceCollection.AddSingleton<ControlExecutionService>();
@@ -135,6 +136,23 @@ if (configuration.GetValue<bool>("EnableChannelTest"))
 }
 
 await connectionService.ConnectToServer(carIdentityKey);
+
+// Initialize BashTool if enabled
+var bashToolService = serviceProvider.GetRequiredService<BashToolService>();
+var bashEnabled = configuration.GetValue<bool?>("bashTool") ?? false;
+if (bashEnabled)
+{
+    var serverUrl = $"{((configuration.GetValue<bool?>("UseHttps") ?? true) ? "https" : "http")}://{configuration.GetValue<string>("ServerName")}:{configuration.GetValue<int?>("ServerPort") ?? 5000}";
+    bashToolService.SetEnabled(true);
+    await bashToolService.ConnectToServer(serverUrl, carIdentityKey);
+    logger.LogInformation("BashToolService connected to server");
+}
+else
+{
+    bashToolService.SetEnabled(false);
+    logger.LogInformation("BashToolService is disabled");
+}
+
 // Try load previous sync (contains server IDs) before optional sync
 var hadPreviousSync = connectionService.TryLoadPreviousSync();
 if (!hadPreviousSync)

@@ -49,7 +49,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
             dbContext.Cars.Add(car);
             car.ChannelMapHash = new Guid().ToString();
         }
-        car.LastSeen = DateTime.Now;
+        car.LastSeen = DateTime.UtcNow;
         await dbContext.SaveChangesAsync();
         
         // Add connection to SignalR group by CarId for targeted messaging
@@ -265,7 +265,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
             var db = dbContext.CarVideoStreams.FirstOrDefault(s => s.StreamId == value.StreamId && s.CarId == car.Id);
             if (db == null)
             {
-                db = new CarVideoStream { StreamId = value.StreamId, CarId = car.Id, StartTime = DateTime.Now };
+                db = new CarVideoStream { StreamId = value.StreamId, CarId = car.Id, StartTime = DateTime.UtcNow };
                 dbContext.CarVideoStreams.Add(db);
                 await dbContext.SaveChangesAsync();
             }
@@ -293,7 +293,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
             hash = Convert.ToHexString(bytes);
         }
         car.ChannelMapHash = hash;
-        car.LastSeen = DateTime.Now;
+        car.LastSeen = DateTime.UtcNow;
         await dbContext.SaveChangesAsync();
 
         var response = new ChannelMapSyncResponse
