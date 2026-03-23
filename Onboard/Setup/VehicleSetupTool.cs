@@ -829,4 +829,19 @@ public class AppSettings
     
     [JsonPropertyName("apiKey")]
     public string? ApiKey { get; set; }
+
+    [JsonPropertyName("webSetup")]
+    public bool WebSetup { get; set; } = true;
+
+    [JsonPropertyName("bashTool")]
+    public bool BashTool { get; set; } = true;
+
+    [JsonPropertyName("channelTester")]
+    public bool ChannelTester { get; set; } = true;
+
+    [JsonPropertyName("audio")]
+    public bool Audio { get; set; } = true;
+
+    [JsonPropertyName("video")]
+    public bool Video { get; set; } = true;
 }

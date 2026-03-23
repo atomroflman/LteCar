@@ -1,14 +1,40 @@
-# LteCar – Dokumentation
+# LteCar – Remote Control über LTE/Internet
 
-## Zweck
+## Quick Start
 
-LteCar ist ein System zum Bau und Betrieb von ferngesteuerten Autos über LTE/Internet. Es ermöglicht:
-- **Quasi unbegrenzte Anzahl von Steuerkanälen** (z.B. Motor, Lenkung, Licht, Sensoren)
-- **Echtzeit-Videoübertragung** vom Fahrzeug zur Weboberfläche
-- **Reaktionsschnelle Steuerung** über das Internet
-- **Mehrere Autos pro Server** – Verwaltung und Steuerung verschiedener Fahrzeuge gleichzeitig
-- **Bidirektionaler Audio-Chat** zwischen Fahrer und Fahrzeug
-- **Webseite** zur Steuerung, Videoanzeige, Audio-Chat und Konfiguration
+```bash
+# Server
+cd Server && dotnet run
+
+# Onboard (Fahrzeug)
+cd Onboard && dotnet run -- setup    # Erstes Setup
+cd Onboard && dotnet run            # Normaler Start
+```
+
+**Dokumentation:** Siehe [Docs/README.md](Docs/README.md) für vollständige Dokumentation.
+
+---
+
+## Wichtige Hinweise
+
+> **LTE-Konnektivität**: Das Onboard-Fahrzeug initiiert eine **ausgehende Verbindung** zum Server. Das Fahrzeug ist **nicht direkt aus dem Internet erreichbar** – alle Kommunikation wird vom Fahrzeug initiiert.
+
+> **Datenbank**: Niemals die Datenbank manuell ändern. Immer EF Core Migrations verwenden.
+
+---
+
+## Features
+
+| Feature | Beschreibung |
+|---------|--------------|
+| Remote Control | Steuerung über LTE/Internet mit niedriger Latenz |
+| Video-Streaming | Echtzeit-Video von Kamera |
+| Audio-Chat | Bidirektionale Audiokommunikation |
+| Bash Tool | Remote Bash-Befehle auf Fahrzeug ausführen |
+| Channel Tester | Hardware-Kanäle testen |
+| Templates | Fahrzeugkonfigurationen teilen |
+
+**Feature Flags**: Alle optionalen Features sind **standardmäßig deaktiviert** (`webSetup`, `bashTool`, `channelTester`, `audio`, `video`). Aktivierung via Setup-Tool oder `appSettings.json`.
 
 ---
 
@@ -16,205 +42,129 @@ LteCar ist ein System zum Bau und Betrieb von ferngesteuerten Autos über LTE/In
 
 ### Server
 
-1. Voraussetzungen: Linux, Docker oder .NET 8, Node.js, Janus Gateway
-2. Repository klonen und Basisinstallation:
 ```bash
 git clone https://github.com/atomroflman/LteCar.git
-cd LteCar
-bash install-server.sh
-```
-3. Janus Gateway installieren (siehe `Server/bash/install-janus.sh` für Details).
-4. Server starten:
-```bash
-bash start-server.sh
-```
-    oder als Systemdienst (`Server/install.sh`).
-
-### Onboard (Fahrzeug)
-
-1. Raspberry Pi vorbereiten.
-2.
-```bash
-git clone https://github.com/atomroflman/LteCar.git
-cd LteCar
-sudo ./pi-install-car.sh
-```
-3. Konfiguration anpassen (siehe unten).
-4. Onboard-Software starten:
-```bash
-cd Onboard
+cd LteCar/Server
 dotnet run
 ```
 
----
+### Onboard (Raspberry Pi)
 
-## Konfiguration Onboard
+```bash
+git clone https://github.com/atomroflman/LteCar.git
+cd LteCar/Onboard
+dotnet run -- setup   # Interaktives Setup
+dotnet run            # Start
+```
 
-- **carId.txt**: Eindeutige Fahrzeug-ID (wird beim ersten Start erzeugt).
-- **channelMap.json**: Definition aller Steuerkanäle (z.B. Motor, Lenkung, Sensoren).
-- **appSettings.json**: Netzwerk- und Servereinstellungen.
-- **VideoSettings**: Videoauflösung, Bitrate etc. (im Server und Onboard konfigurierbar).
-
-### Konfigurationsoptionen (appSettings.json)
-
-| Option | Standard | Beschreibung |
-|--------|----------|---------------|
-| `ServerName` | localhost | Hostname des Servers |
-| `ServerPort` | 5000 | Server-Port |
-| `UseHttps` | true | HTTPS verwenden |
-| `VideoPort` | 10001 | Video-Stream Port |
-| `AudioPort` | 11001 | Audio-Stream Port |
-| `AutoConfigureMediaMtx` | true | MediaMTX automatisch konfigurieren |
-| `LTE_USE_NEW_CONNECTION_MODEL` | true | Neues Kommunikationsmodell aktivieren |
+**Details:** [Docs/INSTALLATION.md](Docs/INSTALLATION.md)
 
 ---
 
-## Features
+## Setup-Tool (raspi-config Style)
 
-### Kommunikationsmodell
-
-Das Fahrzeug verwendet nun eine **zentrale Verbindung** über den `VehicleConnectionManager`:
-
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                    VehicleConnectionManager                      │
-│  ┌─────────────────────────────────────────────────────────┐   │
-│  │              SignalR Connection (Single)                 │   │
-│  └─────────────────────────────────────────────────────────┘   │
-│                              │                                  │
-│         ┌────────────────────┼────────────────────┐           │
-│         │                    │                    │           │
-│    ┌────▼────┐        ┌─────▼─────┐       ┌──────▼──────┐    │
-│    │Control   │        │ Telemetry │       │    Video    │    │
-│    │Service   │        │  Service  │       │   Service   │    │
-│    └─────────┘        └───────────┘       └─────────────┘    │
-│                                                               │
-│    ┌─────────────────────────────────────────────────────────┐│
-│    │              Auto-Discovery System                      ││
-│    │  Alle IVehicleService-Implementierungen werden          ││
-│    │  automatisch erkannt und initialisiert                  ││
-│    └─────────────────────────────────────────────────────────┘│
-└─────────────────────────────────────────────────────────────────┘
+```bash
+cd Onboard && dotnet run -- setup
 ```
 
-**Vorteile:**
-- Nur **eine** persistente Verbindung zum Server
-- Automatisches Reconnection-Handling
-- Services kümmern sich nicht mehr um Connection-Handling
-- Einfache Erweiterung durch `IVehicleService`-Interface
+Menüstruktur:
+1. **System Options** – Hostname, SSH, Boot
+2. **Network / Server** – Server-URL konfigurieren
+3. **Vehicle Configuration** – Kanäle, Name
+4. **Hardware Test** – Outputs, Servos, Motoren testen
+5. **Templates** – Fahrzeugvorlagen verwalten
+6. **Feature Flags** – Features ein/aus
+7. **Update / Recovery** – Updates, Backup, Factory Reset
 
-### Neuen Service erstellen
+**Details:** [Docs/SETUP.md](Docs/SETUP.md)
 
-```csharp
-public class MeinNeuerService : VehicleServiceBase
-{
-    public override string ServiceName => "MeinNeuer";
-    
-    public override Task OnConnectedAsync(HubConnection connection)
-    {
-        // Wird aufgerufen wenn die Verbindung hergestellt ist
-        return Task.CompletedTask;
-    }
-}
-```
+---
 
-Der Service wird automatisch via Dependency Injection erkannt.
+## Konfiguration
 
-### Video-Streaming
-
-- **Janus Gateway** für WebRTC Video-Streaming
-- **MediaMTX** für flexible Stream-Konfiguration
-- Dynamische Endpoint-Konfiguration basierend auf Serverdaten
-
-### Audio-Chat
-
-Bidirektionaler Audio-Chat zwischen Fahrer und Fahrzeug:
-
-- **Mikrofon-Auswahl**: USB oder Jack-Eingang
-- **Lautsprecher-Auswahl**: Audio-Output-Gerät
-- **Aufnahme-Steuerung**: Start/Stop über Control Center
-- **EchoCancellation** und **NoiseSuppression** standardmäßig aktiviert
-
-### Flexible Channel-Konfiguration
-
-Beliebige Funktionen und Sensoren über `channelMap.json`:
+### Onboard (appSettings.json)
 
 ```json
 {
-  "ControlChannels": {
-    "steering": { "Type": "ServoControl", "ServerId": 1 },
-    "throttle": { "Type": "ThrottleControl", "ServerId": 2 }
-  },
-  "TelemetryChannels": {
-    "battery": {
-      "TelemetryType": "LteCar.Onboard.Telemetry.JbdBmsTelemetryReader",
-      "ReadIntervalTicks": 50
-    }
-  },
-  "VideoStreams": {
-    "front": { "StreamId": "rpi0", "Enabled": true }
-  }
+  "carId": "vehicle-001",
+  "carName": "My RC Car",
+  "serverUrl": "https://server.example.com:5000",
+  "bashTool": false,
+  "audio": false,
+  "video": true
 }
 ```
 
-### Mehrbenutzerfähig
+### Feature Flags
 
-- Mehrere Nutzer pro Server
-- Mehrere Fahrzeuge pro Server
-- SSH-basierte Authentifizierung für Fahrzeugsteuerung
+| Flag | Standard | Beschreibung |
+|------|---------|--------------|
+| `webSetup` | false | Web-Setup Interface |
+| `bashTool` | false | Remote Bash-Tool |
+| `channelTester` | false | Kanal-Tester |
+| `audio` | false | Audio-Chat |
+| `video` | false | Video-Streaming |
+
+**Details:** [Docs/CONFIGURATION.md](Docs/CONFIGURATION.md)
 
 ---
 
 ## Architektur
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                     Client (Browser)                             │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────┐  │
-│  │  Video   │  │  Audio   │  │  Telemetry│  │    Flow      │  │
-│  │  Stream  │  │   Chat   │  │  Display  │  │   Editor     │  │
-│  └────┬─────┘  └────┬─────┘  └─────┬─────┘  └──────┬───────┘  │
-└───────┼─────────────┼─────────────┼────────────────┼──────────┘
-        │             │             │                │
-        │ WebRTC      │ SignalR     │ SignalR       │ SignalR
-        │             │             │                │
-┌───────▼─────────────▼─────────────▼────────────────▼──────────┐
-│                     Server (ASP.NET Core)                       │
-│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────┐   │
-│  │ Janus    │  │ Telemetry│  │  Audio   │  │    Car       │   │
-│  │ Gateway  │  │   Hub    │  │   Hub    │  │  Control     │   │
-│  └──────────┘  └──────────┘  └──────────┘  └──────┬───────┘   │
-└───────────────────────────────────────────────────┼───────────┘
-                                                    │
-                                          SignalR   │
-┌───────────────────────────────────────────────────▼───────────┐
-│                     Onboard (Raspberry Pi)                    │
-│  ┌────────────────┐  ┌────────────────┐  ┌───────────────┐ │
-│  │VehicleConnection│  │    Video       │  │    Audio      │ │
-│  │    Manager      │  │   Service      │  │     Chat      │ │
-│  └────────────────┘  └────────────────┘  └───────────────┘ │
-│  ┌────────────────┐  ┌────────────────┐  ┌───────────────┐ │
-│  │    Telemetry    │  │    Control     │  │    Media      │ │
-│  │    Service     │  │    Service     │  │     MTX       │ │
-│  └────────────────┘  └────────────────┘  └───────────────┘ │
-└──────────────────────────────────────────────────────────────┘
+┌──────────────┐     WebRTC      ┌──────────────┐
+│   Browser    │◄──────────────►│    Server    │
+│   (Client)   │    SignalR     │  (ASP.NET)   │
+└──────────────┘                └──────┬───────┘
+                                       │
+                              SignalR  │  WebRTC
+                                       │
+┌──────────────────────────────────────▼───────────────┐
+│                    Onboard (Raspberry Pi)             │
+│  ┌────────────┐  ┌────────────┐  ┌─────────────┐   │
+│  │  Vehicle   │  │   Video    │  │    Audio    │   │
+│  │ Connection │  │  Service   │  │    Chat     │   │
+│  │  Manager   │  │            │  │             │   │
+│  └────────────┘  └────────────┘  └─────────────┘   │
+│  ┌────────────┐  ┌────────────┐  ┌─────────────┐   │
+│  │  Telemetry │  │  Control   │  │  BashTool   │   │
+│  │  Service   │  │  Service   │  │  Service    │   │
+│  └────────────┘  └────────────┘  └─────────────┘   │
+└────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## Weitere Infos
+## SignalR Hubs
 
-- Quellcode und Beispiele: sieh die jeweiligen Unterordner (`Server`, `Onboard`, `Client`)
-- API-Dokumentation: `/api/*` Endpunkte am Server
-- Anpassung der Kanäle: `channelMap.json` und Weboberfläche
+| Hub | Pfad | Zweck |
+|-----|------|-------|
+| CarConnectionHub | `/hubs/connection` | Fahrzeug-Verbindung |
+| CarControlHub | `/hubs/control` | Fernsteuerung |
+| TelemetryHub | `/hubs/telemetry` | Telemetrie |
+| CarUiHub | `/hubs/carui` | UI-Updates |
+| CarVideoHub | `/hubs/video` | Video-Streaming |
+| CarBashHub | `/hubs/carbash` | Bash-Proxy |
+
+---
+
+## Dokumentation
+
+- [Docs/README.md](Docs/README.md) – Übersicht
+- [Docs/INSTALLATION.md](Docs/INSTALLATION.md) – Installationsanleitung
+- [Docs/SETUP.md](Docs/SETUP.md) – Setup-Tool
+- [Docs/FEATURES.md](Docs/FEATURES.md) – Feature-Dokumentation
+- [Docs/CONFIGURATION.md](Docs/CONFIGURATION.md) – Konfigurationsreferenz
 
 ---
 
 ## Environment-Variablen
 
-| Variable | Standard | Beschreibung |
-|----------|----------|---------------|
-| `LTE_USE_NEW_CONNECTION_MODEL` | true | Verwendet das neue zentrale Kommunikationsmodell |
+| Variable | Beschreibung |
+|----------|--------------|
+| `CONFIG_DIR` | Konfigurationsverzeichnis (Onboard) |
+| `VEHICLE_TEMPLATES_PATH` | Template-Pfad |
+| `LTE_USE_NEW_CONNECTION_MODEL` | Neues Verbindungsmodell (default: true) |
 
 ---
 

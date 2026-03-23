@@ -21,25 +21,40 @@ using Microsoft.Extensions.FileProviders;
 // Setup-Modus prüfen
 if (args.Length > 0 && args[0].Equals("setup", StringComparison.OrdinalIgnoreCase))
 {
-    LteCar.Onboard.Setup.VehicleSetupTool.Run();
+    var setupConfigDirArg = args.FirstOrDefault(a => a.StartsWith("--config-dir="))?.Split('=')[1];
+    var setupConfigDirEnv = Environment.GetEnvironmentVariable("CONFIG_DIR");
+    var setupDefaultDir = Directory.GetCurrentDirectory();
+    var setupConfigLoader = new ConfigLoader(setupDefaultDir, setupConfigDirArg ?? setupConfigDirEnv);
+    LteCar.Onboard.Setup.SetupMenu.Run(setupConfigLoader);
     return;
+}
+
+var configDirArg = args.FirstOrDefault(a => a.StartsWith("--config-dir="))?.Split('=')[1];
+var configDirEnv = Environment.GetEnvironmentVariable("CONFIG_DIR");
+var defaultConfigDir = Directory.GetCurrentDirectory();
+var configLoader = new ConfigLoader(defaultConfigDir, configDirArg ?? configDirEnv);
+
+if (configDirArg != null || configDirEnv != null)
+{
+    Console.WriteLine($"Using config directory: {configLoader.ConfigDir}");
 }
 
 var carIdentityKey = Guid.NewGuid().ToString();
 var startupTime = DateTime.Now;
-if (File.Exists("carIdentityKey.txt"))
+var carIdentityKeyPath = configLoader.CarIdentityKeyPath;
+if (File.Exists(carIdentityKeyPath))
 {
-    carIdentityKey = File.ReadAllText("carIdentityKey.txt");
+    carIdentityKey = File.ReadAllText(carIdentityKeyPath);
 }
 else
 {
     Console.WriteLine($"New Car Identity Key created: {carIdentityKey}");
-    File.WriteAllText("carIdentityKey.txt", carIdentityKey);
+    File.WriteAllText(carIdentityKeyPath, carIdentityKey);
 }
 
 // Generate SSH key pair only if no public key exists
-var sshKeyPath = "ssh_key";
-var sshPublicKeyPath = "ssh_key.pub";
+var sshKeyPath = configLoader.SshKeyPath;
+var sshPublicKeyPath = configLoader.SshPublicKeyPath;
 if (!File.Exists(sshPublicKeyPath))
 {
     Console.WriteLine("Generating SSH key pair for vehicle authentication...");
@@ -52,20 +67,19 @@ else
 }
 
 Console.WriteLine($"Car Identity Key: {carIdentityKey}");
+
 var configuration = new ConfigurationBuilder()
+    .SetBasePath(configLoader.ConfigDir)
     .AddInMemoryCollection(new Dictionary<string, string?>() {
         { "CarIdentityKey", carIdentityKey }
     })
-    .AddJsonFile("appSettings.json")
-    .AddJsonFile("appSettings.development.json", true)
+    .AddJsonFile("appSettings.json", optional: false)
+    .AddJsonFile("appSettings.development.json", optional: true)
     .Build();
 
-var channelMapFile = new FileInfo("channelMap.json");
-if (!channelMapFile.Exists)
-    throw new FileNotFoundException("channelMap.json could not be found");
-var channelMap = JsonSerializer.Deserialize<ChannelMap>(channelMapFile.OpenRead());
+var channelMap = await configLoader.LoadConfigsAsync();
 if (channelMap == null)
-    throw new Exception("channelMap.json could not be deserialized");
+    throw new Exception("channelMap.json could not be loaded");
 
 var serviceCollection = new ServiceCollection();
 // Configuration
@@ -78,6 +92,7 @@ serviceCollection.AddSingleton<VideoStreamService>();
 serviceCollection.AddSingleton<ServerCarConfigurationService>();
 serviceCollection.AddSingleton<ControlService>();
 serviceCollection.AddSingleton<TelemetryService>();
+serviceCollection.AddSingleton<BashToolService>();
 
 serviceCollection.AddSingleton<SshKeyService>();
 serviceCollection.AddSingleton<ControlExecutionService>();
@@ -121,6 +136,23 @@ if (configuration.GetValue<bool>("EnableChannelTest"))
 }
 
 await connectionService.ConnectToServer(carIdentityKey);
+
+// Initialize BashTool if enabled
+var bashToolService = serviceProvider.GetRequiredService<BashToolService>();
+var bashEnabled = configuration.GetValue<bool?>("bashTool") ?? false;
+if (bashEnabled)
+{
+    var serverUrl = $"{((configuration.GetValue<bool?>("UseHttps") ?? true) ? "https" : "http")}://{configuration.GetValue<string>("ServerName")}:{configuration.GetValue<int?>("ServerPort") ?? 5000}";
+    bashToolService.SetEnabled(true);
+    await bashToolService.ConnectToServer(serverUrl, carIdentityKey);
+    logger.LogInformation("BashToolService connected to server");
+}
+else
+{
+    bashToolService.SetEnabled(false);
+    logger.LogInformation("BashToolService is disabled");
+}
+
 // Try load previous sync (contains server IDs) before optional sync
 var hadPreviousSync = connectionService.TryLoadPreviousSync();
 if (!hadPreviousSync)
