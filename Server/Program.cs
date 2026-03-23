@@ -93,7 +93,7 @@ builder.Services.AddAuthentication("cookie")
         };
     });
 
-builder.Services.AddUserCleanupService();
+// builder.Services.AddUserCleanupService(); // TODO: Implement UserCleanupService
 
 var app = builder.Build();
 var configuration = app.Configuration;
