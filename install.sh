@@ -182,8 +182,8 @@ if [ -x "$DOTNET_ROOT/dotnet" ]; then
     echo ".NET SDK already installed at $DOTNET_ROOT"
     run_as_user "$DOTNET_ROOT/dotnet" --info | head -3
 else
-    echo "Installing .NET SDK 8.0 for user $RUN_USER ..."
-    run_as_user bash -c 'curl -sSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --channel 8.0'
+    echo "Installing .NET SDK 9.0 for user $RUN_USER ..."
+    run_as_user bash -c 'curl -sSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --channel 9.0'
 fi
 
 if ! grep -q 'DOTNET_ROOT' "$RUN_USER_HOME/.bashrc"; then
@@ -268,7 +268,7 @@ chown "$RUN_USER:$RUN_USER" "$LOG_DIR"
 
 if [ "$INSTALL_MODE" = "server" ]; then
     # ── ltecar-server service ────────────────────────────
-    SERVER_EXEC="$REPO_DIR/Server/bin/Release/net8.0/LteCar.Server"
+    SERVER_EXEC="$REPO_DIR/Server/bin/Release/net9.0/LteCar.Server"
     if [ ! -f "$SERVER_EXEC" ]; then
         echo "Error: Server executable not found at $SERVER_EXEC"
         exit 1
@@ -333,7 +333,7 @@ EOF
 fi
 
 if [ "$INSTALL_MODE" = "onboard" ]; then
-    ONBOARD_DLL="$REPO_DIR/Onboard/bin/Release/net8.0/publish/LteCar.Onboard.dll"
+    ONBOARD_DLL="$REPO_DIR/Onboard/bin/Release/net9.0/publish/LteCar.Onboard.dll"
     if [ ! -f "$ONBOARD_DLL" ]; then
         echo "Error: Onboard DLL not found at $ONBOARD_DLL"
         exit 1

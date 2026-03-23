@@ -50,7 +50,6 @@ public class BashToolService
             _hubConnection = new HubConnectionBuilder()
                 .WithUrl(uriBuilder.Uri)
                 .WithAutomaticReconnect(Enumerable.Range(0, 10).Select(e => TimeSpan.FromSeconds(e + 1)).ToArray())
-                .AddMessagePackProtocol()
                 .Build();
 
             _hubConnection.On<string>("ExecuteCommand", async (command) =>
