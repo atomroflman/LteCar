@@ -21,7 +21,11 @@ using Microsoft.Extensions.FileProviders;
 // Setup-Modus prüfen
 if (args.Length > 0 && args[0].Equals("setup", StringComparison.OrdinalIgnoreCase))
 {
-    LteCar.Onboard.Setup.VehicleSetupTool.Run();
+    var setupConfigDirArg = args.FirstOrDefault(a => a.StartsWith("--config-dir="))?.Split('=')[1];
+    var setupConfigDirEnv = Environment.GetEnvironmentVariable("CONFIG_DIR");
+    var setupDefaultDir = Directory.GetCurrentDirectory();
+    var setupConfigLoader = new ConfigLoader(setupDefaultDir, setupConfigDirArg ?? setupConfigDirEnv);
+    LteCar.Onboard.Setup.SetupMenu.Run(setupConfigLoader);
     return;
 }
 
