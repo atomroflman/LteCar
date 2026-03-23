@@ -152,6 +152,7 @@ app.MapHub<TelemetryHub>(HubPaths.TelemetryHub);
 app.MapHub<CarUiHub>(HubPaths.CarUiHub);
 app.MapHub<CarVideoHub>(HubPaths.CarVideoHub);
 app.MapHub<UserChannelHub>(HubPaths.UserChannelHub);
+app.MapHub<CarBashHub>(HubPaths.CarBashHub);
 
 // Validate configuration during startup
 app.Services.ValidateConfiguration();
