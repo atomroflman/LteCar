@@ -7,50 +7,43 @@ LteCar ist ein System zum Bau und Betrieb von ferngesteuerten Autos über LTE/In
 - **Echtzeit-Videoübertragung** vom Fahrzeug zur Weboberfläche
 - **Reaktionsschnelle Steuerung** über das Internet
 - **Mehrere Autos pro Server** – Verwaltung und Steuerung verschiedener Fahrzeuge gleichzeitig
-- **Webseite** zur Steuerung, Videoanzeige und Konfiguration
+- **Bidirektionaler Audio-Chat** zwischen Fahrer und Fahrzeug
+- **Webseite** zur Steuerung, Videoanzeige, Audio-Chat und Konfiguration
 
 ---
 
 ## Installation
 
-Es gibt ein einziges Installationsskript für Server und Onboard (Fahrzeug).
-Das Skript muss mit `sudo` von einem normalen Benutzer ausgeführt werden (nicht als root direkt).
+### Server
 
+1. Voraussetzungen: Linux, Docker oder .NET 8, Node.js, Janus Gateway
+2. Repository klonen und Basisinstallation:
 ```bash
 git clone https://github.com/atomroflman/LteCar.git
 cd LteCar
-sudo bash install.sh
+bash install-server.sh
 ```
-
-Das Skript fragt interaktiv ab, ob ein **Server** oder ein **Onboard-Client** installiert werden soll,
-und bietet am Ende optional die Einrichtung als systemd-Service an.
-
-### Was passiert bei der Installation?
-
-**Server-Modus:**
-- System-Pakete (Node.js, npm)
-- .NET 8 SDK (für den aktuellen Benutzer)
-- Janus Gateway (WebRTC)
-- Next.js Web-Client Build
-- .NET Server Build
-- Optional: systemd-Services `ltecar-server` + `ltecar-client`
-
-**Onboard-Modus:**
-- System-Pakete (GStreamer, Kamera-Bibliotheken)
-- .NET 8 SDK (für den aktuellen Benutzer)
-- WiringPi (GPIO)
-- .NET Onboard Build
-- Optional: systemd-Service `ltecar-onboard`
-
-### Logs & Verwaltung
-
+3. Janus Gateway installieren (siehe `Server/bash/install-janus.sh` für Details).
+4. Server starten:
 ```bash
-# Logs
-ls /var/log/ltecar/
+bash start-server.sh
+```
+    oder als Systemdienst (`Server/install.sh`).
 
-# Services verwalten
-sudo systemctl status ltecar-server
-sudo systemctl restart ltecar-onboard
+### Onboard (Fahrzeug)
+
+1. Raspberry Pi vorbereiten.
+2.
+```bash
+git clone https://github.com/atomroflman/LteCar.git
+cd LteCar
+sudo ./pi-install-car.sh
+```
+3. Konfiguration anpassen (siehe unten).
+4. Onboard-Software starten:
+```bash
+cd Onboard
+dotnet run
 ```
 
 ---
@@ -62,23 +55,166 @@ sudo systemctl restart ltecar-onboard
 - **appSettings.json**: Netzwerk- und Servereinstellungen.
 - **VideoSettings**: Videoauflösung, Bitrate etc. (im Server und Onboard konfigurierbar).
 
+### Konfigurationsoptionen (appSettings.json)
+
+| Option | Standard | Beschreibung |
+|--------|----------|---------------|
+| `ServerName` | localhost | Hostname des Servers |
+| `ServerPort` | 5000 | Server-Port |
+| `UseHttps` | true | HTTPS verwenden |
+| `VideoPort` | 10001 | Video-Stream Port |
+| `AudioPort` | 11001 | Audio-Stream Port |
+| `AutoConfigureMediaMtx` | true | MediaMTX automatisch konfigurieren |
+| `LTE_USE_NEW_CONNECTION_MODEL` | true | Neues Kommunikationsmodell aktivieren |
+
 ---
 
 ## Features
 
-- **SignalR** für Echtzeit-Kommunikation (Steuerung, Telemetrie)
+### Kommunikationsmodell
+
+Das Fahrzeug verwendet nun eine **zentrale Verbindung** über den `VehicleConnectionManager`:
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                    VehicleConnectionManager                      │
+│  ┌─────────────────────────────────────────────────────────┐   │
+│  │              SignalR Connection (Single)                 │   │
+│  └─────────────────────────────────────────────────────────┘   │
+│                              │                                  │
+│         ┌────────────────────┼────────────────────┐           │
+│         │                    │                    │           │
+│    ┌────▼────┐        ┌─────▼─────┐       ┌──────▼──────┐    │
+│    │Control   │        │ Telemetry │       │    Video    │    │
+│    │Service   │        │  Service  │       │   Service   │    │
+│    └─────────┘        └───────────┘       └─────────────┘    │
+│                                                               │
+│    ┌─────────────────────────────────────────────────────────┐│
+│    │              Auto-Discovery System                      ││
+│    │  Alle IVehicleService-Implementierungen werden          ││
+│    │  automatisch erkannt und initialisiert                  ││
+│    └─────────────────────────────────────────────────────────┘│
+└─────────────────────────────────────────────────────────────────┘
+```
+
+**Vorteile:**
+- Nur **eine** persistente Verbindung zum Server
+- Automatisches Reconnection-Handling
+- Services kümmern sich nicht mehr um Connection-Handling
+- Einfache Erweiterung durch `IVehicleService`-Interface
+
+### Neuen Service erstellen
+
+```csharp
+public class MeinNeuerService : VehicleServiceBase
+{
+    public override string ServiceName => "MeinNeuer";
+    
+    public override Task OnConnectedAsync(HubConnection connection)
+    {
+        // Wird aufgerufen wenn die Verbindung hergestellt ist
+        return Task.CompletedTask;
+    }
+}
+```
+
+Der Service wird automatisch via Dependency Injection erkannt.
+
+### Video-Streaming
+
 - **Janus Gateway** für WebRTC Video-Streaming
-- **Flexible Channel-Konfiguration**: beliebige Funktionen und Sensoren
-- **Mehrbenutzerfähig**: mehrere Nutzer und Fahrzeuge pro Server
-- **Weboberfläche**: Steuerung, Video, Setup, Gamepad-Unterstützung
+- **MediaMTX** für flexible Stream-Konfiguration
+- Dynamische Endpoint-Konfiguration basierend auf Serverdaten
+
+### Audio-Chat
+
+Bidirektionaler Audio-Chat zwischen Fahrer und Fahrzeug:
+
+- **Mikrofon-Auswahl**: USB oder Jack-Eingang
+- **Lautsprecher-Auswahl**: Audio-Output-Gerät
+- **Aufnahme-Steuerung**: Start/Stop über Control Center
+- **EchoCancellation** und **NoiseSuppression** standardmäßig aktiviert
+
+### Flexible Channel-Konfiguration
+
+Beliebige Funktionen und Sensoren über `channelMap.json`:
+
+```json
+{
+  "ControlChannels": {
+    "steering": { "Type": "ServoControl", "ServerId": 1 },
+    "throttle": { "Type": "ThrottleControl", "ServerId": 2 }
+  },
+  "TelemetryChannels": {
+    "battery": {
+      "TelemetryType": "LteCar.Onboard.Telemetry.JbdBmsTelemetryReader",
+      "ReadIntervalTicks": 50
+    }
+  },
+  "VideoStreams": {
+    "front": { "StreamId": "rpi0", "Enabled": true }
+  }
+}
+```
+
+### Mehrbenutzerfähig
+
+- Mehrere Nutzer pro Server
+- Mehrere Fahrzeuge pro Server
+- SSH-basierte Authentifizierung für Fahrzeugsteuerung
+
+---
+
+## Architektur
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                     Client (Browser)                             │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────┐  │
+│  │  Video   │  │  Audio   │  │  Telemetry│  │    Flow      │  │
+│  │  Stream  │  │   Chat   │  │  Display  │  │   Editor     │  │
+│  └────┬─────┘  └────┬─────┘  └─────┬─────┘  └──────┬───────┘  │
+└───────┼─────────────┼─────────────┼────────────────┼──────────┘
+        │             │             │                │
+        │ WebRTC      │ SignalR     │ SignalR       │ SignalR
+        │             │             │                │
+┌───────▼─────────────▼─────────────▼────────────────▼──────────┐
+│                     Server (ASP.NET Core)                       │
+│  ┌──────────┐  ┌──────────┐  ┌──────────┐  ┌──────────────┐   │
+│  │ Janus    │  │ Telemetry│  │  Audio   │  │    Car       │   │
+│  │ Gateway  │  │   Hub    │  │   Hub    │  │  Control     │   │
+│  └──────────┘  └──────────┘  └──────────┘  └──────┬───────┘   │
+└───────────────────────────────────────────────────┼───────────┘
+                                                    │
+                                          SignalR   │
+┌───────────────────────────────────────────────────▼───────────┐
+│                     Onboard (Raspberry Pi)                    │
+│  ┌────────────────┐  ┌────────────────┐  ┌───────────────┐ │
+│  │VehicleConnection│  │    Video       │  │    Audio      │ │
+│  │    Manager      │  │   Service      │  │     Chat      │ │
+│  └────────────────┘  └────────────────┘  └───────────────┘ │
+│  ┌────────────────┐  ┌────────────────┐  ┌───────────────┐ │
+│  │    Telemetry    │  │    Control     │  │    Media      │ │
+│  │    Service     │  │    Service     │  │     MTX       │ │
+│  └────────────────┘  └────────────────┘  └───────────────┘ │
+└──────────────────────────────────────────────────────────────┘
+```
 
 ---
 
 ## Weitere Infos
 
-- Quellcode und Beispiele: siehe die jeweiligen Unterordner (`Server`, `Onboard`, `Client`)
+- Quellcode und Beispiele: sieh die jeweiligen Unterordner (`Server`, `Onboard`, `Client`)
 - API-Dokumentation: `/api/*` Endpunkte am Server
 - Anpassung der Kanäle: `channelMap.json` und Weboberfläche
+
+---
+
+## Environment-Variablen
+
+| Variable | Standard | Beschreibung |
+|----------|----------|---------------|
+| `LTE_USE_NEW_CONNECTION_MODEL` | true | Verwendet das neue zentrale Kommunikationsmodell |
 
 ---
 

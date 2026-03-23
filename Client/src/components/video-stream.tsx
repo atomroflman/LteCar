@@ -5,6 +5,9 @@ import type { Janus, JanusPluginHandle, JanusStatic, JanusStreamingMessage } fro
 
 interface VideoStreamProps {
   carId?: number;
+  audioEnabled?: boolean;
+  audioInputDeviceId?: string;
+  onAudioTrack?: (track: MediaStreamTrack | null) => void;
 }
 
 const JANUS_SERVERS = ['/janus', '/janus-ws'];
@@ -98,8 +101,9 @@ function loadJanusScript(): Promise<JanusStatic> {
   });
 }
 
-export default function VideoStream({ carId }: VideoStreamProps) {
+export default function VideoStream({ carId, audioEnabled = false, audioInputDeviceId, onAudioTrack }: VideoStreamProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
+  const audioRef = useRef<HTMLAudioElement>(null);
   const janusRef = useRef<Janus | null>(null);
   const pluginHandleRef = useRef<JanusPluginHandle | null>(null);
   const [pluginHandle, setPluginHandle] = useState<JanusPluginHandle | null>(null);
@@ -162,6 +166,18 @@ export default function VideoStream({ carId }: VideoStreamProps) {
                       setStreamStatus('Video stream active');
                       setError(null);
                     }
+                  } else if (on && track.kind === 'audio') {
+                    const audioStream = new MediaStream([track]);
+                    if (audioRef.current) {
+                      audioRef.current.srcObject = audioStream;
+                    }
+                    onAudioTrack?.(track);
+                    setStreamStatus('Audio+Video stream active');
+                  } else if (!on && track.kind === 'audio') {
+                    if (audioRef.current) {
+                      audioRef.current.srcObject = null;
+                    }
+                    onAudioTrack?.(null);
                   }
                 };
 
@@ -423,9 +439,15 @@ export default function VideoStream({ carId }: VideoStreamProps) {
         ref={videoRef}
         autoPlay
         playsInline
-        muted
+        muted={!audioEnabled}
         className="w-full h-auto bg-black"
         style={{ maxHeight: '80vh' }}
+      />
+      <audio
+        ref={audioRef}
+        autoPlay
+        playsInline
+        className={audioEnabled ? 'w-full mt-2' : 'hidden'}
       />
     </div>
   );
