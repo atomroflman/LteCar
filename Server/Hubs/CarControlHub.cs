@@ -52,10 +52,10 @@ public class CarControlHub : Hub<ICarControlClient>, ICarControlServer
         var session = await Clients.Client(carClientId).AquireCarControl(authRequest);
         Logger.LogDebug($"Session returned: {session}");
         
-        // If authentication was successful, ensure UserCarSetup exists
         if (!string.IsNullOrEmpty(session))
         {
             await EnsureUserCarSetupExists(carIdStr);
+            await MarkUserAsHasControlledCar(carIdStr);
         }
         
         return session;
@@ -149,6 +149,30 @@ public class CarControlHub : Hub<ICarControlClient>, ICarControlServer
         catch (Exception ex)
         {
             Logger.LogError(ex, $"Error ensuring UserCarSetup exists for car {carIdString}");
+        }
+    }
+
+    private async Task MarkUserAsHasControlledCar(string carIdString)
+    {
+        try
+        {
+            if (!int.TryParse(carIdString, out var carId))
+                return;
+
+            var user = await GetCurrentUserAsync();
+            if (user == null)
+                return;
+
+            if (!user.HasControlledCar)
+            {
+                user.HasControlledCar = true;
+                await _context.SaveChangesAsync();
+                Logger.LogInformation($"User {user.Id} marked as having controlled a car (CarId: {carId})");
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, $"Error marking user as having controlled car {carIdString}");
         }
     }
 
