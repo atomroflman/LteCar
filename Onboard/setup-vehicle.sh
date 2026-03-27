@@ -7,9 +7,16 @@ echo "🚗 LTE Car Vehicle Setup"
 echo "========================"
 echo ""
 
-# Check if .NET is installed
+
+# Check if .NET 10 is installed
 if ! command -v dotnet &> /dev/null; then
-    echo "❌ .NET SDK is not installed. Please install .NET 8.0 or later."
+    echo "❌ .NET SDK is not installed. Please install .NET 10.0.0 using asdf (https://asdf-vm.com/)."
+    exit 1
+fi
+
+DOTNET_VERSION=$(dotnet --version | cut -d. -f1)
+if [ "$DOTNET_VERSION" -lt 10 ]; then
+    echo "❌ .NET SDK 10.0.0 or newer is required. Please install using asdf (https://asdf-vm.com/)."
     exit 1
 fi
 

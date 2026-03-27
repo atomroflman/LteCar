@@ -60,9 +60,14 @@ else
         BRANCH_CHOICE="$BRANCH_INPUT"
     fi
 
-    run_as_user git clone -b "$BRANCH_CHOICE" "$REPO_URL" "$REPO_DIR"
-    CURRENT_BRANCH="$BRANCH_CHOICE"
-    echo "Cloned branch '$CURRENT_BRANCH' to $REPO_DIR"
+    if [ -d "$REPO_DIR" ] && [ "$(ls -A "$REPO_DIR")" ]; then
+        echo "Zielverzeichnis $REPO_DIR existiert und ist nicht leer. Überspringe Klonen."
+        CURRENT_BRANCH="$BRANCH_CHOICE"
+    else
+        run_as_user git clone -b "$BRANCH_CHOICE" "$REPO_URL" "$REPO_DIR"
+        CURRENT_BRANCH="$BRANCH_CHOICE"
+        echo "Cloned branch '$CURRENT_BRANCH' to $REPO_DIR"
+    fi
 fi
 
 echo ""
@@ -160,7 +165,7 @@ if [ "$INSTALL_MODE" = "onboard" ]; then
     apt install -y \
         libcamera-apps gstreamer1.0-tools gstreamer1.0-plugins-base \
         gstreamer1.0-plugins-good gstreamer1.0-plugins-bad gstreamer1.0-plugins-ugly \
-        gstreamer1.0-libav gstreamer1.0-rtsp gstreamer1.0-webrtc vnstat \
+        gstreamer1.0-libav gstreamer1.0-rtsp vnstat \
         libmicrohttpd-dev libjansson-dev libssl-dev libsrtp2-dev \
         libsofia-sip-ua-dev libglib2.0-dev libopus-dev libogg-dev \
         libini-config-dev libcollection-dev libconfig-dev pkg-config \
@@ -173,26 +178,12 @@ fi
 #  Phase 2 – .NET SDK (installed as regular user)
 # =====================================================================
 echo ""
-echo "── Phase 2: .NET SDK ─────────────────────────────────"
+echo "── Phase 2: .NET SDK ─────────────────────────────"
 
-export DOTNET_ROOT="$RUN_USER_HOME/.dotnet"
-export PATH="$DOTNET_ROOT:$DOTNET_ROOT/tools:$PATH"
+wget https://dot.net/v1/dotnet-install.sh -O /tmp/dotnet-install.sh
+chmod +x /tmp/dotnet-install.sh
+/tmp/dotnet-install.sh --channel 10.0
 
-if [ -x "$DOTNET_ROOT/dotnet" ]; then
-    echo ".NET SDK already installed at $DOTNET_ROOT"
-    run_as_user "$DOTNET_ROOT/dotnet" --info | head -3
-else
-    echo "Installing .NET SDK 9.0 for user $RUN_USER ..."
-    run_as_user bash -c 'curl -sSL https://dot.net/v1/dotnet-install.sh | bash /dev/stdin --channel 9.0'
-fi
-
-if ! grep -q 'DOTNET_ROOT' "$RUN_USER_HOME/.bashrc"; then
-    run_as_user bash -c "echo 'export DOTNET_ROOT=\$HOME/.dotnet' >> \$HOME/.bashrc"
-    run_as_user bash -c "echo 'export PATH=\$PATH:\$HOME/.dotnet:\$HOME/.dotnet/tools' >> \$HOME/.bashrc"
-    echo "Added DOTNET_ROOT and PATH to $RUN_USER_HOME/.bashrc"
-fi
-
-echo ".NET SDK ready: $(run_as_user "$DOTNET_ROOT/dotnet" --version)"
 echo "Clearing tmp..."
 # temp clear
 rm -rf /tmp/*
