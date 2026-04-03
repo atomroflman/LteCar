@@ -9,7 +9,15 @@ cd Server && dotnet run
 # Onboard (Fahrzeug)
 cd Onboard && dotnet run -- setup    # Erstes Setup
 cd Onboard && dotnet run            # Normaler Start
+
+# Full stack (client + server + nginx + janus + postgres)
+docker compose up --build
+
+# Stop stack
+docker compose down
 ```
+
+For servers, install `deploy/ltecar-compose.service` so the stack comes back after reboot. The default deployment is `nginx` + `client` + `server` + `janus` + `postgres` via Compose.
 
 **Dokumentation:** Siehe [Docs/README.md](Docs/README.md) für vollständige Dokumentation.
 

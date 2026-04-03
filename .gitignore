@@ -8,6 +8,7 @@
 **/*.crt
 
 # Onboard excludes
+Onboard/Extern/mediamtx
 
 # Server excludes
 LteCar.Server/CarConfigStore/**/*

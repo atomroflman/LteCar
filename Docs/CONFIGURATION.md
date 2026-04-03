@@ -176,6 +176,10 @@ Feature flags control optional functionality. All are **disabled by default**.
 | `JanusConfiguration__PortRangeEnd` | Last UDP video port |
 | `FileTransfer__StoragePath` | Local file storage path |
 
+In Compose, the service names resolve via Docker DNS as `server`, `janus`, and `postgres`.
+In the production stack, nginx is the only public entry point; browsers should use the nginx host name, not the internal service names.
+If you choose the installer HTTPS option, Caddy becomes the public entry point instead of nginx.
+
 ---
 
 ## Database

@@ -1,32 +1,68 @@
 services:
   postgres:
-    image: postgres:16-alpine
+    image: docker.io/library/postgres:18.3
+    restart: unless-stopped
     environment:
       POSTGRES_DB: ltecar
       POSTGRES_USER: ltecar
       POSTGRES_PASSWORD: ltecar
-    ports:
-      - "5432:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
 
-  janus:
-    image: meetecho/janus-gateway:latest
+  server:
+    build:
+      context: .
+      dockerfile: Server/Dockerfile
+    restart: unless-stopped
     depends_on:
       - postgres
-    command:
       - janus
-      - --dev-mode
-      - --nat-1-1=127.0.0.1
-      - --full-trickle
-      - --websockets=yes
-      - --rest=yes
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ASPNETCORE_URLS: http://0.0.0.0:5000
+      RunJanusServer: "false"
+      ConnectionStrings__DefaultConnection: Host=postgres;Database=ltecar;Username=ltecar;Password=ltecar
+      JanusConfiguration__HostName: janus
+      JanusConfiguration__PortRangeStart: "10000"
+      JanusConfiguration__PortRangeEnd: "10200"
+      FileTransfer__StoragePath: /app/data/ltecar
+    volumes:
+      - server-data:/app/data/ltecar
+
+  janus:
+    image: docker.io/meetecho/janus-gateway:latest
+    restart: unless-stopped
+    command: >-
+      sh -c 'exec janus --dev-mode --nat-1-1=${JANUS_NAT_1_1:-127.0.0.1} --full-trickle --websockets=yes --rest=yes'
     ports:
-      - "8088:8088"
-      - "8188:8188"
       - "10000-10200:10000-10200/udp"
     volumes:
       - ./Server/docker/janus:/usr/local/etc/janus
 
+  client:
+    build:
+      context: ./Client
+      args:
+        SERVER_ORIGIN: http://server:5000
+        JANUS_HTTP_ORIGIN: http://janus:8088
+        JANUS_WS_ORIGIN: http://janus:8188
+    restart: unless-stopped
+    depends_on:
+      - server
+      - janus
+
+  nginx:
+    image: docker.io/library/nginx:1.27-alpine
+    restart: unless-stopped
+    depends_on:
+      - client
+      - server
+      - janus
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+
 volumes:
   postgres-data:
+  server-data:

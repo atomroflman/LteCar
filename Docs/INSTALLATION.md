@@ -20,6 +20,31 @@ Then run the server from `Server/` with the development launch profile. This kee
 
 If you use the root `docker-compose.yml`, it starts both services with the local defaults used by the debug profile.
 
+### Full Container Stack
+
+For a self-contained deployment, use the root Compose stack:
+
+```bash
+docker compose up --build
+```
+
+This starts nginx in front, plus client, server, Janus, and PostgreSQL.
+
+All services use `restart: unless-stopped`, so they come back automatically after the container runtime restarts. For a host reboot, enable the container runtime service and start the stack once via systemd or a boot script.
+
+Recommended boot-time setup on the server:
+
+```bash
+sudo systemctl enable --now podman
+sudo systemctl enable --now ltecar-compose.service
+```
+
+Install `deploy/ltecar-compose.service` as `/etc/systemd/system/ltecar-compose.service` and adjust `WorkingDirectory` to your checkout or deployment path.
+
+### Automatic HTTPS
+
+If you install the server with `install.sh`, you can opt into automatic HTTPS via Caddy. The installer will ask for a public domain name and then configure Caddy as a reverse proxy in front of the local client container.
+
 ### 1. Clone Repository
 
 ```bash

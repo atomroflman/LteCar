@@ -108,7 +108,9 @@ public class VideoStreamReceiverService
     {
         Logger.LogInformation($"Starting TCP relay for stream '{stream.StreamId}' on port {stream.Port}");
         var isDebug = Logger.IsEnabled(LogLevel.Debug);
-        var ffmpegArgs = $"{(isDebug ? "" : "-hide_banner -loglevel warning ")} -nostdin -i tcp://0.0.0.0:{stream.Port}?listen -reconnect 1 -c:v copy -f rtp rtp://127.0.0.1:{stream.JanusPort!}";
+        var janusHost = JanusConfig.Value.HostName;
+        if (string.IsNullOrEmpty(janusHost)) janusHost = "localhost";
+        var ffmpegArgs = $"{(isDebug ? "" : "-hide_banner -loglevel warning ")} -nostdin -i tcp://0.0.0.0:{stream.Port}?listen -reconnect 1 -c:v copy -f rtp rtp://{janusHost}:{stream.JanusPort!}";
         Logger.LogDebug($"FFmpeg args: {ffmpegArgs}");
         var startInfo = new ProcessStartInfo("ffmpeg", ffmpegArgs)
         {

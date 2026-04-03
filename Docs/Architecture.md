@@ -9,7 +9,7 @@ graph LR
     Client["Client<br/>(Next.js, React)"]
     Server["Server<br/>(ASP.NET Core, SignalR)"]
     Onboard["Onboard<br/>(Raspberry Pi, .NET)"]
-    Janus["Janus<br/>(Video-Gateway)"]
+    Janus["Janus<br/>(Video-Gateway, container or external)"]
 
     Client <-- "SignalR / REST<br/>Auth, Steuerung, Telemetrie" --> Server
     Server <-- "SignalR<br/>Steuerung, Telemetrie" --> Onboard
@@ -28,7 +28,7 @@ graph LR
 | **Onboard** | Läuft auf dem Fahrzeug (Raspberry Pi). Verbindet sich zum Server, empfängt Steuerbefehle, steuert Hardware (PWM/GPIO), sendet Telemetrie und Video. | .NET 8 Console App, System.Device.Gpio, TypedSignalR, MediaMTX |
 | **Client** | Web-UI im Browser. Steuerung per Gamepad, Konfiguration über Flow-Editor, Videoempfang per WebRTC. | Next.js 15, React 19, ReactFlow, Zustand, Web Crypto API |
 | **Shared** | Gemeinsame DTOs, Interfaces und Utilities für Server und Onboard. | .NET 8 Class Library |
-| **Janus** | WebRTC-Gateway. Empfängt RTP-Streams vom Fahrzeug und liefert sie per WebRTC an den Browser. | Janus Gateway (extern) |
+| **Janus** | WebRTC-Gateway. Empfängt RTP-Streams vom Fahrzeug und liefert sie per WebRTC an den Browser. | Janus Gateway (container oder extern) |
 
 ---
 
@@ -44,7 +44,7 @@ Das Fahrzeug ist ein Raspberry Pi mit angeschlossener Hardware (Motoren, Servos,
 
 ### Server
 
-Der Server ist der zentrale Vermittler. Er verwaltet Benutzer-Sessions, Fahrzeugverbindungen und die Datenbank. Er routet Steuerbefehle vom Browser an das richtige Fahrzeug und Telemetriedaten zurück. Er kontrolliert Janus für das Video-Streaming und stellt die REST-API für CRUD-Operationen bereit.
+Der Server ist der zentrale Vermittler. Er verwaltet Benutzer-Sessions, Fahrzeugverbindungen und die Datenbank. Er routet Steuerbefehle vom Browser an das richtige Fahrzeug und Telemetriedaten zurück. Er kontrolliert Janus für das Video-Streaming und stellt die REST-API für CRUD-Operationen bereit. In der Standard-Deployment-Variante läuft er als Container neben Postgres, Janus und dem Client.
 
 ### Janus (Video-Gateway)
 
