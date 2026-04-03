@@ -9,13 +9,19 @@
             "type": "coreclr",
             "request": "launch",
             "preLaunchTask": "build LteCar.Server",
-            "program": "${workspaceFolder}/bin/Debug/net8.0/LteCar.Server.dll",
+            "program": "${workspaceFolder}/bin/Debug/net10.0/LteCar.Server.dll",
             "args": [],
             "cwd": "${workspaceFolder}",
             "stopAtEntry": false,
             "console": "integratedTerminal",
             "env": {
-                "ASPNETCORE_ENVIRONMENT": "Development"
+                "ASPNETCORE_ENVIRONMENT": "Development",
+                "RunJanusServer": "false",
+                "ConnectionStrings__DefaultConnection": "Host=localhost;Database=ltecar;Username=ltecar;Password=ltecar",
+                "JanusConfiguration__HostName": "localhost",
+                "JanusConfiguration__PortRangeStart": "10000",
+                "JanusConfiguration__PortRangeEnd": "10200",
+                "FileTransfer__StoragePath": "${workspaceFolder}/../.local/ltecar"
             }
         }
     ]

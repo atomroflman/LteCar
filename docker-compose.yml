@@ -1,0 +1,32 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ltecar
+      POSTGRES_USER: ltecar
+      POSTGRES_PASSWORD: ltecar
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+
+  janus:
+    image: meetecho/janus-gateway:latest
+    depends_on:
+      - postgres
+    command:
+      - janus
+      - --dev-mode
+      - --nat-1-1=127.0.0.1
+      - --full-trickle
+      - --websockets=yes
+      - --rest=yes
+    ports:
+      - "8088:8088"
+      - "8188:8188"
+      - "10000-10200:10000-10200/udp"
+    volumes:
+      - ./Server/docker/janus:/usr/local/etc/janus
+
+volumes:
+  postgres-data:

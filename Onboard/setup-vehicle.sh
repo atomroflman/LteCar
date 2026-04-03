@@ -42,7 +42,7 @@ if [[ ${install_service,,} == "y" || ${install_service,,} == "j" ]]; then
 
     SERVICE_NAME="ltecar-onboard.service"
     SERVICE_PATH="/etc/systemd/system/${SERVICE_NAME}"
-    PUBLISH_DIR="$(pwd)/bin/Release/net8.0/publish"
+    PUBLISH_DIR="$(pwd)/bin/Release/net10.0/publish"
     DOTNET_PATH="$(command -v dotnet)"
     CURRENT_USER="$(whoami)"
 

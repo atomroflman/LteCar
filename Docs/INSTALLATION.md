@@ -8,6 +8,18 @@
 
 ## Server Installation
 
+### Local Debug Setup
+
+For local debugging, start PostgreSQL and Janus with Docker:
+
+```bash
+docker compose up -d postgres janus
+```
+
+Then run the server from `Server/` with the development launch profile. This keeps Janus external, so the server can also point to a remote Janus by changing `JanusConfiguration__HostName`.
+
+If you use the root `docker-compose.yml`, it starts both services with the local defaults used by the debug profile.
+
 ### 1. Clone Repository
 
 ```bash
@@ -81,6 +93,12 @@ Or use the provided scripts:
 ```bash
 bash start-server.sh
 ```
+
+### Local vs Remote Janus
+
+- Local debug: `JanusConfiguration__HostName=localhost` and run `docker compose up -d janus`
+- Remote Janus: leave `JanusConfiguration.HostName` pointed at the remote instance
+- Do not enable `RunJanusServer` when Janus already runs in Docker or remotely
 
 ---
 

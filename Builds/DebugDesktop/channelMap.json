@@ -1,0 +1,11 @@
+{
+  "pinManagers": {},
+  "controlChannels": {},
+  "telemetryChannels": {
+    "cpuTemperature": {
+      "telemetryType": "LteCar.Onboard.Telemetry.CpuTemperatureReader",
+      "readIntervalTicks": 1000
+    }
+  },
+  "videoStreams": {}
+}

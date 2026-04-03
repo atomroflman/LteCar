@@ -170,6 +170,11 @@ Feature flags control optional functionality. All are **disabled by default**.
 |----------|-------------|
 | `ASPNETCORE_ENVIRONMENT` | Development/Production |
 | `ConnectionStrings__DefaultConnection` | PostgreSQL connection string |
+| `RunJanusServer` | Start Janus inside the server process |
+| `JanusConfiguration__HostName` | Janus host name or IP |
+| `JanusConfiguration__PortRangeStart` | First UDP video port |
+| `JanusConfiguration__PortRangeEnd` | Last UDP video port |
+| `FileTransfer__StoragePath` | Local file storage path |
 
 ---
 

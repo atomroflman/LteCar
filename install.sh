@@ -259,7 +259,7 @@ chown "$RUN_USER:$RUN_USER" "$LOG_DIR"
 
 if [ "$INSTALL_MODE" = "server" ]; then
     # ── ltecar-server service ────────────────────────────
-    SERVER_EXEC="$REPO_DIR/Server/bin/Release/net9.0/LteCar.Server"
+    SERVER_EXEC="$REPO_DIR/Server/bin/Release/net10.0/LteCar.Server"
     if [ ! -f "$SERVER_EXEC" ]; then
         echo "Error: Server executable not found at $SERVER_EXEC"
         exit 1
@@ -324,7 +324,7 @@ EOF
 fi
 
 if [ "$INSTALL_MODE" = "onboard" ]; then
-    ONBOARD_DLL="$REPO_DIR/Onboard/bin/Release/net9.0/publish/LteCar.Onboard.dll"
+    ONBOARD_DLL="$REPO_DIR/Onboard/bin/Release/net10.0/publish/LteCar.Onboard.dll"
     if [ ! -f "$ONBOARD_DLL" ]; then
         echo "Error: Onboard DLL not found at $ONBOARD_DLL"
         exit 1
