@@ -106,18 +106,6 @@ using (var scope = app.Services.CreateScope())
 var logger = app.Services.GetRequiredService<ILogger<Program>>();
 
 logger.LogInformation("Database migrations applied successfully.");
-var vss = app.Services.GetRequiredService<VideoStreamReceiverService>();
-
-var configService = app.Services.GetRequiredService<IConfigurationService>();
-
-if (configService.Application.RunJanusServer)
-{
-    app.Services.GetRequiredService<VideoStreamReceiverService>().RunVideoStreamServer();
-}
-else
-{
-    logger.LogWarning("Running Janus server is disabled.");
-}
 
 app.Use(async(ctx, next) => {
     try

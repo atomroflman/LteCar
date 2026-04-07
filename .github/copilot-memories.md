@@ -1,0 +1,1 @@
+- Rootless Podman cannot bind privileged host ports below 1024; map nginx to an unprivileged host port such as 8080 unless system sysctl configuration explicitly allows port 80.

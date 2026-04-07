@@ -5,7 +5,6 @@ namespace LteCar.Server.Configuration;
 
 public interface IApplicationConfigurationService
 {
-    bool RunJanusServer { get; }
     ConnectionStrings ConnectionStrings { get; }
     string DefaultConnectionString { get; }
 }
@@ -26,7 +25,6 @@ public class ApplicationConfigurationService : IApplicationConfigurationService
         LogConfiguration();
     }
 
-    public bool RunJanusServer => _config.RunJanusServer;
     public ConnectionStrings ConnectionStrings => _config.ConnectionStrings;
     public string DefaultConnectionString => _config.ConnectionStrings.DefaultConnection;
 
@@ -55,7 +53,6 @@ public class ApplicationConfigurationService : IApplicationConfigurationService
     private void LogConfiguration()
     {
         _logger.LogInformation("Application Configuration:");
-        _logger.LogInformation("- RunJanusServer: {RunJanusServer}", RunJanusServer);
         _logger.LogInformation("- DefaultConnection: [CONFIGURED]");
     }
 }

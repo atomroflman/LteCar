@@ -256,7 +256,7 @@ EOF
     systemctl daemon-reload
     systemctl enable --now ltecar.service
 
-    echo ""
+    echo "
     systemctl status ltecar.service --no-pager || true
 
     echo ""

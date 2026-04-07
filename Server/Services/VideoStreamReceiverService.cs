@@ -11,8 +11,6 @@ namespace LteCar.Server;
 
 public class VideoStreamReceiverService
 {
-    private Process? _janusProcess;
-    
     private readonly ConcurrentDictionary<long, Process> _activeStreamProxies = new();
     private readonly IServiceProvider _serviceProvider;
 
@@ -469,21 +467,4 @@ public class VideoStreamReceiverService
         return stoppedCount > 0;
     }
 
-    public void RunVideoStreamServer()
-    {
-        var startParams = new ProcessStartInfo("/opt/janus/bin/janus")
-        {
-            CreateNoWindow = true,
-            UseShellExecute = false,
-            RedirectStandardError = true,
-            RedirectStandardOutput = true,
-        };
-        _janusProcess = new Process();
-        _janusProcess.OutputDataReceived += (obj, e) =>
-        {
-            Logger.LogInformation("Janus Server: " + e.Data);
-        };
-        _janusProcess.StartInfo = startParams;
-        _janusProcess.Start();
-    }
 }
