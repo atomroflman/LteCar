@@ -35,9 +35,16 @@ pkg_update() {
     "$APT" update -y
 }
 
+pkg_candidate_exists() {
+    local package_name="$1"
+    local candidate
+    candidate=$(apt-cache policy "$package_name" 2>/dev/null | awk '/Candidate:/ { print $2 }')
+    [ -n "$candidate" ] && [ "$candidate" != "(none)" ]
+}
+
 # ── Helper: run a command as the real user ───────────────────────────
 run_as_user() {
-    sudo -u "$RUN_USER" --preserve-env=PATH,HOME "$@"
+    sudo -H -u "$RUN_USER" --preserve-env=PATH "$@"
 }
 
 # ── Repository ───────────────────────────────────────────────────────
@@ -256,7 +263,7 @@ EOF
     systemctl daemon-reload
     systemctl enable --now ltecar.service
 
-    echo "
+    echo ""
     systemctl status ltecar.service --no-pager || true
 
     echo ""
@@ -280,12 +287,30 @@ if [ "$DEPLOY_MODE" = "onboard" ]; then
     # ── Phase 1: System packages ─────────────────────────────────────
     echo "── Phase 1: System packages ──────────────────────────"
     pkg_update
-    pkg_install \
-        git curl \
-        ffmpeg \
-        libcamera0 libcamera-tools \
-        i2c-tools \
-        wiringpi
+
+    base_packages=(git curl ffmpeg i2c-tools)
+    camera_packages=()
+
+    if pkg_candidate_exists rpicam-apps; then
+        camera_packages+=(rpicam-apps)
+    fi
+
+    if pkg_candidate_exists libcamera-tools; then
+        camera_packages+=(libcamera-tools)
+    fi
+
+    for libcamera_pkg in libcamera0 libcamera0.7 libcamera0.6 libcamera0.5 libcamera0.4 libcamera0.3; do
+        if pkg_candidate_exists "$libcamera_pkg"; then
+            camera_packages+=("$libcamera_pkg")
+            break
+        fi
+    done
+
+    if [ "${#camera_packages[@]}" -eq 0 ]; then
+        echo "Warning: No libcamera runtime package found in apt. Continuing without it."
+    fi
+
+    pkg_install "${base_packages[@]}" "${camera_packages[@]}"
 
     # ── Phase 2: mediamtx ───────────────────────────────────────────
     echo ""
