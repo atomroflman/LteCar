@@ -42,6 +42,142 @@ pkg_candidate_exists() {
     [ -n "$candidate" ] && [ "$candidate" != "(none)" ]
 }
 
+prompt_with_default() {
+    local prompt_text="$1"
+    local default_value="$2"
+    local user_input
+
+    if [ -n "$default_value" ]; then
+        read -rp "$prompt_text [$default_value]: " user_input
+        echo "${user_input:-$default_value}"
+    else
+        read -rp "$prompt_text: " user_input
+        echo "$user_input"
+    fi
+}
+
+normalize_boolean() {
+    case "${1,,}" in
+        1|true|yes|y|j|on) echo "true" ;;
+        0|false|no|n|off) echo "false" ;;
+        *) echo "$1" ;;
+    esac
+}
+
+parse_server_url() {
+    local raw_url="$1"
+    local scheme="http"
+    local host_and_path="$raw_url"
+    local host_port
+
+    if [[ "$raw_url" == https://* ]]; then
+        scheme="https"
+        host_and_path="${raw_url#https://}"
+    elif [[ "$raw_url" == http://* ]]; then
+        host_and_path="${raw_url#http://}"
+    fi
+
+    host_port="${host_and_path%%/*}"
+    if [ -z "$host_port" ]; then
+        return 1
+    fi
+
+    if [[ "$host_port" == *:* ]]; then
+        LTECAR_SERVER_NAME="${host_port%%:*}"
+        LTECAR_SERVER_PORT="${host_port##*:}"
+    else
+        LTECAR_SERVER_NAME="$host_port"
+        LTECAR_SERVER_PORT=$([ "$scheme" = "https" ] && echo "443" || echo "80")
+    fi
+
+    LTECAR_USE_HTTPS=$([ "$scheme" = "https" ] && echo "true" || echo "false")
+    return 0
+}
+
+prompt_onboard_server_settings() {
+    local appsettings_path="$1"
+    local current_server_name=""
+    local current_server_port=""
+    local current_use_https=""
+
+    if [ -n "${LTECAR_SERVER_URL:-}" ]; then
+        parse_server_url "$LTECAR_SERVER_URL" || true
+    fi
+
+    if [ -f "$appsettings_path" ] && command -v python3 &>/dev/null; then
+        mapfile -t current_settings < <(python3 - "$appsettings_path" <<'PY'
+import json
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as handle:
+    data = json.load(handle)
+
+print(data.get("ServerName", ""))
+print(data.get("ServerPort", ""))
+print("true" if data.get("UseHttps", False) else "false")
+PY
+)
+        current_server_name="${current_settings[0]}"
+        current_server_port="${current_settings[1]}"
+        current_use_https="${current_settings[2]}"
+    fi
+
+    local default_server_name="${LTECAR_SERVER_NAME:-$current_server_name}"
+    local default_server_port="${LTECAR_SERVER_PORT:-$current_server_port}"
+    local default_use_https
+    default_use_https=$(normalize_boolean "${LTECAR_USE_HTTPS:-$current_use_https}")
+
+    [ -n "$default_server_name" ] || default_server_name="localhost"
+    if [ -z "$default_server_port" ]; then
+        default_server_port=$([ "$default_use_https" = "true" ] && echo "443" || echo "5000")
+    fi
+    [ -n "$default_use_https" ] || default_use_https="false"
+
+    local default_scheme="http"
+    [ "$default_use_https" = "true" ] && default_scheme="https"
+
+    echo ""
+    echo "── Server connection defaults ────────────────────────"
+    local server_url
+    server_url=$(prompt_with_default "Server URL" "${default_scheme}://${default_server_name}:${default_server_port}")
+
+    if ! parse_server_url "$server_url"; then
+        echo "Invalid server URL: $server_url"
+        exit 1
+    fi
+}
+
+update_onboard_appsettings() {
+    local appsettings_path="$1"
+
+    if [ ! -f "$appsettings_path" ]; then
+        echo "Warning: appSettings.json not found at $appsettings_path"
+        return 0
+    fi
+
+    python3 - "$appsettings_path" "${LTECAR_SERVER_NAME:-}" "${LTECAR_SERVER_PORT:-}" "$(normalize_boolean "${LTECAR_USE_HTTPS:-false}")" <<'PY'
+import json
+import sys
+
+path, server_name, server_port, use_https = sys.argv[1:5]
+
+with open(path, encoding="utf-8") as handle:
+    data = json.load(handle)
+
+if server_name:
+    data["ServerName"] = server_name
+if server_port:
+    data["ServerPort"] = int(server_port)
+data["UseHttps"] = use_https == "true"
+
+with open(path, "w", encoding="utf-8") as handle:
+    json.dump(data, handle, indent=2)
+    handle.write("\n")
+PY
+
+    echo "Applied server defaults to $appsettings_path"
+}
+
 # ── Helper: run a command as the real user ───────────────────────────
 run_as_user() {
     sudo -H -u "$RUN_USER" --preserve-env=PATH "$@"
@@ -65,10 +201,14 @@ else
     mapfile -t BRANCHES < <(git ls-remote --heads "$REPO_URL" | sed 's|.*refs/heads/||' | sort)
 
     DEFAULT_IDX=1
+    DEFAULT_BRANCH="${LTECAR_BRANCH:-}"
     for i in "${!BRANCHES[@]}"; do
         idx=$((i + 1))
         marker=""
-        if [ "${BRANCHES[$i]}" = "master" ]; then
+        if [ -n "$DEFAULT_BRANCH" ] && [ "${BRANCHES[$i]}" = "$DEFAULT_BRANCH" ]; then
+            DEFAULT_IDX=$idx
+            marker=" (preselected)"
+        elif [ -z "$DEFAULT_BRANCH" ] && [ "${BRANCHES[$i]}" = "master" ]; then
             DEFAULT_IDX=$idx
             marker=" (default)"
         fi
@@ -76,8 +216,9 @@ else
     done
 
     echo ""
-    read -rp "Choose branch [${DEFAULT_IDX}]: " BRANCH_INPUT
-    BRANCH_INPUT="${BRANCH_INPUT:-$DEFAULT_IDX}"
+    BRANCH_PROMPT_DEFAULT="${DEFAULT_BRANCH:-$DEFAULT_IDX}"
+    read -rp "Choose branch [${BRANCH_PROMPT_DEFAULT}]: " BRANCH_INPUT
+    BRANCH_INPUT="${BRANCH_INPUT:-$BRANCH_PROMPT_DEFAULT}"
 
     if [[ "$BRANCH_INPUT" =~ ^[0-9]+$ ]] && [ "$BRANCH_INPUT" -ge 1 ] && [ "$BRANCH_INPUT" -le "${#BRANCHES[@]}" ]; then
         BRANCH_CHOICE="${BRANCHES[$((BRANCH_INPUT - 1))]}"
@@ -93,6 +234,13 @@ else
         CURRENT_BRANCH="$BRANCH_CHOICE"
         echo "Cloned branch '$CURRENT_BRANCH' to $REPO_DIR"
     fi
+
+    if [ -n "${LTECAR_GIT_REF:-}" ]; then
+        echo "Checking out preselected git ref: $LTECAR_GIT_REF"
+        run_as_user git -C "$REPO_DIR" fetch --all --tags --prune || true
+        run_as_user git -C "$REPO_DIR" checkout "$LTECAR_GIT_REF"
+        CURRENT_BRANCH=$(git -C "$REPO_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "$LTECAR_GIT_REF")
+    fi
 fi
 
 echo ""
@@ -107,15 +255,22 @@ echo "============================================"
 echo ""
 
 # ── Deployment mode selection ────────────────────────────────────────
+DEFAULT_DEPLOY_MODE="${DEPLOY_MODE:-}"
+case "$DEFAULT_DEPLOY_MODE" in
+    server|Server) DEFAULT_DEPLOY_MODE="1" ;;
+    onboard|Onboard) DEFAULT_DEPLOY_MODE="2" ;;
+esac
+
 echo "What do you want to install?"
 echo "  1) Server   (Compose stack: client + server + nginx + janus + postgres)"
 echo "  2) Onboard  (Bare metal: vehicle / car client for Raspberry Pi)"
 echo ""
-read -rp "Choose [1/2]: " DEPLOY_MODE
+read -rp "Choose [1/2${DEFAULT_DEPLOY_MODE:+, default $DEFAULT_DEPLOY_MODE}]: " DEPLOY_MODE_INPUT
+DEPLOY_MODE="${DEPLOY_MODE_INPUT:-$DEFAULT_DEPLOY_MODE}"
 
 case "$DEPLOY_MODE" in
-    1) DEPLOY_MODE="server" ;;
-    2) DEPLOY_MODE="onboard" ;;
+    1|server|Server) DEPLOY_MODE="server" ;;
+    2|onboard|Onboard) DEPLOY_MODE="onboard" ;;
     *)
         echo "Invalid choice. Exiting."
         exit 1
@@ -288,7 +443,7 @@ if [ "$DEPLOY_MODE" = "onboard" ]; then
     echo "── Phase 1: System packages ──────────────────────────"
     pkg_update
 
-    base_packages=(git curl ffmpeg i2c-tools)
+    base_packages=(git curl ffmpeg i2c-tools python3)
     camera_packages=()
 
     if pkg_candidate_exists rpicam-apps; then
@@ -361,6 +516,9 @@ if [ "$DEPLOY_MODE" = "onboard" ]; then
 
     # Resolve DOTNET_ROOT for the user
     DOTNET_ROOT="$RUN_USER_HOME/.dotnet"
+    APPSETTINGS_PATH="$REPO_DIR/Onboard/appSettings.json"
+    prompt_onboard_server_settings "$APPSETTINGS_PATH"
+    update_onboard_appsettings "$APPSETTINGS_PATH"
 
     # ── Phase 4: Build ───────────────────────────────────────────────
     echo ""
@@ -370,13 +528,25 @@ if [ "$DEPLOY_MODE" = "onboard" ]; then
     run_as_user env DOTNET_ROOT="$DOTNET_ROOT" PATH="$DOTNET_ROOT:$DOTNET_ROOT/tools:$PATH" \
         "$DOTNET_ROOT/dotnet" publish "$REPO_DIR/Onboard/LteCar.Onboard.csproj" -c Release
 
-    # ── Phase 5: systemd service (optional) ─────────────────────────
+    ONBOARD_DLL="$REPO_DIR/Onboard/bin/Release/net10.0/publish/LteCar.Onboard.dll"
+    if [ ! -f "$ONBOARD_DLL" ]; then
+        echo "Error: Onboard DLL not found at $ONBOARD_DLL"
+        exit 1
+    fi
+
+    # ── Phase 5: Setup ───────────────────────────────────────────────
+    echo ""
+    echo "── Phase 5: Vehicle setup ────────────────────────────"
+    echo "Starting setup tool ..."
+    run_as_user bash -lc "cd \"$REPO_DIR/Onboard\" && DOTNET_ROOT=\"$DOTNET_ROOT\" PATH=\"$DOTNET_ROOT:$DOTNET_ROOT/tools:\$PATH\" \"$DOTNET_ROOT/dotnet\" \"$ONBOARD_DLL\" setup"
+
+    # ── Phase 6: systemd service (optional) ─────────────────────────
     echo ""
     read -rp "Install as systemd autostart service? [y/N]: " INSTALL_SERVICES
     if [[ ! "${INSTALL_SERVICES,,}" =~ ^(y|j)$ ]]; then
         echo ""
-        echo "Autostart skipped. Start manually:"
-        echo "  cd $REPO_DIR/Onboard && $DOTNET_ROOT/dotnet run -c Release"
+        echo "Autostart skipped. Start manually when you are ready:"
+        echo "  cd $REPO_DIR/Onboard && $DOTNET_ROOT/dotnet $ONBOARD_DLL"
         echo ""
         echo "============================================"
         echo "  Installation complete!"
@@ -385,17 +555,11 @@ if [ "$DEPLOY_MODE" = "onboard" ]; then
     fi
 
     echo ""
-    echo "── Phase 5: systemd service ──────────────────────────"
+    echo "── Phase 6: systemd service ──────────────────────────"
 
     LOG_DIR="/var/log/ltecar"
     mkdir -p "$LOG_DIR"
     chown "$RUN_USER:$RUN_USER" "$LOG_DIR"
-
-    ONBOARD_DLL="$REPO_DIR/Onboard/bin/Release/net10.0/publish/LteCar.Onboard.dll"
-    if [ ! -f "$ONBOARD_DLL" ]; then
-        echo "Error: Onboard DLL not found at $ONBOARD_DLL"
-        exit 1
-    fi
 
     cat > /etc/systemd/system/ltecar-onboard.service <<EOF
 [Unit]
@@ -421,15 +585,17 @@ WantedBy=multi-user.target
 EOF
 
     systemctl daemon-reload
-    systemctl enable --now ltecar-onboard.service
+    systemctl enable ltecar-onboard.service
 
     echo ""
-    systemctl status ltecar-onboard.service --no-pager || true
+    echo "Service installed and enabled for future boots."
+    echo "It was not started automatically."
 
     echo ""
     echo "============================================"
     echo "  Installation complete!"
     echo "============================================"
+    echo "  Start :  sudo systemctl start ltecar-onboard.service"
     echo "  Logs  :  $LOG_DIR/onboard.log"
     echo "  Manage:  sudo systemctl {start|stop|restart|status} ltecar-onboard.service"
     echo "============================================"

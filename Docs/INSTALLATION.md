@@ -129,6 +129,16 @@ bash start-server.sh
 
 ## Onboard (Vehicle) Installation
 
+### Quick install from the server
+
+If the server is already running, you can generate a preconfigured onboard installer directly from it and paste this on the vehicle:
+
+```bash
+curl -fsSL https://YOUR-SERVER/api/install/onboard.sh | sudo bash
+```
+
+The generated script pre-fills the normal `install.sh` with defaults for `onboard`, the server URL, the preferred branch, and optionally the current git ref. The normal installer still asks for these values interactively, runs the setup tool after the install, and does **not** start the onboard service immediately.
+
 ### 1. Clone Repository
 
 ```bash

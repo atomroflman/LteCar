@@ -54,6 +54,8 @@ builder.Services.AddKeyedSingleton("transfer", transferSqids);
 builder.Services.AddSingleton<VideoStreamReceiverService>();
 builder.Services.AddSingleton<ActiveVideoStreamViewerRegistry>();
 builder.Services.AddSingleton<CarConnectionStore>();
+builder.Services.AddSingleton<IServerBuildInfoService, ServerBuildInfoService>();
+builder.Services.AddSingleton<IOnboardInstallScriptService, OnboardInstallScriptService>();
 builder.Services.AddDbContext<LteCarContext>((serviceProvider, options) =>
 {
     var configService = serviceProvider.GetRequiredService<IConfigurationService>();

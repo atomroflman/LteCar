@@ -20,3 +20,4 @@ LteCar.Server/configuration.db*
 Builds/*/carIdentityKey.txt
 Builds/*/ssh_key
 Builds/*/ssh_key.pub
+Server/Generated/**/*

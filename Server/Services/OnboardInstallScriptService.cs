@@ -1,0 +1,181 @@
+using Microsoft.Extensions.Primitives;
+
+namespace LteCar.Server.Services;
+
+public interface IOnboardInstallScriptService
+{
+    OnboardInstallCommandInfo BuildOnboardInstallCommand(HttpRequest request, string? branch = null);
+    string BuildOnboardInstallScript(HttpRequest request, string? branch = null);
+}
+
+public sealed record OnboardInstallCommandInfo(
+    string Command,
+    string ScriptUrl,
+    string ServerName,
+    int ServerPort,
+    bool UseHttps,
+    string ServerUrl,
+    string Branch,
+    string? GitRef);
+
+public class OnboardInstallScriptService : IOnboardInstallScriptService
+{
+    public IWebHostEnvironment HostEnvironment { get; }
+    public ILogger<OnboardInstallScriptService> Logger { get; }
+    public IServerBuildInfoService ServerBuildInfoService { get; }
+
+    public OnboardInstallScriptService(
+        IWebHostEnvironment hostEnvironment,
+        ILogger<OnboardInstallScriptService> logger,
+        IServerBuildInfoService serverBuildInfoService)
+    {
+        HostEnvironment = hostEnvironment;
+        Logger = logger;
+        ServerBuildInfoService = serverBuildInfoService;
+    }
+
+    public OnboardInstallCommandInfo BuildOnboardInstallCommand(HttpRequest request, string? branch = null)
+    {
+        var settings = ResolveServerSettings(request);
+        var resolvedBranch = ResolveBranch(branch);
+        var resolvedGitRef = ResolveGitRef();
+        var scriptUrl = BuildScriptUrl(settings, resolvedBranch);
+        var command = $"curl -fsSL {QuoteForShell(scriptUrl)} | sudo bash";
+
+        return new OnboardInstallCommandInfo(
+            command,
+            scriptUrl,
+            settings.ServerName,
+            settings.ServerPort,
+            settings.UseHttps,
+            BuildServerUrl(settings),
+            resolvedBranch,
+            resolvedGitRef);
+    }
+
+    public string BuildOnboardInstallScript(HttpRequest request, string? branch = null)
+    {
+        var settings = ResolveServerSettings(request);
+        var resolvedBranch = ResolveBranch(branch);
+        var resolvedGitRef = ResolveGitRef();
+        var serverUrl = BuildServerUrl(settings);
+        var templatePath = GetInstallScriptPath();
+
+        if (!File.Exists(templatePath))
+            throw new FileNotFoundException("install.sh template not found", templatePath);
+
+        var template = File.ReadAllText(templatePath);
+        var gitRefLine = string.IsNullOrWhiteSpace(resolvedGitRef)
+            ? string.Empty
+            : $"export LTECAR_GIT_REF='{EscapeForSingleQuotes(resolvedGitRef)}'{Environment.NewLine}";
+
+        Logger.LogInformation(
+            "Generating onboard install script for {ServerName}:{ServerPort} (HTTPS: {UseHttps}, Branch: {Branch}, GitRef: {GitRef})",
+            settings.ServerName,
+            settings.ServerPort,
+            settings.UseHttps,
+            resolvedBranch,
+            resolvedGitRef ?? "n/a");
+
+        return $$"""
+#!/usr/bin/env bash
+export DEPLOY_MODE='onboard'
+export LTECAR_SERVER_URL='{{EscapeForSingleQuotes(serverUrl)}}'
+export LTECAR_SERVER_NAME='{{EscapeForSingleQuotes(settings.ServerName)}}'
+export LTECAR_SERVER_PORT='{{settings.ServerPort}}'
+export LTECAR_USE_HTTPS='{{settings.UseHttps.ToString().ToLowerInvariant()}}'
+export LTECAR_BRANCH='{{EscapeForSingleQuotes(resolvedBranch)}}'
+{{gitRefLine}}
+{{template}}
+""";
+    }
+
+    private string BuildScriptUrl(ServerConnectionSettings settings, string branch)
+    {
+        var builder = new UriBuilder
+        {
+            Scheme = settings.UseHttps ? "https" : "http",
+            Host = settings.ServerName,
+            Port = settings.ServerPort,
+            Path = "/api/install/onboard.sh",
+            Query = $"branch={Uri.EscapeDataString(branch)}"
+        };
+
+        return builder.Uri.ToString();
+    }
+
+    private static string BuildServerUrl(ServerConnectionSettings settings)
+    {
+        var builder = new UriBuilder
+        {
+            Scheme = settings.UseHttps ? "https" : "http",
+            Host = settings.ServerName,
+            Port = settings.ServerPort
+        };
+
+        return builder.Uri.ToString().TrimEnd('/');
+    }
+
+    private string GetInstallScriptPath()
+    {
+        var repoRoot = Path.GetFullPath(Path.Combine(HostEnvironment.ContentRootPath, ".."));
+        return Path.Combine(repoRoot, "install.sh");
+    }
+
+    private string ResolveBranch(string? branch)
+    {
+        if (!string.IsNullOrWhiteSpace(branch))
+            return branch.Trim();
+
+        var buildInfo = ServerBuildInfoService.GetBuildInfo();
+        return string.IsNullOrWhiteSpace(buildInfo.Branch) ? "master" : buildInfo.Branch;
+    }
+
+    private string? ResolveGitRef()
+    {
+        var buildInfo = ServerBuildInfoService.GetBuildInfo();
+        return string.IsNullOrWhiteSpace(buildInfo.Commit) ? null : buildInfo.Commit;
+    }
+
+    private static ServerConnectionSettings ResolveServerSettings(HttpRequest request)
+    {
+        var forwardedProto = GetFirstHeaderValue(request.Headers, "X-Forwarded-Proto");
+        var forwardedHost = GetFirstHeaderValue(request.Headers, "X-Forwarded-Host");
+        var forwardedPort = GetFirstHeaderValue(request.Headers, "X-Forwarded-Port");
+
+        var scheme = string.IsNullOrWhiteSpace(forwardedProto)
+            ? request.Scheme
+            : forwardedProto;
+        var useHttps = string.Equals(scheme, "https", StringComparison.OrdinalIgnoreCase);
+
+        var hostValue = string.IsNullOrWhiteSpace(forwardedHost)
+            ? request.Host.Value
+            : forwardedHost;
+        var host = string.IsNullOrWhiteSpace(hostValue)
+            ? request.Host
+            : new HostString(hostValue);
+
+        var serverPort = int.TryParse(forwardedPort, out var parsedPort)
+            ? parsedPort
+            : host.Port ?? (useHttps ? 443 : 80);
+        var serverName = string.IsNullOrWhiteSpace(host.Host) ? "localhost" : host.Host;
+
+        return new ServerConnectionSettings(serverName, serverPort, useHttps);
+    }
+
+    private static string? GetFirstHeaderValue(IHeaderDictionary headers, string key)
+    {
+        if (!headers.TryGetValue(key, out StringValues values))
+            return null;
+
+        return values.ToString()
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .FirstOrDefault();
+    }
+
+    private static string QuoteForShell(string value) => $"'{EscapeForSingleQuotes(value)}'";
+
+    private static string EscapeForSingleQuotes(string value) => value.Replace("'", "'\"'\"'");
+
+    private sealed record ServerConnectionSettings(string ServerName, int ServerPort, bool UseHttps);
+}
