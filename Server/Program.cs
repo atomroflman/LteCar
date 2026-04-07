@@ -52,6 +52,7 @@ builder.Services.AddSingleton(sqids);
 builder.Services.AddKeyedSingleton("transfer", transferSqids);
 
 builder.Services.AddSingleton<VideoStreamReceiverService>();
+builder.Services.AddSingleton<ActiveVideoStreamViewerRegistry>();
 builder.Services.AddSingleton<CarConnectionStore>();
 builder.Services.AddDbContext<LteCarContext>((serviceProvider, options) =>
 {

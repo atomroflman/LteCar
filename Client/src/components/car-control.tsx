@@ -7,9 +7,10 @@ import AudioChat from "./audio-chat";
 import { useControlFlowStore } from "./control-flow-store";
 import { useRouter } from "next/navigation";
 import SshKeyManager from "./ssh-key-manager";
+import { useCarUiStore } from "./car-ui-store";
 
 export default function CarControl() {
-  const [cars, setCars] = useState<{ id: number; name: string; lastSeen: string }[] | null>(null);
+  const [cars, setCars] = useState<{ id: number; name: string; lastSeen: string; isConnected: boolean }[] | null>(null);
   const [telemetrySubscribed, setTelemetrySubscribed] = useState(false);
   const [sshPrivateKey, setSshPrivateKey] = useState("");
   const [showSshKeyInput, setShowSshKeyInput] = useState(false);
@@ -19,6 +20,18 @@ export default function CarControl() {
   const router = useRouter();
   const updatesEnabled = flowControl.updatesEnabled;
   const setUpdatesEnabled = flowControl.setUpdatesEnabled;
+  const liveCarStates = useCarUiStore(state => state.states);
+  const connectCarUi = useCarUiStore(state => state.connect);
+
+  useEffect(() => {
+    void connectCarUi();
+  }, [connectCarUi]);
+
+  const carsWithLiveStatus = cars?.map(car => ({
+    ...car,
+    isConnected: liveCarStates[car.id]?.isConnected ?? car.isConnected,
+  })) ?? null;
+  const selectedCar = carsWithLiveStatus?.find(car => car.id === flowControl.carId);
 
   // Status colors based on connection and updates
   const statusStyles = flowControl.carSession
@@ -27,26 +40,35 @@ export default function CarControl() {
         : { bg: 'bg-yellow-900/30', border: 'border-yellow-700', text: 'text-yellow-300', dot: 'bg-yellow-400' })
     : { bg: 'bg-red-900/30', border: 'border-red-700', text: 'text-red-300', dot: 'bg-red-500' };
 
-  // Load cars from backend
   useEffect(() => {
-    fetch(`/api/car`)
-      .then((res) => res.json())
-      .then((data) => {
-        setCars(data);
-        
-        // Try to load last selected car from localStorage
-        const lastCarIdStr = localStorage.getItem('lastSelectedCarId');
-        if (lastCarIdStr) {
-          const lastCarId = parseInt(lastCarIdStr);
-          if (data.some((c: any) => c.id === lastCarId)) {
-            flowControl.setCarId(lastCarId);
-          }
-        } else if (data.length === 1) {
-          // If only one car, select it automatically
-          flowControl.setCarId(data[0].id);
-          localStorage.setItem('lastSelectedCarId', data[0].id.toString());
+    let cancelled = false;
+
+    const loadCars = async () => {
+      const response = await fetch(`/api/car`);
+      const data = await response.json();
+      if (cancelled) {
+        return;
+      }
+
+      setCars(data);
+
+      const lastCarIdStr = localStorage.getItem('lastSelectedCarId');
+      if (lastCarIdStr) {
+        const lastCarId = parseInt(lastCarIdStr);
+        if (data.some((c: any) => c.id === lastCarId)) {
+          flowControl.setCarId(lastCarId);
         }
-      });
+      } else if (data.length === 1) {
+        flowControl.setCarId(data[0].id);
+        localStorage.setItem('lastSelectedCarId', data[0].id.toString());
+      }
+    };
+
+    void loadCars();
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
 
@@ -203,7 +225,7 @@ export default function CarControl() {
         </>
       ) : (
         <>
-          {cars && cars.length > 0 ?
+          {carsWithLiveStatus && carsWithLiveStatus.length > 0 ?
             <>
               <select
                 onChange={(e) => {
@@ -220,12 +242,26 @@ export default function CarControl() {
                 className="text-sm p-2 w-full block border-2 border-gray-300 rounded-lg bg-white hover:border-blue-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
               >
                 <option value="" className="text-sm text-gray-500">🚗 Select a vehicle...</option>
-                {cars?.map((c) => (
+                {carsWithLiveStatus.map((c) => (
                   <option key={c.id} value={c.id} className="text-sm py-2">
-                    {c.name || `Car ${c.id}`} (ID: {c.id})
+                    {c.name || `Car ${c.id}`} (ID: {c.id}) {c.isConnected ? '· online' : '· offline'}
                   </option>
                 ))}
               </select>
+
+              {selectedCar && (
+                <div className={`mt-2 rounded-md border px-3 py-2 text-xs ${selectedCar.isConnected ? 'border-green-200 bg-green-50 text-green-800' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>
+                  <div className="flex items-center gap-2">
+                    <span className={`inline-block h-2 w-2 rounded-full ${selectedCar.isConnected ? 'bg-green-500' : 'bg-amber-500'}`} />
+                    <span className="font-medium">{selectedCar.isConnected ? 'Fahrzeug online' : 'Fahrzeug offline'}</span>
+                  </div>
+                  {!selectedCar.isConnected && (
+                    <div className="mt-1 text-[11px] opacity-80">
+                      Das Fahrzeug ist aktuell nicht verbunden. Streams und Kontrolle werden automatisch wieder aktiv, sobald es sich neu verbindet.
+                    </div>
+                  )}
+                </div>
+              )}
               
               {/* SSH Key Manager is shown below */}
 

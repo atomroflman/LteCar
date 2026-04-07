@@ -56,6 +56,23 @@ public class VideoStreamReceiverService
             Logger.LogError($"Stream with ID {streamId} not found in database");
             throw new InvalidOperationException($"Stream with ID {streamId} not found");
         }
+        if (stream.IsActive)
+        {
+            Logger.LogInformation("Stream '{StreamId}' is already active", stream.StreamId);
+            return new VideoSettings()
+            {
+                Protocol = stream.Protocol,
+                TargetPort = stream.Protocol == StreamProtocol.UDP
+                    ? stream.JanusPort ?? stream.Port
+                    : stream.Port,
+                BitrateKbps = stream.BitrateKbps,
+                Brightness = stream.Brightness,
+                Framerate = stream.Framerate,
+                Width = stream.Width,
+                Height = stream.Height,
+                JanusServer = JanusConfig.Value.HostName,
+            };
+        }
         var protocol = stream.Protocol;
         var port = (stream.Port > 0 && IsPortAvailable(stream.Port, stream.Protocol)) ? stream.Port : FindFreePort(stream.Protocol);
         if (port == 0)
@@ -99,6 +116,7 @@ public class VideoStreamReceiverService
             JanusServer = JanusConfig.Value.HostName,
         };
         stream.IsActive = true;
+        await ctx.SaveChangesAsync();
         return res;
     }
 

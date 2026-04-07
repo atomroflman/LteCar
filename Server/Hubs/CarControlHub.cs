@@ -21,16 +21,18 @@ public class CarControlHub : Hub<ICarControlClient>, ICarControlServer
 
     private readonly IConfigurationService _configService;
     private readonly LteCarContext _context;
+    private readonly CarConnectionStore _connectionStore;
 
     private static BiDictionary<string, string> _connectionMap = new BiDictionary<string, string>();
 
-    public CarControlHub(IConfigurationService configService, ILogger<CarControlHub> logger, LteCarContext context, SqidsEncoder<long> sqidsEncoder, IHubContext<CarUiHub, ICarUiClient> carUiHubContext)
+    public CarControlHub(IConfigurationService configService, ILogger<CarControlHub> logger, LteCarContext context, SqidsEncoder<long> sqidsEncoder, IHubContext<CarUiHub, ICarUiClient> carUiHubContext, CarConnectionStore connectionStore)
     {
         _configService = configService;
         Logger = logger;
         _context = context;
         SqidsEncoder = sqidsEncoder;
         CarUiHubContext = carUiHubContext;
+        _connectionStore = connectionStore;
     }
 
     public async Task RegisterForControl(int carId) 
@@ -55,7 +57,9 @@ public class CarControlHub : Hub<ICarControlClient>, ICarControlServer
         if (!string.IsNullOrEmpty(session))
         {
             await EnsureUserCarSetupExists(carIdStr);
+            await MarkUserAsActiveVehicle(carId);
             await MarkUserAsHasControlledCar(carIdStr);
+            await UpdateCarUiDriverStateAsync(carId);
         }
         
         return session;
@@ -67,6 +71,8 @@ public class CarControlHub : Hub<ICarControlClient>, ICarControlServer
         if (!_connectionMap.TryGetByKey(carId.ToString(), out var carClientId))
             return;
         await Clients.Client(carClientId).ReleaseCarControl(sessionId);
+        await ClearUserActiveVehicle(carId);
+        await UpdateCarUiDriverStateAsync(carId);
     }
     
     public async Task UpdateChannel(int carId, string sessionId, int channelId, decimal value)
@@ -75,7 +81,10 @@ public class CarControlHub : Hub<ICarControlClient>, ICarControlServer
         if (!_connectionMap.TryGetByKey(carId.ToString(), out var carClientId))
             return;
         // TODO: Cache einbauen
-        var channelName = Context.GetHttpContext().RequestServices.GetRequiredService<LteCarContext>()
+        var httpContext = Context.GetHttpContext();
+        if (httpContext == null)
+            return;
+        var channelName = httpContext.RequestServices.GetRequiredService<LteCarContext>()
             .Set<CarChannel>().FirstOrDefault(e => e.Id == channelId)?.ChannelName;
         if (channelName == null)
         {
@@ -174,6 +183,63 @@ public class CarControlHub : Hub<ICarControlClient>, ICarControlServer
         {
             Logger.LogError(ex, $"Error marking user as having controlled car {carIdString}");
         }
+    }
+
+    private async Task MarkUserAsActiveVehicle(int carId)
+    {
+        try
+        {
+            var user = await GetCurrentUserAsync();
+            if (user == null)
+                return;
+
+            if (user.ActiveVehicleId == carId)
+                return;
+
+            user.ActiveVehicleId = carId;
+            await _context.SaveChangesAsync();
+            Logger.LogInformation("User {UserId} marked vehicle {CarId} as active control target", user.Id, carId);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error marking active vehicle for car {CarId}", carId);
+        }
+    }
+
+    private async Task ClearUserActiveVehicle(int carId)
+    {
+        try
+        {
+            var user = await GetCurrentUserAsync();
+            if (user == null || user.ActiveVehicleId != carId)
+                return;
+
+            user.ActiveVehicleId = null;
+            await _context.SaveChangesAsync();
+            Logger.LogInformation("User {UserId} cleared active vehicle {CarId}", user.Id, carId);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error clearing active vehicle for car {CarId}", carId);
+        }
+    }
+
+    private async Task UpdateCarUiDriverStateAsync(int carId)
+    {
+        if (!_connectionStore.TryGetValue(carId.ToString(), out var connectionInfo))
+            return;
+
+        var activeDriver = await _context.Users.FirstOrDefaultAsync(user => user.ActiveVehicleId == carId);
+        connectionInfo.DriverId = activeDriver?.Id.ToString();
+        connectionInfo.DriverName = activeDriver?.Name ?? activeDriver?.LoginName;
+
+        await CarUiHubContext.Clients.All.CarStateUpdated(new CarStateModel
+        {
+            Id = carId.ToString(),
+            IsConnected = true,
+            DriverId = connectionInfo.DriverId,
+            DriverName = connectionInfo.DriverName
+        });
     }
 
     private async Task<User?> GetCurrentUserAsync()

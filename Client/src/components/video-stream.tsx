@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from 'react';
 import type { Janus, JanusPluginHandle, JanusStatic, JanusStreamingMessage } from '@/types/janus';
 
 interface VideoStreamProps {
-  carId?: number;
+  streamId?: number;
+  streamName?: string;
   audioEnabled?: boolean;
   audioInputDeviceId?: string;
   onAudioTrack?: (track: MediaStreamTrack | null) => void;
@@ -101,7 +102,7 @@ function loadJanusScript(): Promise<JanusStatic> {
   });
 }
 
-export default function VideoStream({ carId, audioEnabled = false, audioInputDeviceId, onAudioTrack }: VideoStreamProps) {
+export default function VideoStream({ streamId, streamName, audioEnabled = false, audioInputDeviceId, onAudioTrack }: VideoStreamProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const janusRef = useRef<Janus | null>(null);
@@ -117,7 +118,7 @@ export default function VideoStream({ carId, audioEnabled = false, audioInputDev
     let mounted = true;
 
     const resetState = () => {
-      setStreamStatus('Initializing...');
+      setStreamStatus(streamId ? 'Initializing...' : 'No stream selected');
       setError(null);
       setBitrate(null);
       setFps(null);
@@ -129,6 +130,12 @@ export default function VideoStream({ carId, audioEnabled = false, audioInputDev
     };
 
     resetState();
+
+    if (streamId === undefined) {
+      return () => {
+        mounted = false;
+      };
+    }
 
     const initialise = async () => {
       try {
@@ -233,13 +240,11 @@ export default function VideoStream({ carId, audioEnabled = false, audioInputDev
 
                         const streams = msg.list ?? [];
                         if (msg.streaming === 'list' && streams.length > 0) {
-                          let streamId: number;
-
-                          if (typeof carId === 'number') {
-                            const match = streams.find((s) => s.id === carId);
-                            streamId = match ? match.id : streams[0].id;
-                          } else {
-                            streamId = streams[0].id;
+                          const match = streams.find((s) => s.id === streamId);
+                          if (!match) {
+                            setError(`Configured stream ${streamId} not found in Janus`);
+                            setStreamStatus('Error');
+                            return;
                           }
 
                           setStreamStatus(`Starting stream ${streamId}...`);
@@ -313,7 +318,7 @@ export default function VideoStream({ carId, audioEnabled = false, audioInputDev
         videoRef.current.srcObject = null;
       }
     };
-  }, [carId]);
+  }, [streamId]);
 
   useEffect(() => {
     if (!pluginHandle) {
@@ -405,7 +410,7 @@ export default function VideoStream({ carId, audioEnabled = false, audioInputDev
           <div className="flex items-start justify-between gap-4">
             <div>
               Status: {streamStatus}
-              {carId !== undefined && ` (Car ID: ${carId})`}
+              {streamName && ` (${streamName})`}
             </div>
             <button
               type="button"

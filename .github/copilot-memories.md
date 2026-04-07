@@ -1,1 +1,4 @@
 - Rootless Podman cannot bind privileged host ports below 1024; map nginx to an unprivileged host port such as 8080 unless system sysctl configuration explicitly allows port 80.
+- Video streams on the browser are now viewer-driven: the selected stream tab activates the stream, switching tabs or hiding the browser tab deactivates it, and cars no longer auto-start enabled streams on connect.
+- Treat CarVideoStream.Enabled as persistent driver-managed availability, not as runtime viewer state; runtime viewer counts are tracked in-memory and enable/disable is restricted to logged-in drivers with an active control session via User.ActiveVehicleId.
+- Car presence and driver status in the UI should be pushed live over CarUiHub and stored client-side in a shared SignalR state store; avoid reintroducing polling for online or driver indicators.
