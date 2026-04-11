@@ -10,10 +10,13 @@ import FunctionNodesView from "@/components/function-nodes-view";
 import CustomFlowNode from "@/components/custom-flow-node";
 import ConfigGuard from "@/components/config-guard";
 import UpdateControl from "@/components/update-control";
+import LanguageSwitcher from "@/components/language-switcher";
+import { useI18n } from "@/i18n/provider";
 
 const nodeTypes = { custom: CustomFlowNode };
 
 export default function CarControlFlowPage() {
+  const { messages } = useI18n();
   const router = useRouter();
   const flowControl = useControlFlowStore();
   const carId = router.query.carId as string;
@@ -88,16 +91,19 @@ export default function CarControlFlowPage() {
   };
 
   if (flowControl.isLoading)
-    return <div className="p-8 text-zinc-300">Lade Control Flow...</div>;
+    return <div className="p-8 text-zinc-300">{messages.controlFlowPage.loadingFlow}</div>;
   
   if (!carIdNum) {
-    return <div className="p-8 text-zinc-300">Loading...</div>;
+    return <div className="p-8 text-zinc-300">{messages.common.loading}</div>;
   }
 
   return (
     <ConfigGuard carId={carIdNum}>
       <div className="flex flex-col md:flex-row gap-4 p-4 bg-zinc-950 min-h-screen">
         <div className="w-full md:w-1/4 space-y-4">
+          <div className="flex justify-end">
+            <LanguageSwitcher />
+          </div>
           <UpdateControl />
           <GamepadViewer hideFlowButtons={false} />
           <FunctionNodesView />

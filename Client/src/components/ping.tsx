@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useRef, useCallback } from "react";
 import { useControlFlowStore } from "./control-flow-store";
+import { useI18n } from "@/i18n/provider";
 
 interface PingResult {
     rttMs: number;
@@ -12,6 +13,7 @@ const PING_HISTORY_SIZE = 20;
 const PING_INTERVALS = [500, 1000, 2000, 5000] as const;
 
 const Ping: React.FC = () => {
+    const { messages } = useI18n();
     const [currentRtt, setCurrentRtt] = useState<number | null>(null);
     const [currentSrt, setCurrentSrt] = useState<number | null>(null);
     const [currentCat, setCurrentCat] = useState<number | null>(null);
@@ -85,8 +87,8 @@ const Ping: React.FC = () => {
     if (!carId) {
         return (
             <div className="bg-zinc-900 border border-zinc-700 rounded p-3 text-sm">
-                <span className="font-bold text-zinc-200">Ping</span>
-                <div className="text-zinc-500 text-center py-2 text-xs">No car selected</div>
+                <span className="font-bold text-zinc-200">{messages.ping.title}</span>
+                <div className="text-zinc-500 text-center py-2 text-xs">{messages.ping.noCarSelected}</div>
             </div>
         );
     }
@@ -96,7 +98,7 @@ const Ping: React.FC = () => {
     return (
         <div className="bg-zinc-900 border border-zinc-700 rounded p-3 text-sm">
             <div className="flex items-center justify-between mb-2">
-                <span className="font-bold text-zinc-200">Ping</span>
+                <span className="font-bold text-zinc-200">{messages.ping.title}</span>
                 <div className="flex items-center gap-2">
                     <select
                         value={pingIntervalMs}
@@ -142,7 +144,7 @@ const Ping: React.FC = () => {
                         const drift = Math.round(currentCat - currentRtt / 2);
                         return Math.abs(drift) > 15 ? (
                             <div className="text-center mb-2 text-[10px] text-amber-400">
-                                Clock drift: {drift > 0 ? "+" : ""}{drift}ms
+                                {messages.ping.clockDrift(drift)}
                             </div>
                         ) : null;
                     })()}
@@ -206,7 +208,7 @@ const Ping: React.FC = () => {
                     </div>
                 </>
             ) : (
-                <div className="text-zinc-500 text-center py-2">Waiting for first ping...</div>
+                <div className="text-zinc-500 text-center py-2">{messages.ping.waitingFirstPing}</div>
             )}
         </div>
     );

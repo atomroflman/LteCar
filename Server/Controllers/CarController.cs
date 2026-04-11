@@ -9,14 +9,26 @@ namespace LteCar.Server.Controllers
     [Route("api/[controller]")]
     public class CarController : ControllerBase
     {
-        public CarController(LteCarContext context) : base(context)
+        private readonly CarConnectionStore _connectionStore;
+
+        public CarController(LteCarContext context, CarConnectionStore connectionStore) : base(context)
         {
+            _connectionStore = connectionStore;
         }
 
         [HttpGet]
         public async Task<IActionResult> GetCars()
         {
-            var cars = await _context.Cars.ToListAsync();
+            var cars = await _context.Cars
+                .OrderBy(c => c.Name)
+                .Select(c => new
+                {
+                    c.Id,
+                    c.Name,
+                    c.LastSeen,
+                    IsConnected = _connectionStore.ContainsKey(c.Id.ToString())
+                })
+                .ToListAsync();
             return Ok(cars);
         }
 

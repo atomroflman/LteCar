@@ -13,10 +13,10 @@ public class VehicleSetupTool
     private ChannelMap _channelMap;
     private AppSettings _appSettings;
 
-    public VehicleSetupTool()
+    public VehicleSetupTool(string? channelMapPath = null, string? appSettingsPath = null)
     {
-        _channelMapPath = Path.Combine(Directory.GetCurrentDirectory(), "channelMap.json");
-        _appSettingsPath = Path.Combine(Directory.GetCurrentDirectory(), "appSettings.json");
+        _channelMapPath = channelMapPath ?? Path.Combine(Directory.GetCurrentDirectory(), "channelMap.json");
+        _appSettingsPath = appSettingsPath ?? Path.Combine(Directory.GetCurrentDirectory(), "appSettings.json");
         LoadConfiguration();
     }
 
@@ -75,6 +75,8 @@ public class VehicleSetupTool
         });
         File.WriteAllText(_appSettingsPath, appSettingsJson);
     }
+
+    public void PersistConfiguration() => SaveConfiguration();
 
     private void StartSetup()
     {
@@ -500,7 +502,7 @@ public class VehicleSetupTool
         }
     }
 
-    private void ConfigureVideoStreams()
+    public void ConfigureVideoStreams()
     {
         AnsiConsole.MarkupLine("[yellow]Video-Streams Konfiguration[/]");
         AnsiConsole.WriteLine();
@@ -536,11 +538,17 @@ public class VehicleSetupTool
 
     private void AddVideoStream()
     {
-        var streamId = AnsiConsole.Ask<string>("Stream Key:");
-        var name = AnsiConsole.Ask<string>("Stream Name: (default: Key)");
-        var displayName = AnsiConsole.Ask<string>("Anzeige Name:");
+        var key = AnsiConsole.Ask<string>("Stream Key:");
+        var streamId = AnsiConsole.Ask<string>("Stream Id:", key);
+        var displayName = AnsiConsole.Ask<string>("Anzeige Name:", key);
         var location = AnsiConsole.Ask<string>("Kamera Position:", "Front");
-        var type = AnsiConsole.Ask<string>("Stream Typ:", "raspicam");
+        var type = PromptVideoStreamType("rpiCamera");
+        var cameraDevice = PromptCameraDevice(type == "v4l2" ? null : "/dev/video0");
+        var rpiCamId = type == "rpiCamera" ? AnsiConsole.Ask<int>("RpiCamId:", 0) : 0;
+        var width = AnsiConsole.Ask<int>("Breite:", 1024);
+        var height = AnsiConsole.Ask<int>("Höhe:", 768);
+        var framerate = AnsiConsole.Ask<int>("Framerate:", 22);
+        var bitrate = AnsiConsole.Ask<int>("Bitrate:", 1000000);
         var enabled = AnsiConsole.Confirm("Stream aktiviert?", true);
 
         var stream = new VideoStreamMapItem
@@ -549,11 +557,17 @@ public class VehicleSetupTool
             Name = displayName,
             Location = location,
             Type = type,
-            Enabled = enabled
+            Enabled = enabled,
+            CameraDevice = type == "v4l2" ? cameraDevice : cameraDevice,
+            RpiCamId = type == "rpiCamera" ? rpiCamId : null,
+            Width = width,
+            Height = height,
+            Framerate = framerate,
+            Bitrate = bitrate
         };
 
-        _channelMap.VideoStreams[name] = stream;
-        AnsiConsole.MarkupLine($"[green]✓ Video-Stream '{name}' hinzugefügt[/]");
+        _channelMap.VideoStreams[key] = stream;
+        AnsiConsole.MarkupLine($"[green]✓ Video-Stream '{key}' hinzugefügt[/]");
     }
 
     private void EditVideoStream()
@@ -569,7 +583,52 @@ public class VehicleSetupTool
                 .Title("Video-Stream auswählen:")
                 .AddChoices(_channelMap.VideoStreams.Keys));
 
-        AnsiConsole.MarkupLine($"[yellow]Bearbeitung von '{name}' noch nicht implementiert[/]");
+        var stream = _channelMap.VideoStreams[name];
+        stream.StreamId = AnsiConsole.Ask<string>("Stream Id:", stream.StreamId);
+        stream.Name = AnsiConsole.Ask<string>("Anzeige Name:", stream.Name ?? name);
+        stream.Location = AnsiConsole.Ask<string>("Kamera Position:", stream.Location ?? "Front");
+        stream.Type = PromptVideoStreamType(stream.Type ?? "rpiCamera");
+        stream.CameraDevice = PromptCameraDevice(stream.CameraDevice);
+        stream.RpiCamId = stream.Type == "rpiCamera" ? AnsiConsole.Ask<int>("RpiCamId:", stream.RpiCamId ?? 0) : null;
+        stream.Width = AnsiConsole.Ask<int>("Breite:", stream.Width ?? 1024);
+        stream.Height = AnsiConsole.Ask<int>("Höhe:", stream.Height ?? 768);
+        stream.Framerate = AnsiConsole.Ask<int>("Framerate:", stream.Framerate ?? 22);
+        stream.Bitrate = AnsiConsole.Ask<int>("Bitrate:", stream.Bitrate ?? 1000000);
+        stream.Enabled = AnsiConsole.Confirm("Stream aktiviert?", stream.Enabled);
+
+        _channelMap.VideoStreams[name] = stream;
+        AnsiConsole.MarkupLine($"[green]✓ Video-Stream '{name}' aktualisiert[/]");
+    }
+
+    private string PromptVideoStreamType(string defaultType)
+    {
+        return AnsiConsole.Prompt(new SelectionPrompt<string>()
+            .Title("Stream Typ:")
+            .AddChoices(new[] { "rpiCamera", "v4l2" }))
+            ?? defaultType;
+    }
+
+    private string? PromptCameraDevice(string? current)
+    {
+        var devices = Directory.Exists("/dev")
+            ? Directory.GetFiles("/dev", "video*").OrderBy(x => x).ToList()
+            : new List<string>();
+
+        if (devices.Any())
+        {
+            var choice = AnsiConsole.Prompt(new SelectionPrompt<string>()
+                .Title("Kamera Device:")
+                .AddChoices(devices.Append("Manuell eingeben")));
+
+            if (choice == "Manuell eingeben")
+            {
+                return AnsiConsole.Ask<string>("Kamera Device:", current ?? string.Empty);
+            }
+
+            return choice;
+        }
+
+        return AnsiConsole.Ask<string>("Kamera Device:", current ?? string.Empty);
     }
 
     private void RemoveVideoStream()

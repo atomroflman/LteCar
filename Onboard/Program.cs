@@ -17,21 +17,17 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Configuration;
 using Microsoft.Extensions.FileProviders;
 
-
+var configDirEnv = Environment.GetEnvironmentVariable("CONFIG_DIR");
+var configDirArg = args.FirstOrDefault(a => a.StartsWith("--config-dir="))?.Split('=', 2, StringSplitOptions.TrimEntries)[1];
+var defaultConfigDir = Directory.GetCurrentDirectory();
 // Setup-Modus prüfen
 if (args.Length > 0 && args[0].Equals("setup", StringComparison.OrdinalIgnoreCase))
 {
-    var setupConfigDirArg = args.FirstOrDefault(a => a.StartsWith("--config-dir="))?.Split('=')[1];
-    var setupConfigDirEnv = Environment.GetEnvironmentVariable("CONFIG_DIR");
-    var setupDefaultDir = Directory.GetCurrentDirectory();
-    var setupConfigLoader = new ConfigLoader(setupDefaultDir, setupConfigDirArg ?? setupConfigDirEnv);
+    var setupConfigLoader = new ConfigLoader(defaultConfigDir, configDirArg ?? configDirEnv);
     LteCar.Onboard.Setup.SetupMenu.Run(setupConfigLoader);
     return;
 }
 
-var configDirArg = args.FirstOrDefault(a => a.StartsWith("--config-dir="))?.Split('=')[1];
-var configDirEnv = Environment.GetEnvironmentVariable("CONFIG_DIR");
-var defaultConfigDir = Directory.GetCurrentDirectory();
 var configLoader = new ConfigLoader(defaultConfigDir, configDirArg ?? configDirEnv);
 
 if (configDirArg != null || configDirEnv != null)
@@ -88,6 +84,7 @@ serviceCollection.AddSingleton<IConfiguration>(configuration);
 
 // Hub Connections
 serviceCollection.AddSingleton<ServerConnectionService>();
+serviceCollection.AddSingleton<IMediaMtxConfigurator, MediaMtxConfigurator>();
 serviceCollection.AddSingleton<VideoStreamService>();
 serviceCollection.AddSingleton<ServerCarConfigurationService>();
 serviceCollection.AddSingleton<ControlService>();
@@ -98,6 +95,7 @@ serviceCollection.AddSingleton<SshKeyService>();
 serviceCollection.AddSingleton<ControlExecutionService>();
 serviceCollection.AddTransient<Bash>();
 serviceCollection.AddSingleton<IModuleManagerFactory, ModuleManagerFactory>();
+serviceCollection.AddAllTransient(typeof(TelemetryReaderBase));
 serviceCollection.AddAllTransient(typeof(ControlTypeBase));
 serviceCollection.AddAllTransient(typeof(IPwmModule));
 serviceCollection.AddAllTransient(typeof(IGpioModule));

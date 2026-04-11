@@ -7,6 +7,7 @@ import GearboxFlowNode from "./gearbox-flow-node";
 import IifFlowNode from "./iif-flow-node";
 import SmoothFlowNode from "./smooth-flow-node";
 import { ParamInput } from "./param-input";
+import { useI18n } from "@/i18n/provider";
 
 export type CustomFlowNodeProps = NodeProps & {
   data: any;
@@ -14,9 +15,10 @@ export type CustomFlowNodeProps = NodeProps & {
 };
 
 export default function CustomFlowNode(props: NodeProps) {
+  const { messages } = useI18n();
   if (!props || !props.data) {
     console.warn('CustomFlowNode: props oder props.data ist null/undefined', { props });
-    return <div className="bg-zinc-800 border border-zinc-700 rounded p-2">Loading...</div>;
+    return <div className="bg-zinc-800 border border-zinc-700 rounded p-2">{messages.flowNode.loading}</div>;
   }
 
   const id = props.data.nodeId;
@@ -45,7 +47,7 @@ export default function CustomFlowNode(props: NodeProps) {
     <button
           className="ml-2 px-1 py-0.5 bg-red-900 hover:bg-red-800 text-red-100 rounded text-[10px] border border-red-800 transition-colors duration-150"
           onClick={() => flowControl.deleteNode(Number(id))}
-          title="Node löschen"
+          title={messages.flowNode.deleteNode}
         >
           ✕
         </button>
@@ -101,7 +103,7 @@ export default function CustomFlowNode(props: NodeProps) {
   if (data?.type !== "input" && data?.type !== "output" && data?.metadata?.functionName) {
     const definition = filterFunctionRegistry[data?.metadata?.functionName as keyof typeof filterFunctionRegistry];
     if (!definition) {
-      return (<>Function not found! {removeButton()}</>);
+      return (<>{messages.flowNode.functionNotFound} {removeButton()}</>);
     }
   }
   

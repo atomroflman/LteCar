@@ -52,7 +52,10 @@ builder.Services.AddSingleton(sqids);
 builder.Services.AddKeyedSingleton("transfer", transferSqids);
 
 builder.Services.AddSingleton<VideoStreamReceiverService>();
+builder.Services.AddSingleton<ActiveVideoStreamViewerRegistry>();
 builder.Services.AddSingleton<CarConnectionStore>();
+builder.Services.AddSingleton<IServerBuildInfoService, ServerBuildInfoService>();
+builder.Services.AddSingleton<IOnboardInstallScriptService, OnboardInstallScriptService>();
 builder.Services.AddDbContext<LteCarContext>((serviceProvider, options) =>
 {
     var configService = serviceProvider.GetRequiredService<IConfigurationService>();
@@ -106,18 +109,6 @@ using (var scope = app.Services.CreateScope())
 var logger = app.Services.GetRequiredService<ILogger<Program>>();
 
 logger.LogInformation("Database migrations applied successfully.");
-var vss = app.Services.GetRequiredService<VideoStreamReceiverService>();
-
-var configService = app.Services.GetRequiredService<IConfigurationService>();
-
-if (configService.Application.RunJanusServer)
-{
-    app.Services.GetRequiredService<VideoStreamReceiverService>().RunVideoStreamServer();
-}
-else
-{
-    logger.LogWarning("Running Janus server is disabled.");
-}
 
 app.Use(async(ctx, next) => {
     try

@@ -1,11 +1,13 @@
 import React, { useEffect } from "react";
 import { useTelemetryStore } from "./telemetry-store";
+import { useI18n } from "@/i18n/provider";
 
 interface TelemetryProps {
   carId: number | undefined;
 }
 
 const Telemetry: React.FC<TelemetryProps> = ({ carId }) => {
+  const { messages } = useI18n();
   const availableChannels = useTelemetryStore((s) => s.availableChannels);
   const subscribedChannels = useTelemetryStore((s) => s.subscribedChannels);
   const entries = useTelemetryStore((s) => s.entries);
@@ -26,8 +28,8 @@ const Telemetry: React.FC<TelemetryProps> = ({ carId }) => {
 
   if (!carId) {
     return (
-      <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400 text-sm">
-        Kein Fahrzeug ausgewählt
+      <div className="flex min-h-24 items-center justify-center px-4 text-sm text-gray-500 dark:text-gray-400">
+        {messages.telemetry.noVehicleSelected}
       </div>
     );
   }
@@ -41,7 +43,7 @@ const Telemetry: React.FC<TelemetryProps> = ({ carId }) => {
   };
 
   return (
-    <div className="flex items-center h-full px-4 gap-4 overflow-x-auto">
+    <div className="flex min-h-24 items-center px-4 py-3 gap-4 overflow-x-auto">
       {/* Connection status */}
       <div className="flex items-center gap-1.5 shrink-0">
         <span
@@ -50,7 +52,7 @@ const Telemetry: React.FC<TelemetryProps> = ({ carId }) => {
           }`}
         />
         <span className="text-xs text-gray-500 dark:text-gray-400">
-          Telemetrie
+          {messages.telemetry.title}
         </span>
       </div>
 
@@ -68,7 +70,7 @@ const Telemetry: React.FC<TelemetryProps> = ({ carId }) => {
           <button
             key={ch.id}
             onClick={() => toggleChannel(ch.channelName)}
-            className={`flex items-center gap-2 shrink-0 rounded px-3 py-1.5 text-left transition-colors ${
+            className={`flex items-center gap-2 shrink-0 rounded-lg px-3 py-2 text-left transition-colors ${
               isActive
                 ? "bg-blue-100 dark:bg-blue-900/40 ring-1 ring-blue-300 dark:ring-blue-700"
                 : "bg-gray-100 dark:bg-gray-800 opacity-60 hover:opacity-100"
@@ -91,7 +93,7 @@ const Telemetry: React.FC<TelemetryProps> = ({ carId }) => {
 
       {availableChannels.length === 0 && isConnected && (
         <span className="text-xs text-gray-400 dark:text-gray-500">
-          Keine Telemetrie-Kanäle verfügbar
+          {messages.telemetry.noChannels}
         </span>
       )}
     </div>

@@ -8,6 +8,7 @@
 **/*.crt
 
 # Onboard excludes
+Onboard/Extern/mediamtx
 
 # Server excludes
 LteCar.Server/CarConfigStore/**/*
@@ -16,3 +17,7 @@ LteCar.Server/bash/dotnet-install.sh
 LteCar.Server/janus/janus-gateway/**/*
 /.vs/**
 LteCar.Server/configuration.db*
+Builds/*/carIdentityKey.txt
+Builds/*/ssh_key
+Builds/*/ssh_key.pub
+Server/Generated/**/*

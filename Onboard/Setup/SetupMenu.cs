@@ -364,14 +364,10 @@ public class SetupMenu
         AnsiConsole.Write(new Panel("[bold cyan]Channel Map Editor[/]").Border(BoxBorder.Rounded));
         AnsiConsole.WriteLine();
 
-        AnsiConsole.MarkupLine("[yellow]Channel map editing is done through the existing setup wizard.[/]");
-        AnsiConsole.WriteLine();
-        AnsiConsole.MarkupLine("Available channels:");
-        AnsiConsole.MarkupLine($"  - Control channels: {_channelMap.ControlChannels.Count}");
-        AnsiConsole.MarkupLine($"  - Telemetry channels: {_channelMap.TelemetryChannels.Count}");
-        AnsiConsole.MarkupLine($"  - Video streams: {_channelMap.VideoStreams.Count}");
-        AnsiConsole.WriteLine();
-        AnsiConsole.Prompt(new TextPrompt<string>("Press Enter to continue..."));
+        var tool = new VehicleSetupTool(_configLoader.ChannelMapPath, _configLoader.AppSettingsPath);
+        tool.ConfigureVideoStreams();
+        tool.PersistConfiguration();
+        LoadConfiguration();
     }
 
     private void ViewConfiguration()

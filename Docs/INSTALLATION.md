@@ -8,6 +8,43 @@
 
 ## Server Installation
 
+### Local Debug Setup
+
+For local debugging, start PostgreSQL and Janus with Docker:
+
+```bash
+docker compose up -d postgres janus
+```
+
+Then run the server from `Server/` with the development launch profile. This keeps Janus external, so the server can also point to a remote Janus by changing `JanusConfiguration__HostName`.
+
+If you use the root `docker-compose.yml`, it starts both services with the local defaults used by the debug profile.
+
+### Full Container Stack
+
+For a self-contained deployment, use the root Compose stack:
+
+```bash
+docker compose up --build
+```
+
+This starts nginx in front, plus client, server, Janus, and PostgreSQL.
+
+All services use `restart: unless-stopped`, so they come back automatically after the container runtime restarts. For a host reboot, enable the container runtime service and start the stack once via systemd or a boot script.
+
+Recommended boot-time setup on the server:
+
+```bash
+sudo systemctl enable --now podman
+sudo systemctl enable --now ltecar-compose.service
+```
+
+Install `deploy/ltecar-compose.service` as `/etc/systemd/system/ltecar-compose.service` and adjust `WorkingDirectory` to your checkout or deployment path.
+
+### Automatic HTTPS
+
+If you install the server with `install.sh`, you can opt into automatic HTTPS via Caddy. The installer will ask for a public domain name and then configure Caddy as a reverse proxy in front of the local client container.
+
 ### 1. Clone Repository
 
 ```bash
@@ -82,9 +119,25 @@ Or use the provided scripts:
 bash start-server.sh
 ```
 
+### Local vs Remote Janus
+
+- Local debug: `JanusConfiguration__HostName=localhost` and run `docker compose up -d janus`
+- Remote Janus: leave `JanusConfiguration.HostName` pointed at the remote instance
+- Do not enable `RunJanusServer` when Janus already runs in Docker or remotely
+
 ---
 
 ## Onboard (Vehicle) Installation
+
+### Quick install from the server
+
+If the server is already running, you can generate a preconfigured onboard installer directly from it and paste this on the vehicle:
+
+```bash
+curl -fsSL https://YOUR-SERVER/api/install/onboard.sh | sudo bash
+```
+
+The generated script pre-fills the normal `install.sh` with defaults for `onboard`, the server URL, the preferred branch, and optionally the current git ref. The normal installer still asks for these values interactively, runs the setup tool after the install, and does **not** start the onboard service immediately.
 
 ### 1. Clone Repository
 

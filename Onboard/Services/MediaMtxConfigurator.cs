@@ -1,5 +1,7 @@
 using System.Diagnostics;
 using System.Text.RegularExpressions;
+using System.Text;
+using LteCar.Shared.Channels;
 using LteCar.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -22,7 +24,10 @@ public class MediaMtxConfiguration
 public interface IMediaMtxConfigurator
 {
     Task<string> GenerateConfigurationAsync(MediaMtxConfiguration config);
+    Task GenerateFromChannelMapAsync(ChannelMap channelMap, IReadOnlyDictionary<string, int> streamPorts);
     Task UpdateServerAddressAsync(string serverHost, int videoPort, int audioPort);
+    Task StartProcessAsync();
+    Task StopAsync();
     Task RestartAsync();
     MediaMtxConfiguration CurrentConfiguration { get; }
 }
@@ -94,8 +99,81 @@ public class MediaMtxConfigurator : IMediaMtxConfigurator, IDisposable
         template = UpdateOrAddPathSection(template, config.StreamName, rpiCameraSection);
         
         _currentConfig = config;
-        
+
         return template;
+    }
+
+    public async Task GenerateFromChannelMapAsync(ChannelMap channelMap, IReadOnlyDictionary<string, int> streamPorts)
+    {
+        var template = await File.ReadAllTextAsync(_configPath);
+        var generatedPaths = new StringBuilder();
+
+        foreach (var stream in channelMap.VideoStreams.Where(s => s.Value.Enabled))
+        {
+            if (!streamPorts.TryGetValue(stream.Value.StreamId, out var targetPort))
+            {
+                continue;
+            }
+
+            generatedPaths.AppendLine(BuildPathSection(stream.Key, stream.Value, targetPort));
+        }
+
+        generatedPaths.AppendLine("  all_others:");
+
+        template = ReplacePathsSection(template, generatedPaths.ToString().TrimEnd());
+
+        await File.WriteAllTextAsync(_configPath, template);
+    }
+
+    private string BuildPathSection(string pathName, VideoStreamMapItem stream, int targetPort)
+    {
+        var width = stream.Width ?? _currentConfig.Width;
+        var height = stream.Height ?? _currentConfig.Height;
+        var framerate = stream.Framerate ?? _currentConfig.Framerate;
+        var bitrate = stream.Bitrate ?? _currentConfig.Bitrate;
+        var cameraDevice = string.IsNullOrWhiteSpace(stream.CameraDevice) ? "/dev/video0" : stream.CameraDevice;
+        var camId = stream.RpiCamId ?? 0;
+        var sourceHost = string.IsNullOrWhiteSpace(_currentConfig.Host) ? "localhost" : _currentConfig.Host;
+
+        if (string.Equals(stream.Type, "v4l2", StringComparison.OrdinalIgnoreCase))
+        {
+            return $@"  {pathName}:
+    source: publisher
+    runOnInit: ffmpeg -f v4l2 -framerate {framerate} -video_size {width}x{height} -i {cameraDevice} -c:v libx264 -preset veryfast -tune zerolatency -b:v {bitrate} -f rtp rtp://{sourceHost}:{targetPort}?pkt_size=1300
+    runOnInitRestart: yes";
+        }
+
+        return $@"  {pathName}:
+    source: rpiCamera
+    runOnInit: ffmpeg -t 2147483647 -i rtsp://localhost:8554/{pathName} -c copy -f rtp rtp://{sourceHost}:{targetPort}?pkt_size=1300
+    runOnInitRestart: yes
+    rpiCameraCamID: {camId}
+    rpiCameraWidth: {width}
+    rpiCameraHeight: {height}
+    rpiCameraFPS: {framerate}
+    rpiCameraTextOverlay: '%Y-%m-%d %H:%M:%S - {pathName}'
+    rpiCameraBrightness: 0.3
+    rpiCameraBitrate: {bitrate}
+    rpiCameraIDRPeriod: 60";
+    }
+
+    private string ReplacePathsSection(string content, string newPathsSection)
+    {
+        var pathsStart = content.IndexOf("paths:", StringComparison.Ordinal);
+        if (pathsStart < 0)
+        {
+            return content;
+        }
+
+        var allOthersIndex = content.IndexOf("all_others:", pathsStart, StringComparison.Ordinal);
+        if (allOthersIndex < 0)
+        {
+            return content[..pathsStart] + "paths:\n" + newPathsSection + "\n";
+        }
+
+        var prefix = content[..pathsStart];
+        var suffix = content[allOthersIndex..];
+        return prefix + "paths:\n" + newPathsSection + "\n" + suffix;
     }
 
     private string ReplaceOrAddLine(string content, string key, string newValue)
@@ -205,21 +283,33 @@ public class MediaMtxConfigurator : IMediaMtxConfigurator, IDisposable
         _logger.LogInformation("MediaMTX configuration updated successfully");
     }
 
+    public async Task StopAsync()
+    {
+        if (_mediamtxProcess != null && !_mediamtxProcess.HasExited)
+        {
+            _logger.LogInformation("Stopping MediaMTX process...");
+            _mediamtxProcess.Kill();
+            await _mediamtxProcess.WaitForExitAsync();
+        }
+    }
+
     public async Task RestartAsync()
     {
         _logger.LogInformation("Restarting MediaMTX...");
         
-        if (_mediamtxProcess != null && !_mediamtxProcess.HasExited)
-        {
-            _mediamtxProcess.Kill();
-            await _mediamtxProcess.WaitForExitAsync();
-        }
+        await StopAsync();
         
         await StartProcessAsync();
     }
 
     public async Task StartProcessAsync()
     {
+        if (_mediamtxProcess != null && !_mediamtxProcess.HasExited)
+        {
+            _logger.LogInformation("MediaMTX is already running.");
+            return;
+        }
+
         var startInfo = new ProcessStartInfo
         {
             FileName = "bash",
@@ -265,12 +355,7 @@ public class MediaMtxConfigurator : IMediaMtxConfigurator, IDisposable
 
     public void Stop()
     {
-        if (_mediamtxProcess != null && !_mediamtxProcess.HasExited)
-        {
-            _logger.LogInformation("Stopping MediaMTX process...");
-            _mediamtxProcess.Kill();
-            _mediamtxProcess.WaitForExitAsync().Wait();
-        }
+        StopAsync().Wait();
     }
 
     public async Task RestoreOriginalConfigurationAsync()

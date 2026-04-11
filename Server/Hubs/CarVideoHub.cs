@@ -6,6 +6,7 @@ using System.Net.Sockets;
 using LteCar.Server.Data;
 using LteCar.Shared.Video;
 using Microsoft.EntityFrameworkCore;
+using LteCar.Server.Services;
 
 namespace LteCar.Server.Hubs;
 
@@ -15,6 +16,7 @@ public class CarVideoHub : Hub<ICarVideoClient>, ICarVideoServer
     private readonly ILogger<CarVideoHub> _logger;
     private readonly IHubContext<CarConnectionHub, IConnectionHubClient> _carConnectionHub;
     private readonly IConfigurationService _configService;
+    private readonly ActiveVideoStreamViewerRegistry _viewerRegistry;
 
     public VideoStreamReceiverService VideoStreamReceiverService { get; }
 
@@ -23,13 +25,15 @@ public class CarVideoHub : Hub<ICarVideoClient>, ICarVideoServer
         VideoStreamReceiverService videoStreamReceiverService,
         ILogger<CarVideoHub> logger,
         IHubContext<CarConnectionHub, IConnectionHubClient> carConnectionHub,
-        IConfigurationService configService)
+        IConfigurationService configService,
+        ActiveVideoStreamViewerRegistry viewerRegistry)
     {
         _lteCarContext = lteCarContext;
         VideoStreamReceiverService = videoStreamReceiverService;
         _logger = logger;
         _carConnectionHub = carConnectionHub;
         _configService = configService;
+        _viewerRegistry = viewerRegistry;
     }
 
     public async Task ConnectCar(string carIdentityKey)
@@ -43,24 +47,33 @@ public class CarVideoHub : Hub<ICarVideoClient>, ICarVideoServer
             throw new InvalidOperationException($"Car with identity key {carIdentityKey} not found!");
         }
         await this.AddCarToGroupAsync(car.Id);
-        _logger.LogInformation("Car {CarIdentityKey} connected with ID {CarId}. Starting enabled video streams...", carIdentityKey, car.Id);
-        foreach (var stream in car.VideoStreams.Where(s => s.Enabled))
+        _logger.LogInformation("Car {CarIdentityKey} connected with ID {CarId}. Synchronizing viewer-driven video streams.", carIdentityKey, car.Id);
+
+        foreach (var stream in car.VideoStreams.Where(stream => stream.Enabled && _viewerRegistry.GetViewerCount(stream.Id) > 0))
         {
-            await StartVideoStream(stream.Id);
+            await StartStreamForViewersAsync(stream);
         }
+    }
+
+    public override async Task OnDisconnectedAsync(Exception? exception)
+    {
+        var stoppedStreamIds = _viewerRegistry.RemoveConnection(Context.ConnectionId);
+        foreach (var streamId in stoppedStreamIds)
+        {
+            var stream = await _lteCarContext.CarVideoStreams.FirstOrDefaultAsync(s => s.Id == streamId);
+            if (stream == null)
+                continue;
+
+            await StopStreamForViewersAsync(stream);
+        }
+
+        await base.OnDisconnectedAsync(exception);
     }
 
     public async Task StartVideoStream(int streamId)
     {
-        var stream = _lteCarContext.CarVideoStreams
-            .Select(s => new { s.Car.CarIdentityKey, s.Name, s.Id, s.CarId, s.Height, s.Width, s.BitrateKbps, s.Framerate, s.Brightness, s.Port, s.Protocol, s })
-            .FirstOrDefault(s => s.Id == streamId)
-            ?? throw new InvalidOperationException($"Video stream with ID {streamId} not found.");
-        _logger.LogInformation("Starting video stream {StreamId} ({StreamName}) for car {CarId}", stream.Id, stream.Name, stream.CarId);
-        var settings = await VideoStreamReceiverService.StartStreamAsync(streamId);
-        stream.s.Enabled = true;
-        await _lteCarContext.SaveChangesAsync();   
-        await Clients.Car(stream.CarId).StartVideoStream(stream.s.StreamId, settings!);     
+        var stream = await GetStreamAsync(streamId);
+        await StartStreamForViewersAsync(stream);
     }
 
     private async Task SanitizeStreamSettings(CarVideoStream s)
@@ -103,64 +116,170 @@ public class CarVideoHub : Hub<ICarVideoClient>, ICarVideoServer
         }
     }
 
-    public async Task<Dictionary<int, VideoSettingsModel>> GetVideoStreamsForCar(int carId)
+    public async Task<IReadOnlyList<VideoStreamInfoModel>> GetVideoStreamsForCar(int carId)
     {
-        var result = new Dictionary<int, VideoSettingsModel>();
-        var streams = _lteCarContext.CarVideoStreams
+        var streams = await _lteCarContext.CarVideoStreams
             .Where(s => s.CarId == carId)
-            .ToList();
+            .OrderBy(s => s.Priority)
+            .ThenBy(s => s.Name)
+            .ToListAsync();
 
-        foreach (var s in streams)
-        {
-            result[s.Id] = new VideoSettingsModel()
+        return streams
+            .Select(s => new VideoStreamInfoModel()
             {
+                Id = s.Id,
+                Name = s.Name,
+                StreamId = s.StreamId,
+                Type = s.Type,
+                Location = s.Location,
+                Priority = s.Priority,
                 Width = s.Width,
                 Height = s.Height,
                 BitrateKbps = s.BitrateKbps,
                 Framerate = s.Framerate,
                 Brightness = s.Brightness,
-                Enabled = s.Enabled
-            };
+                Enabled = s.Enabled,
+                IsActive = s.IsActive,
+                ViewerCount = _viewerRegistry.GetViewerCount(s.Id)
+            })
+            .ToList();
+    }
+
+    public async Task ActivateStream(int streamId)
+    {
+        var stream = await GetStreamAsync(streamId);
+        if (!stream.Enabled)
+        {
+            throw new HubException($"Stream {stream.Name} is disabled.");
         }
-        return result;
+
+        var firstViewer = _viewerRegistry.Activate(Context.ConnectionId, streamId);
+        _logger.LogInformation("Connection {ConnectionId} activated stream {StreamId}. Viewers: {ViewerCount}", Context.ConnectionId, streamId, _viewerRegistry.GetViewerCount(streamId));
+        if (firstViewer)
+        {
+            await StartStreamForViewersAsync(stream);
+        }
+    }
+
+    public async Task DeactivateStream(int streamId)
+    {
+        var stream = await GetStreamAsync(streamId);
+        var lastViewer = _viewerRegistry.Deactivate(Context.ConnectionId, streamId);
+        _logger.LogInformation("Connection {ConnectionId} deactivated stream {StreamId}. Viewers: {ViewerCount}", Context.ConnectionId, streamId, _viewerRegistry.GetViewerCount(streamId));
+        if (lastViewer)
+        {
+            await StopStreamForViewersAsync(stream);
+        }
     }
 
     public async Task StopVideoStream(int streamId)
     {
-        var stream = _lteCarContext.CarVideoStreams
-            .Select(s => new { s.Car.CarIdentityKey, s.Name, s.Id, s.CarId, s })
-            .FirstOrDefault(s => s.Id == streamId)
-            ?? throw new InvalidOperationException($"Video stream with ID {streamId} not found.");
-        _logger.LogInformation("Stopping video stream {StreamId} ({StreamName}) for car {CarId}", stream.Id, stream.Name, stream.CarId);
-        await Clients.Car(stream.CarId).StopVideoStream(stream.Name);
-        stream.s.Enabled = false;
-        await _lteCarContext.SaveChangesAsync();
+        var stream = await GetStreamAsync(streamId);
+        _viewerRegistry.ClearStream(streamId);
+        await StopStreamForViewersAsync(stream);
     }
 
     public async Task ChangeVideoStreamSettings(int streamId, VideoSettingsModel settings)
     {
-         var stream = _lteCarContext.CarVideoStreams
-            .Select(s => new { s.Car.CarIdentityKey, s.Name, s.Id, s.CarId, s })
-            .FirstOrDefault(s => s.Id == streamId)
-            ?? throw new InvalidOperationException($"Video stream with ID {streamId} not found.");
+        var stream = await GetStreamAsync(streamId);
         _logger.LogInformation("Stopping video stream {StreamId} ({StreamName}) for car {CarId}", stream.Id, stream.Name, stream.CarId);
-        await Clients.Car(stream.CarId).StopVideoStream(stream.Name);
+        await Clients.Car(stream.CarId).StopVideoStream(stream.StreamId);
+        await VideoStreamReceiverService.StopStream(streamId);
         _logger.LogInformation("Changing video stream settings for stream {StreamId} ({StreamName}) for car {CarId}", stream.Id, stream.Name, stream.CarId);
         // Only update settings that are provided (non-null) and synchronize back to Model
-        settings.ApplySettings(stream.s);
-        await SanitizeStreamSettings(stream.s);
+        settings.ApplySettings(stream);
+        await SanitizeStreamSettings(stream);
         await _lteCarContext.SaveChangesAsync();
+
+        if (_viewerRegistry.GetViewerCount(streamId) == 0)
+        {
+            return;
+        }
+
         _logger.LogInformation("Restarting video stream {StreamId} ({StreamName}) for car {CarId} with new settings", stream.Id, stream.Name, stream.CarId);
         var settingsToApply = new VideoSettings()
         {
-            Height = stream.s.Height,
-            Width = stream.s.Width,
-            Framerate = stream.s.Framerate,
-            BitrateKbps = stream.s.BitrateKbps,
-            Brightness = stream.s.Brightness,
-            Protocol = stream.s.Protocol,
-            TargetPort = stream.s.Port
+            Height = stream.Height,
+            Width = stream.Width,
+            Framerate = stream.Framerate,
+            BitrateKbps = stream.BitrateKbps,
+            Brightness = stream.Brightness,
+            Protocol = stream.Protocol,
+            TargetPort = stream.Port
         };
-        await Clients.Car(stream.CarId).StartVideoStream(stream.Name, settingsToApply);
+        await Clients.Car(stream.CarId).StartVideoStream(stream.StreamId, settingsToApply);
+    }
+
+    public async Task SetVideoStreamEnabled(int carId, int streamId, bool enabled)
+    {
+        await EnsureDriverCanManageStreamAsync(carId);
+
+        var stream = await _lteCarContext.CarVideoStreams
+            .FirstOrDefaultAsync(s => s.Id == streamId && s.CarId == carId)
+            ?? throw new InvalidOperationException($"Video stream with ID {streamId} not found for car {carId}.");
+
+        if (stream.Enabled == enabled)
+        {
+            return;
+        }
+
+        stream.Enabled = enabled;
+        await _lteCarContext.SaveChangesAsync();
+        _logger.LogInformation("Driver changed enabled state for stream {StreamId} on car {CarId} to {Enabled}", streamId, carId, enabled);
+
+        if (enabled)
+        {
+            return;
+        }
+
+        _viewerRegistry.ClearStream(streamId);
+        await StopStreamForViewersAsync(stream);
+    }
+
+    private async Task<CarVideoStream> GetStreamAsync(int streamId)
+    {
+        return await _lteCarContext.CarVideoStreams
+            .FirstOrDefaultAsync(s => s.Id == streamId)
+            ?? throw new InvalidOperationException($"Video stream with ID {streamId} not found.");
+    }
+
+    private async Task StartStreamForViewersAsync(CarVideoStream stream)
+    {
+        _logger.LogInformation("Starting video stream {StreamId} ({StreamName}) for car {CarId}", stream.Id, stream.Name, stream.CarId);
+        var settings = await VideoStreamReceiverService.StartStreamAsync(stream.Id);
+        stream.IsActive = true;
+        await _lteCarContext.SaveChangesAsync();
+        await Clients.Car(stream.CarId).StartVideoStream(stream.StreamId, settings);
+    }
+
+    private async Task StopStreamForViewersAsync(CarVideoStream stream)
+    {
+        _logger.LogInformation("Stopping video stream {StreamId} ({StreamName}) for car {CarId}", stream.Id, stream.Name, stream.CarId);
+        await Clients.Car(stream.CarId).StopVideoStream(stream.StreamId);
+        await VideoStreamReceiverService.StopStream(stream.Id);
+        stream.IsActive = false;
+        await _lteCarContext.SaveChangesAsync();
+    }
+
+    private async Task EnsureDriverCanManageStreamAsync(int carId)
+    {
+        var httpContext = Context.GetHttpContext()
+            ?? throw new HubException("No HTTP context available for video hub request.");
+        var user = await HubUserHelper.GetUserAsync(httpContext, _lteCarContext);
+        if (user == null || string.IsNullOrWhiteSpace(user.LoginName))
+        {
+            throw new HubException("You must be logged in to enable or disable streams.");
+        }
+
+        var hasSetup = await _lteCarContext.UserSetups.AnyAsync(setup => setup.UserId == user.Id && setup.CarId == carId);
+        if (!hasSetup)
+        {
+            throw new HubException("You do not have access to manage this vehicle.");
+        }
+
+        if (user.ActiveVehicleId != carId)
+        {
+            throw new HubException("You must actively control this vehicle to change stream enable state.");
+        }
     }
 }

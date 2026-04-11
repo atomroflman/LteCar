@@ -11,8 +11,6 @@ namespace LteCar.Server;
 
 public class VideoStreamReceiverService
 {
-    private Process? _janusProcess;
-    
     private readonly ConcurrentDictionary<long, Process> _activeStreamProxies = new();
     private readonly IServiceProvider _serviceProvider;
 
@@ -58,6 +56,23 @@ public class VideoStreamReceiverService
             Logger.LogError($"Stream with ID {streamId} not found in database");
             throw new InvalidOperationException($"Stream with ID {streamId} not found");
         }
+        if (stream.IsActive)
+        {
+            Logger.LogInformation("Stream '{StreamId}' is already active", stream.StreamId);
+            return new VideoSettings()
+            {
+                Protocol = stream.Protocol,
+                TargetPort = stream.Protocol == StreamProtocol.UDP
+                    ? stream.JanusPort ?? stream.Port
+                    : stream.Port,
+                BitrateKbps = stream.BitrateKbps,
+                Brightness = stream.Brightness,
+                Framerate = stream.Framerate,
+                Width = stream.Width,
+                Height = stream.Height,
+                JanusServer = JanusConfig.Value.HostName,
+            };
+        }
         var protocol = stream.Protocol;
         var port = (stream.Port > 0 && IsPortAvailable(stream.Port, stream.Protocol)) ? stream.Port : FindFreePort(stream.Protocol);
         if (port == 0)
@@ -101,6 +116,7 @@ public class VideoStreamReceiverService
             JanusServer = JanusConfig.Value.HostName,
         };
         stream.IsActive = true;
+        await ctx.SaveChangesAsync();
         return res;
     }
 
@@ -108,7 +124,9 @@ public class VideoStreamReceiverService
     {
         Logger.LogInformation($"Starting TCP relay for stream '{stream.StreamId}' on port {stream.Port}");
         var isDebug = Logger.IsEnabled(LogLevel.Debug);
-        var ffmpegArgs = $"{(isDebug ? "" : "-hide_banner -loglevel warning ")} -nostdin -i tcp://0.0.0.0:{stream.Port}?listen -reconnect 1 -c:v copy -f rtp rtp://127.0.0.1:{stream.JanusPort!}";
+        var janusHost = JanusConfig.Value.HostName;
+        if (string.IsNullOrEmpty(janusHost)) janusHost = "localhost";
+        var ffmpegArgs = $"{(isDebug ? "" : "-hide_banner -loglevel warning ")} -nostdin -i tcp://0.0.0.0:{stream.Port}?listen -reconnect 1 -c:v copy -f rtp rtp://{janusHost}:{stream.JanusPort!}";
         Logger.LogDebug($"FFmpeg args: {ffmpegArgs}");
         var startInfo = new ProcessStartInfo("ffmpeg", ffmpegArgs)
         {
@@ -467,21 +485,4 @@ public class VideoStreamReceiverService
         return stoppedCount > 0;
     }
 
-    public void RunVideoStreamServer()
-    {
-        var startParams = new ProcessStartInfo("/opt/janus/bin/janus")
-        {
-            CreateNoWindow = true,
-            UseShellExecute = false,
-            RedirectStandardError = true,
-            RedirectStandardOutput = true,
-        };
-        _janusProcess = new Process();
-        _janusProcess.OutputDataReceived += (obj, e) =>
-        {
-            Logger.LogInformation("Janus Server: " + e.Data);
-        };
-        _janusProcess.StartInfo = startParams;
-        _janusProcess.Start();
-    }
 }

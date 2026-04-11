@@ -4,11 +4,13 @@ import { filterFunctionRegistry } from "./filters/filter-function-registry";
 import { useControlFlowStore } from "./control-flow-store";
 import { CustomFlowNodeProps } from "./custom-flow-node";
 import { ParamInput } from "./param-input";
+import { useI18n } from "@/i18n/provider";
 
 export default function FloatValueFlowNode(props: CustomFlowNodeProps) {
+  const { messages } = useI18n();
   // Umfassender Null-Check für props und props.data
   if (!props || !props.data) {
-    return <div className="bg-zinc-800 border border-zinc-700 rounded p-2">Loading...</div>;
+    return <div className="bg-zinc-800 border border-zinc-700 rounded p-2">{messages.flowNode.loading}</div>;
   }
 
   const id = props.data.nodeId;
@@ -60,7 +62,7 @@ export default function FloatValueFlowNode(props: CustomFlowNodeProps) {
         <button
           className="ml-2 px-1 py-0.5 bg-red-900 hover:bg-red-800 text-red-100 rounded text-[10px] border border-red-800 transition-colors duration-150"
           onClick={() => flowControl.deleteNode(Number(id))}
-          title="Node löschen"
+          title={messages.flowNode.deleteNode}
         >
           ✕
         </button>

@@ -1,24 +1,39 @@
 using LteCar.Shared.HubClients;
+using LteCar.Server.Data;
 using Microsoft.AspNetCore.SignalR;
+using Microsoft.EntityFrameworkCore;
 
 namespace LteCar.Server.Hubs;
 
 public class CarUiHub : Hub<ICarUiClient>, ICarUiServer
 {
-    public CarUiHub(CarConnectionStore connectionStore)
+    public CarUiHub(CarConnectionStore connectionStore, LteCarContext dbContext)
     {
         ConnectionStore = connectionStore;
+        DataContext = dbContext;
     }
 
     public CarConnectionStore ConnectionStore { get; }
+    public LteCarContext DataContext { get; }
 
     public CarStateModel[] UiClientConnected()
     {
-        return ConnectionStore.Select(e => new CarStateModel() {
-            Id = e.Key,
-            DriverId = e.Value?.DriverId,
-            DriverName = e.Value?.DriverName
-        }).ToArray();
+        var cars = DataContext.Cars
+            .AsNoTracking()
+            .ToList()
+            .Select(car => {
+                var hasConnectionInfo = ConnectionStore.TryGetValue(car.Id.ToString(), out var connectionInfo);
+                return new CarStateModel
+                {
+                Id = car.Id.ToString(),
+                IsConnected = hasConnectionInfo,
+                DriverId = hasConnectionInfo ? connectionInfo?.DriverId : null,
+                DriverName = hasConnectionInfo ? connectionInfo?.DriverName : null
+                };
+            })
+            .ToArray();
+
+        return cars;
     }
 }
 
@@ -35,7 +50,8 @@ public interface ICarUiServer
 
 public class CarStateModel
 {
-    public string Id { get; internal set; }
+    public string Id { get; internal set; } = string.Empty;
+    public bool IsConnected { get; internal set; }
     public string? DriverId { get; internal set; }
     public string? DriverName { get; internal set; }
 }

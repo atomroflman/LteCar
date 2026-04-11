@@ -24,13 +24,15 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
     public ILogger<CarConnectionHub> Logger { get; }
     private readonly VideoStreamReceiverService _streamService;
     private readonly IConfigurationService _configService;
+    private readonly CarConnectionStore _connectionStore;
     
-    public CarConnectionHub(IHubContext<CarUiHub, ICarUiClient> uiHub, IConfigurationService configService, ILogger<CarConnectionHub> logger, VideoStreamReceiverService streamService)
+    public CarConnectionHub(IHubContext<CarUiHub, ICarUiClient> uiHub, IConfigurationService configService, ILogger<CarConnectionHub> logger, VideoStreamReceiverService streamService, CarConnectionStore connectionStore)
     {
         UiHub = uiHub;
         Logger = logger;
         _streamService = streamService;
         _configService = configService;
+        _connectionStore = connectionStore;
     }
     
     public async Task<CarConfiguration> OpenCarConnection(string carIdentityKey, string channelMapHash)
@@ -71,8 +73,14 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
             Logger.LogInformation($"Car ID {car.Id} channel map hash mismatch. Server: '{car.ChannelMapHash}' Client: '{channelMapHash}'");
         }
         
+        var connectionInfo = _connectionStore.RegisterConnection(car.Id.ToString(), Context.ConnectionId);
+        connectionInfo.CarConfiguration = carConfig;
+
         await UiHub.Clients.All.CarStateUpdated(new CarStateModel() {
-            Id = car.Id.ToString()
+            Id = car.Id.ToString(),
+            IsConnected = true,
+            DriverId = connectionInfo.DriverId,
+            DriverName = connectionInfo.DriverName
         });
         return carConfig;
     }
@@ -89,10 +97,21 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
         return base.OnConnectedAsync();
     }
 
-    public override Task OnDisconnectedAsync(Exception? exception)
+    public override async Task OnDisconnectedAsync(Exception? exception)
     {
         Logger.LogWarning($"Client disconnected: {exception}");
-        return base.OnDisconnectedAsync(exception);
+        if (_connectionStore.TryRemoveConnection(Context.ConnectionId, out var carId, out var connectionInfo) && carId != null)
+        {
+            await UiHub.Clients.All.CarStateUpdated(new CarStateModel()
+            {
+                Id = carId,
+                IsConnected = false,
+                DriverId = connectionInfo?.DriverId,
+                DriverName = connectionInfo?.DriverName
+            });
+        }
+
+        await base.OnDisconnectedAsync(exception);
     }
 
     public async Task UpdateChannelMap(int carId, ChannelMap channelMap)

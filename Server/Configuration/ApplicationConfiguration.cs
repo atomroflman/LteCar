@@ -7,9 +7,6 @@ public class ApplicationConfiguration
     public const string SectionName = "";
 
     [Required]
-    public bool RunJanusServer { get; set; } = true;
-
-    [Required]
     public ConnectionStrings ConnectionStrings { get; set; } = new();
 
     [Required]

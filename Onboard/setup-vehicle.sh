@@ -7,9 +7,16 @@ echo "🚗 LTE Car Vehicle Setup"
 echo "========================"
 echo ""
 
-# Check if .NET is installed
+
+# Check if .NET 10 is installed
 if ! command -v dotnet &> /dev/null; then
-    echo "❌ .NET SDK is not installed. Please install .NET 8.0 or later."
+    echo "❌ .NET SDK is not installed. Please install .NET 10.0.0 using asdf (https://asdf-vm.com/)."
+    exit 1
+fi
+
+DOTNET_VERSION=$(dotnet --version | cut -d. -f1)
+if [ "$DOTNET_VERSION" -lt 10 ]; then
+    echo "❌ .NET SDK 10.0.0 or newer is required. Please install using asdf (https://asdf-vm.com/)."
     exit 1
 fi
 
@@ -35,7 +42,7 @@ if [[ ${install_service,,} == "y" || ${install_service,,} == "j" ]]; then
 
     SERVICE_NAME="ltecar-onboard.service"
     SERVICE_PATH="/etc/systemd/system/${SERVICE_NAME}"
-    PUBLISH_DIR="$(pwd)/bin/Release/net8.0/publish"
+    PUBLISH_DIR="$(pwd)/bin/Release/net10.0/publish"
     DOTNET_PATH="$(command -v dotnet)"
     CURRENT_USER="$(whoami)"
 

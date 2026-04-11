@@ -20,6 +20,6 @@ public class VideoSettingsModel
         settings.Framerate = Framerate;
         settings.Brightness = Brightness;
     
-        settings.BitrateKbps = BitrateKbps * 1024;
+        settings.BitrateKbps = BitrateKbps;
     }
 }

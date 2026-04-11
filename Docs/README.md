@@ -7,6 +7,8 @@
 - [Features](FEATURES.md) - Feature overview and usage
 - [Configuration Reference](CONFIGURATION.md) - Complete configuration reference
 
+For the full container stack, see the installation guide. It covers the nginx + client + server + janus + postgres deployment and the reboot setup.
+
 ---
 
 ## System Overview
