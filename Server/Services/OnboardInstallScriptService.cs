@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Primitives;
+using System.Net;
 
 namespace LteCar.Server.Services;
 
@@ -158,9 +159,35 @@ export LTECAR_BRANCH='{{EscapeForSingleQuotes(resolvedBranch)}}'
         var serverPort = int.TryParse(forwardedPort, out var parsedPort)
             ? parsedPort
             : host.Port ?? (useHttps ? 443 : 80);
-        var serverName = string.IsNullOrWhiteSpace(host.Host) ? "localhost" : host.Host;
+        var serverName = ResolveServerName(host.Host);
 
         return new ServerConnectionSettings(serverName, serverPort, useHttps);
+    }
+
+    private static string ResolveServerName(string? hostName)
+    {
+        if (!string.IsNullOrWhiteSpace(hostName)
+            && !string.Equals(hostName, "localhost", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(hostName, "127.0.0.1", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(hostName, "::1", StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(hostName, "[::1]", StringComparison.OrdinalIgnoreCase))
+        {
+            return hostName;
+        }
+
+        try
+        {
+            var systemHostName = Dns.GetHostName();
+            if (!string.IsNullOrWhiteSpace(systemHostName))
+            {
+                return systemHostName;
+            }
+        }
+        catch
+        {
+        }
+
+        return "localhost";
     }
 
     private static string? GetFirstHeaderValue(IHeaderDictionary headers, string key)
