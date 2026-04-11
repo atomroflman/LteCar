@@ -7,6 +7,7 @@ import CarControl from "@/components/car-control";
 import Telemetry from "@/components/telemetry";
 import Ping from "@/components/ping";
 import SessionTransfer from "@/components/session-transfer";
+import InstallDialog from "@/components/install-dialog";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -43,25 +44,66 @@ export default function Home() {
   }
 
   return (
-      <div
-          className={`${geistSans.className} ${geistMono.className} min-h-screen flex flex-col`}
-      >
-        <div className="flex flex-1">
-          <div className="flex-1 flex items-center justify-center p-4">
-            <CarVideoPanel carId={selectedCarId} />
+    <div
+      className={`${geistSans.className} ${geistMono.className} h-screen overflow-hidden bg-[linear-gradient(180deg,#101217_0%,#17191f_46%,#111319_100%)] text-slate-100`}
+    >
+      <div className="relative isolate h-full overflow-hidden">
+        <div className="pointer-events-none absolute left-[-8rem] top-[-7rem] h-64 w-64 rounded-full bg-slate-700/16 blur-3xl" />
+        <div className="pointer-events-none absolute bottom-[-9rem] right-[-5rem] h-72 w-72 rounded-full bg-slate-700/18 blur-3xl" />
+
+        <div className="relative flex h-full flex-col overflow-hidden bg-[linear-gradient(180deg,rgba(23,25,31,0.98),rgba(15,17,22,0.96))] shadow-[0_28px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl">
+          <div className="flex items-center justify-between px-5 py-4 md:px-6">
+            <div className="text-[11px] font-semibold uppercase tracking-[0.34em] text-sky-300">
+              Signal-RC Control Deck
+            </div>
+            <div className="hidden items-center gap-2 md:flex">
+              {!selectedCarId && <InstallDialog />}
+              <div className="rounded-full bg-slate-800/90 px-3 py-2 text-[11px] font-medium text-slate-300 shadow-sm ring-1 ring-white/10">
+                {selectedCarId ? `Active vehicle ID ${selectedCarId}` : "No vehicle selected"}
+              </div>
+            </div>
           </div>
 
-          <div className="w-64 border-l border-gray-300 flex flex-col">
-            <CarControl />
-            <SessionTransfer />
-            <VideoSettingsControl carId={selectedCarId} canManageEnabled={Boolean(user?.loginName && selectedCarId && carSession)} />
-            <Ping />
-          </div>
-        </div>
+          <div className="flex flex-1 flex-col lg:flex-row">
+            <div className="flex-1 p-4 md:p-5">
+              <div className="flex h-full min-h-[20rem] items-center justify-center overflow-hidden rounded-[28px] border border-white/8 bg-[linear-gradient(180deg,rgba(9,11,16,0.94),rgba(18,20,28,0.92))] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+                <CarVideoPanel carId={selectedCarId} />
+              </div>
+            </div>
 
-        <div className="h-14 border-t border-gray-200 dark:border-gray-700">
-          <Telemetry carId={selectedCarId} />
+            <div className="w-full border-t border-white/8 bg-[linear-gradient(180deg,rgba(23,27,37,0.92),rgba(17,20,28,0.94))] lg:w-[24rem] lg:border-l lg:border-t-0 lg:border-white/8">
+              <div className="flex h-full flex-col">
+                <div className="border-b border-white/8 px-3 py-3">
+                  <div className="border border-white/8 bg-slate-900/45 shadow-[0_14px_32px_rgba(0,0,0,0.18)]">
+                    <CarControl />
+                  </div>
+                </div>
+                {selectedCarId && (
+                  <div className="space-y-3 overflow-y-auto px-3 py-3">
+                    <div className="border border-white/8 bg-slate-900/45 shadow-[0_14px_32px_rgba(0,0,0,0.18)]">
+                      <SessionTransfer />
+                    </div>
+                    <div className="border border-white/8 bg-slate-900/45 shadow-[0_14px_32px_rgba(0,0,0,0.18)]">
+                      <VideoSettingsControl carId={selectedCarId} canManageEnabled={Boolean(user?.loginName && selectedCarId && carSession)} />
+                    </div>
+                    <div className="border border-white/8 bg-slate-900/45 shadow-[0_14px_32px_rgba(0,0,0,0.18)]">
+                      <Ping />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {selectedCarId && (
+            <div className="border-t border-white/8 bg-slate-950/40 px-3 py-3 backdrop-blur-sm">
+              <div className="min-h-24 border border-white/8 bg-slate-900/70 shadow-sm">
+                <Telemetry carId={selectedCarId} />
+              </div>
+            </div>
+          )}
         </div>
       </div>
+    </div>
   );
 }

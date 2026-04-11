@@ -26,7 +26,7 @@ const Telemetry: React.FC<TelemetryProps> = ({ carId }) => {
 
   if (!carId) {
     return (
-      <div className="flex items-center justify-center h-full text-gray-500 dark:text-gray-400 text-sm">
+      <div className="flex min-h-24 items-center justify-center px-4 text-sm text-gray-500 dark:text-gray-400">
         Kein Fahrzeug ausgewählt
       </div>
     );
@@ -41,7 +41,7 @@ const Telemetry: React.FC<TelemetryProps> = ({ carId }) => {
   };
 
   return (
-    <div className="flex items-center h-full px-4 gap-4 overflow-x-auto">
+    <div className="flex min-h-24 items-center px-4 py-3 gap-4 overflow-x-auto">
       {/* Connection status */}
       <div className="flex items-center gap-1.5 shrink-0">
         <span
@@ -68,7 +68,7 @@ const Telemetry: React.FC<TelemetryProps> = ({ carId }) => {
           <button
             key={ch.id}
             onClick={() => toggleChannel(ch.channelName)}
-            className={`flex items-center gap-2 shrink-0 rounded px-3 py-1.5 text-left transition-colors ${
+            className={`flex items-center gap-2 shrink-0 rounded-lg px-3 py-2 text-left transition-colors ${
               isActive
                 ? "bg-blue-100 dark:bg-blue-900/40 ring-1 ring-blue-300 dark:ring-blue-700"
                 : "bg-gray-100 dark:bg-gray-800 opacity-60 hover:opacity-100"

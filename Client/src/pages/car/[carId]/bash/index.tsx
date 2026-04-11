@@ -113,7 +113,10 @@ export default function CarBashPage(): JSX.Element {
     }
 
     return (
-        <div style={{ padding: 12, height: "100%", display: "flex", flexDirection: "column", gap: 8 }}>
+        <div style={{ padding: 12, height: "100vh", display: "flex", flexDirection: "column", gap: 8, background: "linear-gradient(180deg, #12141a 0%, #0e1015 100%)", color: "#e5e7eb" }}>
+            <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: "0.34em", textTransform: "uppercase", color: "#7dd3fc", padding: "2px 0 6px 0" }}>
+                Signal-RC Maschinenraum
+            </div>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div>Car Bash: {carId}</div>
                 <div>{connected ? "Connected" : "Disconnected"}</div>

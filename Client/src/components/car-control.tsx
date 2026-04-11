@@ -227,30 +227,37 @@ export default function CarControl() {
         <>
           {carsWithLiveStatus && carsWithLiveStatus.length > 0 ?
             <>
-              <select
-                onChange={(e) => {
-                  const carIdStr = e.currentTarget.value;
-                  if (carIdStr) {
-                    const carId = parseInt(carIdStr);
-                    flowControl.setCarId(carId);
-                    localStorage.setItem('lastSelectedCarId', carIdStr);
-                  } else {
-                    flowControl.setCarId(undefined);
-                  }
-                }}
-                value={flowControl.carId?.toString() || ""}
-                className="text-sm p-2 w-full block border-2 border-gray-300 rounded-lg bg-white hover:border-blue-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200 transition-all"
-              >
-                <option value="" className="text-sm text-gray-500">🚗 Select a vehicle...</option>
-                {carsWithLiveStatus.map((c) => (
-                  <option key={c.id} value={c.id} className="text-sm py-2">
-                    {c.name || `Car ${c.id}`} (ID: {c.id}) {c.isConnected ? '· online' : '· offline'}
-                  </option>
-                ))}
-              </select>
+              <div className="space-y-2 border border-slate-200/80 bg-white/70 p-3 shadow-[0_16px_32px_rgba(15,23,42,0.06)] backdrop-blur-sm">
+                <div>
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Vehicle</div>
+                  <div className="mt-1 text-sm font-semibold text-slate-900">Choose control target</div>
+                </div>
+
+                <select
+                  onChange={(e) => {
+                    const carIdStr = e.currentTarget.value;
+                    if (carIdStr) {
+                      const carId = parseInt(carIdStr);
+                      flowControl.setCarId(carId);
+                      localStorage.setItem('lastSelectedCarId', carIdStr);
+                    } else {
+                      flowControl.setCarId(undefined);
+                    }
+                  }}
+                  value={flowControl.carId?.toString() || ""}
+                  className="text-sm p-3 w-full block border border-slate-300 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(241,245,249,0.95))] text-slate-900 shadow-inner outline-none transition-all hover:border-sky-400 focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
+                >
+                  <option value="" className="text-sm text-gray-500">Select a vehicle...</option>
+                  {carsWithLiveStatus.map((c) => (
+                    <option key={c.id} value={c.id} className="text-sm py-2">
+                      {c.name || `Car ${c.id}`} (ID: {c.id}) {c.isConnected ? '· online' : '· offline'}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
               {selectedCar && (
-                <div className={`mt-2 rounded-md border px-3 py-2 text-xs ${selectedCar.isConnected ? 'border-green-200 bg-green-50 text-green-800' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>
+                <div className={`mt-2 border px-3 py-2 text-xs ${selectedCar.isConnected ? 'border-green-200 bg-green-50 text-green-800' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>
                   <div className="flex items-center gap-2">
                     <span className={`inline-block h-2 w-2 rounded-full ${selectedCar.isConnected ? 'bg-green-500' : 'bg-amber-500'}`} />
                     <span className="font-medium">{selectedCar.isConnected ? 'Fahrzeug online' : 'Fahrzeug offline'}</span>
@@ -265,37 +272,41 @@ export default function CarControl() {
               
               {/* SSH Key Manager is shown below */}
 
-              {/* Control Message */}
-              {controlMessage && (
-                <div className={`mt-2 p-3 rounded-md text-xs ${
-                  controlMessage.type === 'success' ? 'bg-green-50 border border-green-200 text-green-800' :
-                  controlMessage.type === 'error' ? 'bg-red-50 border border-red-200 text-red-800' :
-                  'bg-blue-50 border border-blue-200 text-blue-800'
-                }`}>
-                  <div className="flex items-center">
-                    <div className={`w-4 h-4 mr-2 ${
-                      controlMessage.type === 'success' ? 'text-green-500' :
-                      controlMessage.type === 'error' ? 'text-red-500' :
-                      'text-blue-500'
+              {flowControl.carId && (
+                <>
+                  {/* Control Message */}
+                  {controlMessage && (
+                    <div className={`mt-2 p-3 text-xs ${
+                      controlMessage.type === 'success' ? 'bg-green-50 border border-green-200 text-green-800' :
+                      controlMessage.type === 'error' ? 'bg-red-50 border border-red-200 text-red-800' :
+                      'bg-blue-50 border border-blue-200 text-blue-800'
                     }`}>
-                      {controlMessage.type === 'success' ? '✓' : controlMessage.type === 'error' ? '✕' : 'ℹ'}
+                      <div className="flex items-center">
+                        <div className={`w-4 h-4 mr-2 ${
+                          controlMessage.type === 'success' ? 'text-green-500' :
+                          controlMessage.type === 'error' ? 'text-red-500' :
+                          'text-blue-500'
+                        }`}>
+                          {controlMessage.type === 'success' ? '✓' : controlMessage.type === 'error' ? '✕' : 'ℹ'}
+                        </div>
+                        {controlMessage.text}
+                      </div>
                     </div>
-                    {controlMessage.text}
-                  </div>
-                </div>
-              )}
+                  )}
 
-              <button 
-                className={`text-xs p-2 mt-2 w-full block rounded-md font-medium transition-colors ${
-                  isAcquiringControl 
-                    ? 'bg-gray-400 text-gray-600 cursor-not-allowed' 
-                    : 'bg-blue-600 text-white hover:bg-blue-700'
-                }`} 
-                onClick={handleAquireCarControl}
-                disabled={isAcquiringControl}
-              >
-                {isAcquiringControl ? 'Acquiring Control...' : 'Acquire Control'}
-              </button>
+                  <button 
+                    className={`text-xs p-2 mt-2 w-full block font-medium transition-colors ${
+                      isAcquiringControl 
+                        ? 'bg-gray-400 text-gray-600 cursor-not-allowed' 
+                        : 'bg-blue-600 text-white hover:bg-blue-700'
+                    }`} 
+                    onClick={handleAquireCarControl}
+                    disabled={isAcquiringControl}
+                  >
+                    {isAcquiringControl ? 'Acquiring Control...' : 'Acquire Control'}
+                  </button>
+                </>
+              )}
             </> : <p className="text-xs text-red-500">No cars available. Please register a car first.</p>}
             
         </>
@@ -305,10 +316,13 @@ export default function CarControl() {
           <SshKeyManager carId={flowControl.carId} />
         </>
       )}
-      {/* Removed second box (UpdateControl) as requested */}
-      <GamepadViewer hideFlowButtons={true} />
-      {flowControl.carId && <CarFunctionsView carId={flowControl.carId} hideFlowButtons={true} />}
-      <AudioChat carId={flowControl.carId ?? undefined} />
+      {flowControl.carId && (
+        <>
+          <GamepadViewer hideFlowButtons={true} />
+          <CarFunctionsView carId={flowControl.carId} hideFlowButtons={true} />
+          <AudioChat carId={flowControl.carId} />
+        </>
+      )}
     </div>
   );
 }
