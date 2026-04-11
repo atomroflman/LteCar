@@ -15,9 +15,9 @@ public class InstallController : Microsoft.AspNetCore.Mvc.ControllerBase
     }
 
     [HttpGet("onboard-command")]
-    public IActionResult GetOnboardCommand([FromQuery] string? branch = null)
+    public IActionResult GetOnboardCommand()
     {
-        var installCommand = OnboardInstallScriptService.BuildOnboardInstallCommand(Request, branch);
+        var installCommand = OnboardInstallScriptService.BuildOnboardInstallCommand(Request);
         return Ok(new
         {
             installCommand.Command,
@@ -32,9 +32,9 @@ public class InstallController : Microsoft.AspNetCore.Mvc.ControllerBase
     }
 
     [HttpGet("onboard.sh")]
-    public IActionResult GetOnboardScript([FromQuery] string? branch = null)
+    public IActionResult GetOnboardScript()
     {
-        var script = OnboardInstallScriptService.BuildOnboardInstallScript(Request, branch);
+        var script = OnboardInstallScriptService.BuildOnboardInstallScript(Request);
         Response.Headers.ContentDisposition = "inline; filename=ltecar-onboard-install.sh";
         return Content(script, "text/x-shellscript; charset=utf-8");
     }

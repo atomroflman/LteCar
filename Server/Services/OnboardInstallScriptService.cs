@@ -5,8 +5,8 @@ namespace LteCar.Server.Services;
 
 public interface IOnboardInstallScriptService
 {
-    OnboardInstallCommandInfo BuildOnboardInstallCommand(HttpRequest request, string? branch = null);
-    string BuildOnboardInstallScript(HttpRequest request, string? branch = null);
+    OnboardInstallCommandInfo BuildOnboardInstallCommand(HttpRequest request);
+    string BuildOnboardInstallScript(HttpRequest request);
 }
 
 public sealed record OnboardInstallCommandInfo(
@@ -35,10 +35,10 @@ public class OnboardInstallScriptService : IOnboardInstallScriptService
         ServerBuildInfoService = serverBuildInfoService;
     }
 
-    public OnboardInstallCommandInfo BuildOnboardInstallCommand(HttpRequest request, string? branch = null)
+    public OnboardInstallCommandInfo BuildOnboardInstallCommand(HttpRequest request)
     {
         var settings = ResolveServerSettings(request);
-        var resolvedBranch = ResolveBranch(branch);
+        var resolvedBranch = ResolveBranch();
         var resolvedGitRef = ResolveGitRef();
         var scriptUrl = BuildScriptUrl(settings, resolvedBranch);
         var command = $"curl -fsSL {QuoteForShell(scriptUrl)} | sudo bash";
@@ -54,10 +54,10 @@ public class OnboardInstallScriptService : IOnboardInstallScriptService
             resolvedGitRef);
     }
 
-    public string BuildOnboardInstallScript(HttpRequest request, string? branch = null)
+    public string BuildOnboardInstallScript(HttpRequest request)
     {
         var settings = ResolveServerSettings(request);
-        var resolvedBranch = ResolveBranch(branch);
+        var resolvedBranch = ResolveBranch();
         var resolvedGitRef = ResolveGitRef();
         var serverUrl = BuildServerUrl(settings);
         var templatePath = GetInstallScriptPath();
@@ -98,8 +98,7 @@ export LTECAR_BRANCH='{{EscapeForSingleQuotes(resolvedBranch)}}'
             Scheme = settings.UseHttps ? "https" : "http",
             Host = settings.ServerName,
             Port = settings.ServerPort,
-            Path = "/api/install/onboard.sh",
-            Query = $"branch={Uri.EscapeDataString(branch)}"
+            Path = "/api/install/onboard.sh"
         };
 
         return builder.Uri.ToString();
@@ -123,11 +122,8 @@ export LTECAR_BRANCH='{{EscapeForSingleQuotes(resolvedBranch)}}'
         return Path.Combine(repoRoot, "install.sh");
     }
 
-    private string ResolveBranch(string? branch)
+    private string ResolveBranch()
     {
-        if (!string.IsNullOrWhiteSpace(branch))
-            return branch.Trim();
-
         var buildInfo = ServerBuildInfoService.GetBuildInfo();
         return string.IsNullOrWhiteSpace(buildInfo.Branch) ? "master" : buildInfo.Branch;
     }
