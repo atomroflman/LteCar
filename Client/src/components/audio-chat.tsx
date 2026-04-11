@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react';
 import { useControlFlowStore } from './control-flow-store';
+import { useI18n } from '@/i18n/provider';
 
 interface AudioDevice {
   deviceId: string;
@@ -15,6 +16,7 @@ interface AudioChatProps {
 }
 
 export default function AudioChat({ carId }: AudioChatProps) {
+  const { messages } = useI18n();
   const [isEnabled, setIsEnabled] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [audioDevices, setAudioDevices] = useState<AudioDevice[]>([]);
@@ -44,7 +46,7 @@ export default function AudioChat({ carId }: AudioChatProps) {
           const isDefault = device.deviceId === defaultInput;
           audioInputDevices.push({
             deviceId: device.deviceId,
-            label: device.label || `Microphone ${device.deviceId.slice(0, 8)}`,
+            label: device.label || messages.audioChat.microphoneLabel(device.deviceId),
             kind: 'audioinput',
             isDefault
           });
@@ -52,7 +54,7 @@ export default function AudioChat({ carId }: AudioChatProps) {
           const isDefault = device.deviceId === defaultOutput;
           audioOutputDevices.push({
             deviceId: device.deviceId,
-            label: device.label || `Speaker ${device.deviceId.slice(0, 8)}`,
+            label: device.label || messages.audioChat.speakerLabel(device.deviceId),
             kind: 'audiooutput',
             isDefault
           });
@@ -71,7 +73,7 @@ export default function AudioChat({ carId }: AudioChatProps) {
     } catch (err) {
       console.error('Error enumerating audio devices:', err);
     }
-  }, [selectedInput, selectedOutput]);
+  }, [selectedInput, selectedOutput, messages]);
 
   useEffect(() => {
     if (isConnected) {
@@ -207,17 +209,17 @@ export default function AudioChat({ carId }: AudioChatProps) {
 
   const getStatusText = () => {
     switch (connectionState) {
-      case 'active': return isRecording ? 'Recording' : 'Active';
-      case 'connected': return 'Ready';
-      case 'error': return 'Error';
-      default: return 'Disconnected';
+      case 'active': return isRecording ? messages.audioChat.recording : messages.audioChat.active;
+      case 'connected': return messages.audioChat.ready;
+      case 'error': return messages.audioChat.error;
+      default: return messages.audioChat.disconnected;
     }
   };
 
   return (
     <div className="bg-zinc-800 rounded-lg p-3 space-y-3">
       <div className="flex items-center justify-between">
-        <h3 className="text-sm font-medium text-zinc-200">Audio Chat</h3>
+        <h3 className="text-sm font-medium text-zinc-200">{messages.audioChat.title}</h3>
         <div className="flex items-center gap-2">
           <div className={`w-2 h-2 rounded-full ${getStatusColor()}`} />
           <span className="text-xs text-zinc-400">{getStatusText()}</span>
@@ -226,13 +228,13 @@ export default function AudioChat({ carId }: AudioChatProps) {
 
       {!isConnected ? (
         <div className="text-xs text-zinc-500 text-center py-4">
-          Connect to a vehicle to use audio chat
+          {messages.audioChat.connectVehicle}
         </div>
       ) : (
         <>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="block text-xs text-zinc-400 mb-1">Microphone</label>
+              <label className="block text-xs text-zinc-400 mb-1">{messages.audioChat.microphone}</label>
               <select
                 value={selectedInput}
                 onChange={(e) => handleInputChange(e.target.value)}
@@ -241,17 +243,17 @@ export default function AudioChat({ carId }: AudioChatProps) {
               >
                 {inputDevices.map(device => (
                   <option key={device.deviceId} value={device.deviceId}>
-                    {device.label} {device.isDefault ? '(Default)' : ''}
+                    {device.label} {device.isDefault ? messages.audioChat.defaultDeviceSuffix : ''}
                   </option>
                 ))}
                 {inputDevices.length === 0 && (
-                  <option value="">No microphone found</option>
+                  <option value="">{messages.audioChat.noMicrophone}</option>
                 )}
               </select>
             </div>
             
             <div>
-              <label className="block text-xs text-zinc-400 mb-1">Speaker</label>
+              <label className="block text-xs text-zinc-400 mb-1">{messages.audioChat.speaker}</label>
               <select
                 value={selectedOutput}
                 onChange={(e) => setSelectedOutput(e.target.value)}
@@ -259,18 +261,18 @@ export default function AudioChat({ carId }: AudioChatProps) {
               >
                 {outputDevices.map(device => (
                   <option key={device.deviceId} value={device.deviceId}>
-                    {device.label} {device.isDefault ? '(Default)' : ''}
+                    {device.label} {device.isDefault ? messages.audioChat.defaultDeviceSuffix : ''}
                   </option>
                 ))}
                 {outputDevices.length === 0 && (
-                  <option value="">No speaker found</option>
+                  <option value="">{messages.audioChat.noSpeaker}</option>
                 )}
               </select>
             </div>
           </div>
 
           <div className="flex items-center gap-2">
-            <label className="text-xs text-zinc-400">Volume</label>
+            <label className="text-xs text-zinc-400">{messages.audioChat.volume}</label>
             <input
               type="range"
               min="0"
@@ -291,7 +293,7 @@ export default function AudioChat({ carId }: AudioChatProps) {
                   : 'bg-blue-600 hover:bg-blue-700 text-white'
               }`}
             >
-              {isEnabled ? 'Mute' : 'Unmute'}
+              {isEnabled ? messages.audioChat.mute : messages.audioChat.unmute}
             </button>
             
             <button
@@ -303,13 +305,13 @@ export default function AudioChat({ carId }: AudioChatProps) {
               }`}
               disabled={!isEnabled}
             >
-              {isRecording ? 'Stop' : 'Record'}
+              {isRecording ? messages.audioChat.stop : messages.audioChat.record}
             </button>
             
             <button
               onClick={loadAudioDevices}
               className="px-3 py-1.5 text-xs bg-zinc-600 hover:bg-zinc-500 text-zinc-200 rounded font-medium transition-colors"
-              title="Refresh devices"
+              title={messages.audioChat.refreshDevices}
             >
               ↻
             </button>

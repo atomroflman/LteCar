@@ -8,8 +8,10 @@ import { useControlFlowStore } from "./control-flow-store";
 import { useRouter } from "next/navigation";
 import SshKeyManager from "./ssh-key-manager";
 import { useCarUiStore } from "./car-ui-store";
+import { useI18n } from "@/i18n/provider";
 
 export default function CarControl() {
+  const { messages } = useI18n();
   const [cars, setCars] = useState<{ id: number; name: string; lastSeen: string; isConnected: boolean }[] | null>(null);
   const [telemetrySubscribed, setTelemetrySubscribed] = useState(false);
   const [sshPrivateKey, setSshPrivateKey] = useState("");
@@ -95,12 +97,12 @@ export default function CarControl() {
   // Start connection and session with SSH key authentication (via SignalR)
   const handleAquireCarControl = async () => {
     if (!flowControl.carId) {
-      setControlMessage({ type: 'error', text: 'No car selected' });
+      setControlMessage({ type: 'error', text: messages.carControl.noCarSelected });
       return;
     }
     
     if (!sshPrivateKey) {
-      setControlMessage({ type: 'error', text: 'SSH private key is required. Please download or upload a key first.' });
+      setControlMessage({ type: 'error', text: messages.carControl.sshKeyRequired });
       return;
     }
     
@@ -112,14 +114,14 @@ export default function CarControl() {
       // The server forwards the challenge/response to the vehicle
       const { connection } = flowControl;
       if (!connection) {
-        setControlMessage({ type: 'error', text: 'Not connected to server' });
+        setControlMessage({ type: 'error', text: messages.carControl.notConnectedToServer });
         setIsAcquiringControl(false);
         return;
       }
 
       const challenge = await connection.invoke("GetChallenge", flowControl.carId);
       if (!challenge) {
-        setControlMessage({ type: 'error', text: 'Failed to get authentication challenge from vehicle. Is the vehicle connected?' });
+        setControlMessage({ type: 'error', text: messages.carControl.challengeFailed });
         setIsAcquiringControl(false);
         return;
       }
@@ -127,7 +129,7 @@ export default function CarControl() {
       // Sign the challenge with private key
       const signature = await flowControl.signWithPrivateKey(challenge, sshPrivateKey);
       if (!signature) {
-        setControlMessage({ type: 'error', text: 'Failed to sign challenge with private key' });
+        setControlMessage({ type: 'error', text: messages.carControl.signFailed });
         setIsAcquiringControl(false);
         return;
       }
@@ -143,13 +145,13 @@ export default function CarControl() {
       if (carSession) {
         flowControl.setCarSession(carSession);
         flowControl.markCarAsAuthenticated(flowControl.carId);
-        setControlMessage({ type: 'success', text: 'Successfully acquired car control! You can now control the vehicle.' });
+        setControlMessage({ type: 'success', text: messages.carControl.acquireSuccess });
       } else {
-        setControlMessage({ type: 'error', text: 'SSH authentication failed. Please check your key and try again.' });
+        setControlMessage({ type: 'error', text: messages.carControl.authFailed });
       }
     } catch (error) {
       console.error("Authentication error:", error);
-      setControlMessage({ type: 'error', text: 'An unexpected error occurred while acquiring control.' });
+      setControlMessage({ type: 'error', text: messages.carControl.unexpectedAcquireError });
     } finally {
       setIsAcquiringControl(false);
     }
@@ -159,10 +161,10 @@ export default function CarControl() {
     if (!flowControl.carId || !sshPrivateKey) return;
     const success = flowControl.saveSshPrivateKey(flowControl.carId, sshPrivateKey);
     if (success) {
-      alert("SSH private key saved successfully");
+      alert(messages.carControl.saveKeySuccess);
       setShowSshKeyInput(false);
     } else {
-      alert("Failed to save SSH private key");
+      alert(messages.carControl.saveKeyFailed);
     }
   };
 
@@ -171,9 +173,9 @@ export default function CarControl() {
     const success = flowControl.removeSshPrivateKey(flowControl.carId);
     if (success) {
       setSshPrivateKey("");
-      alert("SSH private key removed");
+      alert(messages.carControl.removeKeySuccess);
     } else {
-      alert("Failed to remove SSH private key");
+      alert(messages.carControl.removeKeyFailed);
     }
   };
 
@@ -190,23 +192,23 @@ export default function CarControl() {
           <div className={`w-full p-2 rounded-md ${statusStyles.bg} border ${statusStyles.border} ${statusStyles.text}`}>
             <div className="flex items-center space-x-2 text-xs">
               <div className={`w-1.5 h-1.5 rounded-full ${statusStyles.dot}`} />
-              <div className="font-medium">Control session active</div>
+              <div className="font-medium">{messages.carControl.controlSessionActive}</div>
             </div>
             <div className="mt-1 text-[11px] opacity-80">
-              Car ID: {flowControl.carId} · Session: {String(flowControl.carSession).slice(0, 8)}…
+              {messages.carControl.carIdSession(flowControl.carId!, String(flowControl.carSession))}
             </div>
           </div>
           <div className="mt-2 flex items-center space-x-1">
             <button
               className={`px-2 py-1 text-xs rounded ${updatesEnabled ? 'bg-amber-600 hover:bg-amber-700' : 'bg-green-600 hover:bg-green-700'} text-white`}
-              title={updatesEnabled ? 'Pause updates' : 'Resume updates'}
+              title={updatesEnabled ? messages.carControl.pauseUpdates : messages.carControl.resumeUpdates}
               onClick={() => setUpdatesEnabled(!updatesEnabled)}
             >
               ⏸
             </button>
             <button
               className="px-2 py-1 text-xs rounded bg-red-600 hover:bg-red-700 text-white"
-              title="Stop control session"
+              title={messages.carControl.stopControlSession}
               onClick={() => {
                 flowControl.stopConnection();
                 flowControl.setCarId(undefined);
@@ -216,7 +218,7 @@ export default function CarControl() {
             </button>
             <button
               className="ml-auto px-2 py-1 text-xs rounded bg-zinc-700 hover:bg-zinc-600 text-zinc-100"
-              title="Open Flow Control Editor"
+              title={messages.carControl.openFlowEditor}
               onClick={() => router.push(`/car/${flowControl.carId}`)}
             >
               🧭
@@ -229,8 +231,8 @@ export default function CarControl() {
             <>
               <div className="space-y-2 border border-slate-200/80 bg-white/70 p-3 shadow-[0_16px_32px_rgba(15,23,42,0.06)] backdrop-blur-sm">
                 <div>
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">Vehicle</div>
-                  <div className="mt-1 text-sm font-semibold text-slate-900">Choose control target</div>
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.24em] text-slate-500">{messages.carControl.vehicle}</div>
+                  <div className="mt-1 text-sm font-semibold text-slate-900">{messages.carControl.chooseControlTarget}</div>
                 </div>
 
                 <select
@@ -247,10 +249,10 @@ export default function CarControl() {
                   value={flowControl.carId?.toString() || ""}
                   className="text-sm p-3 w-full block border border-slate-300 bg-[linear-gradient(180deg,rgba(255,255,255,0.96),rgba(241,245,249,0.95))] text-slate-900 shadow-inner outline-none transition-all hover:border-sky-400 focus:border-sky-500 focus:ring-4 focus:ring-sky-100"
                 >
-                  <option value="" className="text-sm text-gray-500">Select a vehicle...</option>
+                  <option value="" className="text-sm text-gray-500">{messages.carControl.selectVehicle}</option>
                   {carsWithLiveStatus.map((c) => (
                     <option key={c.id} value={c.id} className="text-sm py-2">
-                      {c.name || `Car ${c.id}`} (ID: {c.id}) {c.isConnected ? '· online' : '· offline'}
+                      {messages.carControl.vehicleOption(c.name, c.id, c.isConnected)}
                     </option>
                   ))}
                 </select>
@@ -260,11 +262,11 @@ export default function CarControl() {
                 <div className={`mt-2 border px-3 py-2 text-xs ${selectedCar.isConnected ? 'border-green-200 bg-green-50 text-green-800' : 'border-amber-200 bg-amber-50 text-amber-800'}`}>
                   <div className="flex items-center gap-2">
                     <span className={`inline-block h-2 w-2 rounded-full ${selectedCar.isConnected ? 'bg-green-500' : 'bg-amber-500'}`} />
-                    <span className="font-medium">{selectedCar.isConnected ? 'Fahrzeug online' : 'Fahrzeug offline'}</span>
+                    <span className="font-medium">{selectedCar.isConnected ? messages.carControl.vehicleOnline : messages.carControl.vehicleOffline}</span>
                   </div>
                   {!selectedCar.isConnected && (
                     <div className="mt-1 text-[11px] opacity-80">
-                      Das Fahrzeug ist aktuell nicht verbunden. Streams und Kontrolle werden automatisch wieder aktiv, sobald es sich neu verbindet.
+                      {messages.carControl.vehicleOfflineHint}
                     </div>
                   )}
                 </div>
@@ -303,11 +305,11 @@ export default function CarControl() {
                     onClick={handleAquireCarControl}
                     disabled={isAcquiringControl}
                   >
-                    {isAcquiringControl ? 'Acquiring Control...' : 'Acquire Control'}
+                    {isAcquiringControl ? messages.carControl.acquiringControl : messages.carControl.acquireControl}
                   </button>
                 </>
               )}
-            </> : <p className="text-xs text-red-500">No cars available. Please register a car first.</p>}
+            </> : <p className="text-xs text-red-500">{messages.carControl.noCarsAvailable}</p>}
             
         </>
       )}

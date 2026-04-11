@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import type { Janus, JanusPluginHandle, JanusStatic, JanusStreamingMessage } from '@/types/janus';
+import { useI18n } from '@/i18n/provider';
 
 interface VideoStreamProps {
   streamId?: number;
@@ -51,10 +52,10 @@ function formatBitrate(bits: number | null): string {
   return `${(bits / 1_000).toFixed(0)} kbit/s`;
 }
 
-function loadJanusScript(): Promise<JanusStatic> {
+function loadJanusScript(browserRequiredMessage: string, janusUnavailableMessage: string, janusScriptFailedMessage: string): Promise<JanusStatic> {
   return new Promise((resolve, reject) => {
     if (typeof window === 'undefined') {
-      reject(new Error('Browserumgebung erforderlich'));
+      reject(new Error(browserRequiredMessage));
       return;
     }
 
@@ -78,7 +79,7 @@ function loadJanusScript(): Promise<JanusStatic> {
       if (window.Janus) {
         resolve(window.Janus);
       } else {
-        reject(new Error('Janus global nicht verfügbar'));
+        reject(new Error(janusUnavailableMessage));
       }
     };
 
@@ -87,7 +88,7 @@ function loadJanusScript(): Promise<JanusStatic> {
       if (script) {
         cleanup(script);
       }
-      reject(new Error('Janus Skript konnte nicht geladen werden'));
+      reject(new Error(janusScriptFailedMessage));
     };
 
     const script = existing ?? document.createElement('script');
@@ -103,12 +104,13 @@ function loadJanusScript(): Promise<JanusStatic> {
 }
 
 export default function VideoStream({ streamId, streamName, audioEnabled = false, audioInputDeviceId, onAudioTrack }: VideoStreamProps) {
+  const { messages } = useI18n();
   const videoRef = useRef<HTMLVideoElement>(null);
   const audioRef = useRef<HTMLAudioElement>(null);
   const janusRef = useRef<Janus | null>(null);
   const pluginHandleRef = useRef<JanusPluginHandle | null>(null);
   const [pluginHandle, setPluginHandle] = useState<JanusPluginHandle | null>(null);
-  const [streamStatus, setStreamStatus] = useState('Initializing...');
+  const [streamStatus, setStreamStatus] = useState(messages.videoStream.initializing);
   const [error, setError] = useState<string | null>(null);
   const [bitrate, setBitrate] = useState<number | null>(null);
   const [fps, setFps] = useState<number | null>(null);
@@ -118,7 +120,7 @@ export default function VideoStream({ streamId, streamName, audioEnabled = false
     let mounted = true;
 
     const resetState = () => {
-      setStreamStatus(streamId ? 'Initializing...' : 'No stream selected');
+      setStreamStatus(streamId ? messages.videoStream.initializing : messages.videoStream.noStreamSelected);
       setError(null);
       setBitrate(null);
       setFps(null);
@@ -139,16 +141,20 @@ export default function VideoStream({ streamId, streamName, audioEnabled = false
 
     const initialise = async () => {
       try {
-        const JanusCtor = await loadJanusScript();
+        const JanusCtor = await loadJanusScript(
+          messages.videoStream.browserRequired,
+          messages.videoStream.janusUnavailable,
+          messages.videoStream.janusScriptFailed,
+        );
         if (!mounted) return;
 
         if (!JanusCtor.isWebrtcSupported()) {
-          setError('WebRTC is not supported by this browser');
-          setStreamStatus('Error');
+          setError(messages.videoStream.webRtcNotSupported);
+          setStreamStatus(messages.videoStream.errorState);
           return;
         }
 
-        setStreamStatus('Connecting to Janus...');
+        setStreamStatus(messages.videoStream.connectingToJanus);
 
         JanusCtor.init({
           debug: 'all',
@@ -161,7 +167,7 @@ export default function VideoStream({ streamId, streamName, audioEnabled = false
               success: () => {
                 if (!mounted) return;
 
-                setStreamStatus('Connected, loading plugin...');
+                setStreamStatus(messages.videoStream.connectedLoadingPlugin);
                 janusRef.current = janus;
 
                 const handleRemoteTrack = (track: MediaStreamTrack, mid: string, on: boolean) => {
@@ -170,7 +176,7 @@ export default function VideoStream({ streamId, streamName, audioEnabled = false
                     const stream = new MediaStream([track]);
                     if (videoRef.current) {
                       videoRef.current.srcObject = stream;
-                      setStreamStatus('Video stream active');
+                      setStreamStatus(messages.videoStream.streamActive);
                       setError(null);
                     }
                   } else if (on && track.kind === 'audio') {
@@ -179,7 +185,7 @@ export default function VideoStream({ streamId, streamName, audioEnabled = false
                       audioRef.current.srcObject = audioStream;
                     }
                     onAudioTrack?.(track);
-                    setStreamStatus('Audio+Video stream active');
+                    setStreamStatus(messages.videoStream.audioVideoActive);
                   } else if (!on && track.kind === 'audio') {
                     if (audioRef.current) {
                       audioRef.current.srcObject = null;
@@ -192,7 +198,7 @@ export default function VideoStream({ streamId, streamName, audioEnabled = false
                   if (!mounted) return;
                   if (videoRef.current) {
                     JanusCtor.attachMediaStream(videoRef.current, stream);
-                    setStreamStatus('Video stream active');
+                    setStreamStatus(messages.videoStream.streamActive);
                     setError(null);
                   }
                 };
@@ -200,7 +206,7 @@ export default function VideoStream({ streamId, streamName, audioEnabled = false
                 const handleMessage = (msg: JanusStreamingMessage, jsep?: RTCSessionDescriptionInit) => {
                   if (!mounted) return;
                   if (jsep && pluginHandleRef.current) {
-                    setStreamStatus('Negotiating WebRTC...');
+                    setStreamStatus(messages.videoStream.negotiating);
                     pluginHandleRef.current.createAnswer({
                       jsep,
                       media: { audioSend: false, videoSend: false },
@@ -214,8 +220,8 @@ export default function VideoStream({ streamId, streamName, audioEnabled = false
                       error: (err) => {
                         if (!mounted) return;
                         console.error('createAnswer error:', err);
-                        setError(`WebRTC error: ${err}`);
-                        setStreamStatus('Error');
+                        setError(messages.videoStream.webRtcError(err));
+                        setStreamStatus(messages.videoStream.errorState);
                       },
                     });
                   }
@@ -228,7 +234,7 @@ export default function VideoStream({ streamId, streamName, audioEnabled = false
 
                     pluginHandleRef.current = handle;
                     setPluginHandle(handle);
-                    setStreamStatus('Plugin ready, discovering streams...');
+                    setStreamStatus(messages.videoStream.pluginReady);
 
                     handle.onremotetrack = handleRemoteTrack;
                     handle.onremotestream = handleRemoteStream;
@@ -242,23 +248,23 @@ export default function VideoStream({ streamId, streamName, audioEnabled = false
                         if (msg.streaming === 'list' && streams.length > 0) {
                           const match = streams.find((s) => s.id === streamId);
                           if (!match) {
-                            setError(`Configured stream ${streamId} not found in Janus`);
-                            setStreamStatus('Error');
+                            setError(messages.videoStream.configuredStreamMissing(streamId!));
+                            setStreamStatus(messages.videoStream.errorState);
                             return;
                           }
 
-                          setStreamStatus(`Starting stream ${streamId}...`);
+                          setStreamStatus(messages.videoStream.startingStream(streamId!));
                           handle.send({ message: { request: 'watch', id: streamId } });
                         } else {
-                          setError('No video streams available');
-                          setStreamStatus('Error');
+                          setError(messages.videoStream.noStreamsAvailable);
+                          setStreamStatus(messages.videoStream.errorState);
                         }
                       },
                       error: (err: string) => {
                         if (!mounted) return;
                         console.error('Stream list error:', err);
-                        setError(`Stream list error: ${err}`);
-                        setStreamStatus('Error');
+                        setError(messages.videoStream.streamListError(err));
+                        setStreamStatus(messages.videoStream.errorState);
                       },
                     });
                   },
@@ -267,20 +273,20 @@ export default function VideoStream({ streamId, streamName, audioEnabled = false
                   error: (err: string) => {
                     if (!mounted) return;
                     console.error('Plugin attach error:', err);
-                    setError(`Plugin error: ${err}`);
-                    setStreamStatus('Error');
+                    setError(messages.videoStream.pluginError(err));
+                    setStreamStatus(messages.videoStream.errorState);
                   },
                 });
               },
               error: (err: string) => {
                 if (!mounted) return;
                 console.error('Janus init error:', err);
-                setError(`Connection error: ${err}`);
-                setStreamStatus('Error');
+                setError(messages.videoStream.connectionError(err));
+                setStreamStatus(messages.videoStream.errorState);
               },
               destroyed: () => {
                 if (!mounted) return;
-                setStreamStatus('Connection closed');
+                setStreamStatus(messages.videoStream.connectionClosed);
               },
             });
           },
@@ -290,7 +296,7 @@ export default function VideoStream({ streamId, streamName, audioEnabled = false
         console.error('Janus setup error:', err);
         const message = err instanceof Error ? err.message : String(err);
         setError(message);
-        setStreamStatus('Error');
+        setStreamStatus(messages.videoStream.errorState);
       }
     };
 
@@ -318,7 +324,7 @@ export default function VideoStream({ streamId, streamName, audioEnabled = false
         videoRef.current.srcObject = null;
       }
     };
-  }, [streamId]);
+  }, [messages, onAudioTrack, streamId]);
 
   useEffect(() => {
     if (!pluginHandle) {
@@ -409,20 +415,20 @@ export default function VideoStream({ streamId, streamName, audioEnabled = false
         <div className="absolute top-2 left-2 bg-black/70 text-white px-3 py-2 rounded text-sm z-10 space-y-1">
           <div className="flex items-start justify-between gap-4">
             <div>
-              Status: {streamStatus}
+              {messages.videoStream.statusLabel}: {streamStatus}
               {streamName && ` (${streamName})`}
             </div>
             <button
               type="button"
               className="text-white/70 hover:text-white text-xs"
               onClick={() => setOverlayVisible(false)}
-              aria-label="Overlay schließen"
+              aria-label={messages.videoStream.closeOverlay}
             >
               ✕
             </button>
           </div>
           <div className="text-xs text-white/80">
-            Stream: {formattedFps} | {formattedBitrate}
+            {messages.videoStream.streamInfoLabel}: {formattedFps} | {formattedBitrate}
           </div>
         </div>
       )}
@@ -432,12 +438,12 @@ export default function VideoStream({ streamId, streamName, audioEnabled = false
           className="absolute top-2 left-2 bg-black/60 text-white text-xs px-2 py-1 rounded z-10"
           onClick={() => setOverlayVisible(true)}
         >
-          Info anzeigen
+          {messages.videoStream.showInfo}
         </button>
       )}
       {error && (
         <div className="absolute top-10 left-2 bg-red-600/90 text-white px-3 py-1 rounded text-sm z-10">
-          Error: {error}
+          {messages.videoStream.errorLabel}: {error}
         </div>
       )}
       <video

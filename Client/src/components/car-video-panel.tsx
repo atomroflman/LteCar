@@ -4,6 +4,7 @@ import { JSX, useEffect, useMemo, useState } from 'react';
 import VideoStream from './video-stream';
 import type { VideoStreamInfo } from '@/types/video-stream';
 import { useCarUiStore } from './car-ui-store';
+import { useI18n } from '@/i18n/provider';
 
 const STREAM_REFRESH_EVENT = 'videoStreams:refresh';
 
@@ -32,6 +33,7 @@ function sortStreams(streams: VideoStreamInfo[]): VideoStreamInfo[] {
 }
 
 export default function CarVideoPanel({ carId }: CarVideoPanelProps): JSX.Element {
+  const { messages } = useI18n();
   const [videoConnection, setVideoConnection] = useState<any>(undefined);
   const [streams, setStreams] = useState<VideoStreamInfo[]>([]);
   const [selectedStreamId, setSelectedStreamId] = useState<number | undefined>(undefined);
@@ -88,7 +90,7 @@ export default function CarVideoPanel({ carId }: CarVideoPanelProps): JSX.Elemen
       } catch (connectionError) {
         console.debug('Failed to start video hub connection:', connectionError);
         if (mounted) {
-          setError('Video-Hub konnte nicht verbunden werden.');
+          setError(messages.carVideoPanel.hubConnectionFailed);
         }
       }
     })();
@@ -102,7 +104,7 @@ export default function CarVideoPanel({ carId }: CarVideoPanelProps): JSX.Elemen
       }
       setVideoConnection(undefined);
     };
-  }, []);
+  }, [messages]);
 
   useEffect(() => {
     if (!carId || !videoConnection) {
@@ -130,7 +132,7 @@ export default function CarVideoPanel({ carId }: CarVideoPanelProps): JSX.Elemen
         }
 
         console.error('Failed to load video streams:', loadError);
-        setError('Video-Streams konnten nicht geladen werden.');
+        setError(messages.carVideoPanel.loadStreamsFailed);
       } finally {
         if (!cancelled) {
           setLoading(false);
@@ -149,7 +151,7 @@ export default function CarVideoPanel({ carId }: CarVideoPanelProps): JSX.Elemen
       cancelled = true;
       window.removeEventListener(STREAM_REFRESH_EVENT, handleRefresh);
     };
-  }, [carId, reconnectVersion, videoConnection]);
+  }, [carId, reconnectVersion, videoConnection, messages]);
 
   useEffect(() => {
     if (!carId) {
@@ -213,7 +215,7 @@ export default function CarVideoPanel({ carId }: CarVideoPanelProps): JSX.Elemen
   if (!carId) {
     return (
       <div className="flex h-full w-full items-center justify-center rounded-2xl border border-dashed border-zinc-700 bg-zinc-900 p-10 text-center text-sm text-zinc-300">
-        Bitte zuerst ein Auto auswählen. Erst danach wird ein Video-Stream geöffnet.
+        {messages.carVideoPanel.selectVehicleFirst}
       </div>
     );
   }
@@ -221,7 +223,7 @@ export default function CarVideoPanel({ carId }: CarVideoPanelProps): JSX.Elemen
   if (loading && streams.length === 0) {
     return (
       <div className="flex h-full w-full items-center justify-center rounded-2xl border border-zinc-700 bg-zinc-900 text-sm text-zinc-300">
-        Lade Video-Streams...
+        {messages.carVideoPanel.loadingStreams}
       </div>
     );
   }
@@ -237,7 +239,7 @@ export default function CarVideoPanel({ carId }: CarVideoPanelProps): JSX.Elemen
   if (streams.length === 0) {
     return (
       <div className="flex h-full w-full items-center justify-center rounded-2xl border border-zinc-700 bg-zinc-900 p-6 text-center text-sm text-zinc-300">
-        Für dieses Auto sind keine Video-Streams konfiguriert.
+        {messages.carVideoPanel.noStreamsConfigured}
       </div>
     );
   }
@@ -261,8 +263,8 @@ export default function CarVideoPanel({ carId }: CarVideoPanelProps): JSX.Elemen
               <span className="font-medium">{stream.name}</span>
               <span className="ml-2 text-xs opacity-80">
                 {stream.location ? `${stream.location} · ` : ''}
-                {stream.enabled ? 'enabled' : 'disabled'}
-                {stream.viewerCount > 0 ? ` · ${stream.viewerCount} viewer` : ''}
+                {stream.enabled ? messages.carVideoPanel.streamEnabled : messages.carVideoPanel.streamDisabled}
+                {stream.viewerCount > 0 ? ` · ${messages.carVideoPanel.viewerCount(stream.viewerCount)}` : ''}
               </span>
             </button>
           );
@@ -271,25 +273,25 @@ export default function CarVideoPanel({ carId }: CarVideoPanelProps): JSX.Elemen
 
       {!selectedStream && (
         <div className="rounded-2xl border border-zinc-700 bg-zinc-900 p-6 text-sm text-zinc-300">
-          Kein Stream ausgewählt.
+          {messages.carVideoPanel.noStreamSelected}
         </div>
       )}
 
       {selectedStream && !selectedStream.enabled && (
         <div className="rounded-2xl border border-amber-900 bg-amber-950/50 p-6 text-sm text-amber-200">
-          Dieser Stream ist deaktiviert und wird erst wieder geöffnet, wenn ihn ein angemeldeter Fahrer aktiviert.
+          {messages.carVideoPanel.streamDisabledHint}
         </div>
       )}
 
       {selectedStream && carConnected === false && (
         <div className="rounded-2xl border border-amber-900 bg-amber-950/50 p-6 text-sm text-amber-200">
-          Das Fahrzeug ist aktuell offline. Der ausgewählte Stream bleibt vorgemerkt und wird automatisch wieder gestartet, sobald sich das Fahrzeug neu verbindet.
+          {messages.carVideoPanel.carOfflineHint}
         </div>
       )}
 
       {selectedStream && selectedStream.enabled && !documentVisible && (
         <div className="rounded-2xl border border-zinc-700 bg-zinc-900 p-6 text-sm text-zinc-300">
-          Der Stream ist pausiert, weil dieser Browser-Tab nicht aktiv ist.
+          {messages.carVideoPanel.tabInactiveHint}
         </div>
       )}
 

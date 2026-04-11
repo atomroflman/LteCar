@@ -8,6 +8,8 @@ import Telemetry from "@/components/telemetry";
 import Ping from "@/components/ping";
 import SessionTransfer from "@/components/session-transfer";
 import InstallDialog from "@/components/install-dialog";
+import LanguageSwitcher from "@/components/language-switcher";
+import { useI18n } from "@/i18n/provider";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -20,6 +22,7 @@ const geistMono = Geist_Mono({
 });
 
 export default function Home() {
+  const { messages } = useI18n();
   const [user, setUser] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const selectedCarId = useControlFlowStore(state => state.carId);
@@ -34,12 +37,12 @@ export default function Home() {
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">Loading...</div>
+      <div className="flex items-center justify-center min-h-screen">{messages.common.loading}</div>
     );
   }
   if (!user) {
     return (
-      <div className="flex items-center justify-center min-h-screen">Kein User angemeldet.</div>
+      <div className="flex items-center justify-center min-h-screen">{messages.home.unauthenticated}</div>
     );
   }
 
@@ -54,12 +57,15 @@ export default function Home() {
         <div className="relative flex h-full flex-col overflow-hidden bg-[linear-gradient(180deg,rgba(23,25,31,0.98),rgba(15,17,22,0.96))] shadow-[0_28px_80px_rgba(0,0,0,0.35)] backdrop-blur-xl">
           <div className="flex items-center justify-between px-5 py-4 md:px-6">
             <div className="text-[11px] font-semibold uppercase tracking-[0.34em] text-sky-300">
-              Signal-RC Control Deck
+              {messages.home.title}
             </div>
-            <div className="hidden items-center gap-2 md:flex">
+            <div className="flex items-center gap-2">
+              <LanguageSwitcher className="shrink-0" />
+              <div className="hidden items-center gap-2 md:flex">
               {!selectedCarId && <InstallDialog />}
               <div className="rounded-full bg-slate-800/90 px-3 py-2 text-[11px] font-medium text-slate-300 shadow-sm ring-1 ring-white/10">
-                {selectedCarId ? `Active vehicle ID ${selectedCarId}` : "No vehicle selected"}
+                {selectedCarId ? messages.home.activeVehicle(selectedCarId) : messages.home.noVehicleSelected}
+              </div>
               </div>
             </div>
           </div>

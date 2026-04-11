@@ -3,12 +3,14 @@
 import React, { useState, useRef } from "react";
 import { useControlFlowStore } from "./control-flow-store";
 import CollapsibleSection from "./collapsible-section";
+import { useI18n } from "@/i18n/provider";
 
 interface SshKeyManagerProps {
   carId: number;
 }
 
 export default function SshKeyManager({ carId }: SshKeyManagerProps) {
+  const { messages } = useI18n();
   const { downloadSshKey, uploadSshKey, getSshPrivateKey, removeSshPrivateKey, getSshKeyDownloadUrl } = useControlFlowStore();
   const [isLoading, setIsLoading] = useState(false);
   const [message, setMessage] = useState<{ type: 'success' | 'error' | 'info'; text: string } | null>(null);
@@ -21,7 +23,7 @@ export default function SshKeyManager({ carId }: SshKeyManagerProps) {
 
   const handleDownloadKeyFromVehicle = async () => {
     if (!vehicleIp.trim()) {
-      setMessage({ type: 'error', text: 'Please enter the vehicle IP address' });
+      setMessage({ type: 'error', text: messages.sshKeyManager.enterVehicleIp });
       return;
     }
 
@@ -33,18 +35,18 @@ export default function SshKeyManager({ carId }: SshKeyManagerProps) {
       if (result.success && result.key) {
         const saveSuccess = useControlFlowStore.getState().saveSshPrivateKey(carId, result.key);
         if (saveSuccess) {
-          setMessage({ type: 'success', text: 'SSH key downloaded from vehicle and saved to browser!' });
+          setMessage({ type: 'success', text: messages.sshKeyManager.downloadSaved });
           setHasStoredKey(true);
           setShowDownload(false);
           setVehicleIp("");
         } else {
-          setMessage({ type: 'error', text: 'Failed to save SSH key to browser storage' });
+          setMessage({ type: 'error', text: messages.sshKeyManager.saveToBrowserFailed });
         }
       } else {
-        setMessage({ type: 'error', text: result.error || 'Failed to download SSH key from vehicle' });
+        setMessage({ type: 'error', text: result.error || messages.sshKeyManager.downloadFromVehicleFailed });
       }
     } catch (error) {
-      setMessage({ type: 'error', text: 'An unexpected error occurred' });
+      setMessage({ type: 'error', text: messages.sshKeyManager.unexpectedError });
     } finally {
       setIsLoading(false);
     }
@@ -53,7 +55,7 @@ export default function SshKeyManager({ carId }: SshKeyManagerProps) {
   const handleDownloadKeyFile = () => {
     const key = getSshPrivateKey(carId);
     if (!key) {
-      setMessage({ type: 'error', text: 'No SSH key found in browser storage' });
+      setMessage({ type: 'error', text: messages.sshKeyManager.noKeyInBrowser });
       return;
     }
 
@@ -72,12 +74,12 @@ export default function SshKeyManager({ carId }: SshKeyManagerProps) {
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
     
-    setMessage({ type: 'success', text: 'SSH key file downloaded successfully!' });
+    setMessage({ type: 'success', text: messages.sshKeyManager.keyFileDownloaded });
   };
 
   const handleUploadKey = async () => {
     if (!uploadKey.trim()) {
-      setMessage({ type: 'error', text: 'Please enter a private key' });
+      setMessage({ type: 'error', text: messages.sshKeyManager.enterPrivateKey });
       return;
     }
 
@@ -87,15 +89,15 @@ export default function SshKeyManager({ carId }: SshKeyManagerProps) {
     try {
       const result = await uploadSshKey(carId, uploadKey.trim());
       if (result.success) {
-        setMessage({ type: 'success', text: 'SSH key uploaded and saved successfully!' });
+        setMessage({ type: 'success', text: messages.sshKeyManager.uploadSaved });
         setUploadKey("");
         setShowUpload(false);
         setHasStoredKey(true);
       } else {
-        setMessage({ type: 'error', text: result.error || 'Failed to upload SSH key' });
+        setMessage({ type: 'error', text: result.error || messages.sshKeyManager.uploadFailed });
       }
     } catch (error) {
-      setMessage({ type: 'error', text: 'An unexpected error occurred' });
+      setMessage({ type: 'error', text: messages.sshKeyManager.unexpectedError });
     } finally {
       setIsLoading(false);
     }
@@ -123,13 +125,13 @@ export default function SshKeyManager({ carId }: SshKeyManagerProps) {
   };
 
   const handleRemoveKey = () => {
-    if (confirm("Are you sure you want to remove the stored SSH key? This will prevent access to the vehicle.")) {
+    if (confirm(messages.sshKeyManager.removeConfirm)) {
       const success = removeSshPrivateKey(carId);
       if (success) {
-        setMessage({ type: 'info', text: 'SSH key removed successfully' });
+        setMessage({ type: 'info', text: messages.sshKeyManager.removed });
         setHasStoredKey(false);
       } else {
-        setMessage({ type: 'error', text: 'Failed to remove SSH key' });
+        setMessage({ type: 'error', text: messages.sshKeyManager.removeFailed });
       }
     }
   };
@@ -137,12 +139,12 @@ export default function SshKeyManager({ carId }: SshKeyManagerProps) {
   const title = (
     <div className="flex items-center space-x-2">
       <div className={`w-1.5 h-1.5 rounded-full ${hasStoredKey ? 'bg-green-500' : 'bg-red-500'}`}></div>
-      <span>SSH Key {hasStoredKey ? '(stored)' : '(no key)'}</span>
+      <span>{hasStoredKey ? messages.sshKeyManager.titleStored : messages.sshKeyManager.titleMissing}</span>
     </div>
   );
 
   return (
-    <CollapsibleSection title={title as any} defaultCollapsed={true}>
+    <CollapsibleSection title={title} label="SSH Key" defaultCollapsed={true}>
       <div className="space-y-2">
           {/* Message */}
           {message && (
@@ -164,7 +166,7 @@ export default function SshKeyManager({ carId }: SshKeyManagerProps) {
                   onClick={() => setShowDownload(!showDownload)}
                   className="w-full text-left px-2 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-200 transition-colors"
                 >
-                  {showDownload ? '✕ Cancel' : '↓ Download from Vehicle'}
+                  {showDownload ? `✕ ${messages.common.cancel}` : `↓ ${messages.sshKeyManager.downloadFromVehicle}`}
                 </button>
                 {showDownload && (
                   <div className="mt-1 p-2 bg-zinc-800 rounded space-y-1.5">
@@ -181,19 +183,19 @@ export default function SshKeyManager({ carId }: SshKeyManagerProps) {
                     disabled={isLoading || !vehicleIp.trim()}
                     className="flex-1 px-2 py-1 bg-zinc-700 hover:bg-zinc-600 disabled:bg-zinc-800 disabled:text-zinc-600 rounded text-zinc-200 transition-colors"
                   >
-                    {isLoading ? 'Fetch via UI' : 'Fetch via UI'}
+                    {messages.sshKeyManager.fetchViaUi}
                   </button>
                   <button
                     onClick={async () => {
                       const url = await useControlFlowStore.getState().getSshKeyDownloadUrl(carId, vehicleIp.trim());
                       if (url) window.open(url, '_blank');
-                      else setMessage({ type: 'error', text: 'Failed to build local download URL' });
+                      else setMessage({ type: 'error', text: messages.sshKeyManager.buildUrlFailed });
                     }}
                     disabled={!vehicleIp.trim()}
                     className="px-2 py-1 bg-zinc-700 hover:bg-zinc-600 disabled:bg-zinc-800 disabled:text-zinc-600 rounded text-zinc-200 transition-colors"
-                    title="Open local download link (HTTP, local network)"
+                    title={messages.sshKeyManager.openLocalDownloadLink}
                   >
-                    Open Link
+                    {messages.common.openLink}
                   </button>
                 </div>
                   </div>
@@ -206,7 +208,7 @@ export default function SshKeyManager({ carId }: SshKeyManagerProps) {
                   onClick={() => setShowUpload(!showUpload)}
                   className="w-full text-left px-2 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-200 transition-colors"
                 >
-                  {showUpload ? '✕ Cancel' : '↑ Upload Key'}
+                  {showUpload ? `✕ ${messages.common.cancel}` : `↑ ${messages.sshKeyManager.uploadKey}`}
                 </button>
                 {showUpload && (
                   <div className="mt-1 p-2 bg-zinc-800 rounded space-y-1.5">
@@ -228,7 +230,7 @@ export default function SshKeyManager({ carId }: SshKeyManagerProps) {
                       disabled={isLoading || !uploadKey.trim()}
                       className="w-full px-2 py-1 bg-zinc-700 hover:bg-zinc-600 disabled:bg-zinc-800 disabled:text-zinc-600 rounded text-zinc-200 transition-colors"
                     >
-                      {isLoading ? 'Uploading...' : 'Save Key'}
+                      {isLoading ? messages.sshKeyManager.uploading : messages.sshKeyManager.saveKey}
                     </button>
                   </div>
                 )}
@@ -241,7 +243,7 @@ export default function SshKeyManager({ carId }: SshKeyManagerProps) {
                 onClick={handleDownloadKeyFile}
                 className="w-full text-left px-2 py-1.5 bg-zinc-800 hover:bg-zinc-700 rounded text-zinc-200 transition-colors"
               >
-                💾 Download Key File
+                💾 {messages.sshKeyManager.downloadKeyFile}
               </button>
               
               {/* Remove Key */}
@@ -249,7 +251,7 @@ export default function SshKeyManager({ carId }: SshKeyManagerProps) {
                 onClick={handleRemoveKey}
                 className="w-full text-left px-2 py-1.5 bg-zinc-800 hover:bg-red-900/30 rounded text-red-400 transition-colors"
               >
-                🗑️ Remove Key
+                🗑️ {messages.sshKeyManager.removeKey}
               </button>
             </>
           )}

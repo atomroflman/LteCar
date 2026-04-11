@@ -2,6 +2,7 @@ import React, { JSX, useEffect, useState } from "react";
 import { useControlFlowStore } from "./control-flow-store";
 import CollapsibleSection from "./collapsible-section";
 import type { VideoSettingsPayload, VideoStreamInfo } from "@/types/video-stream";
+import { useI18n } from "@/i18n/provider";
 
 type VideoSettingsState = VideoSettingsPayload & {
   resolutionMode?: 'preset'|'custom';
@@ -10,6 +11,7 @@ type VideoSettingsState = VideoSettingsPayload & {
 const STREAM_REFRESH_EVENT = 'videoStreams:refresh';
 
 export default function VideoSettingsControl(props: { carId?: number; canManageEnabled?: boolean } = {}): JSX.Element {
+  const { messages } = useI18n();
   const carIdFromStore = useControlFlowStore(state => state.carId);
   const carId = props.carId ?? carIdFromStore;
 
@@ -116,7 +118,7 @@ export default function VideoSettingsControl(props: { carId?: number; canManageE
   async function handleSave(streamId: number) {
     setError(null);
     const cfg = settingsMap[streamId];
-    if (!cfg) return setError('No settings for stream');
+    if (!cfg) return setError(messages.videoSettings.noSettingsForStream);
     setBusyMap(b => ({ ...b, [streamId]: true }));
     const payload = {
       height: cfg.height,
@@ -133,7 +135,7 @@ export default function VideoSettingsControl(props: { carId?: number; canManageE
       }
     } catch (e) {
       console.error('Failed to save stream settings:', e);
-      setError('Video-Einstellungen konnten nicht gespeichert werden.');
+      setError(messages.videoSettings.saveFailed);
     } finally {
       if (videoConnection && carId) {
         await loadStreams(videoConnection, carId);
@@ -156,7 +158,7 @@ export default function VideoSettingsControl(props: { carId?: number; canManageE
       }
     } catch (toggleError) {
       console.error('Failed to change enabled state:', toggleError);
-      setError('Enable/Disable ist nur für den angemeldeten Fahrer mit aktiver Fahrersitzung erlaubt.');
+      setError(messages.videoSettings.toggleEnabledFailed);
     } finally {
       if (videoConnection && carId) {
         await loadStreams(videoConnection, carId);
@@ -167,9 +169,9 @@ export default function VideoSettingsControl(props: { carId?: number; canManageE
   }
 
   return (
-    <CollapsibleSection title="Video-Einstellungen" defaultCollapsed={true} className="px-2">
+    <CollapsibleSection title={messages.videoSettings.title} label={messages.videoSettings.title} defaultCollapsed={true} className="px-2">
       <div className="space-y-2 text-xs leading-tight">
-        {streams.length === 0 && <div className="text-zinc-400">Keine Streams gefunden.</div>}
+        {streams.length === 0 && <div className="text-zinc-400">{messages.videoSettings.noStreams}</div>}
 
         {streams.map(s => {
           const cfg = settingsMap[s.id] || {};
@@ -179,20 +181,20 @@ export default function VideoSettingsControl(props: { carId?: number; canManageE
             <div key={s.id} className="mb-2 p-2 bg-zinc-800 border border-zinc-700 rounded">
               <div className="flex items-center justify-between mb-2">
                 <div className="font-medium text-zinc-100">{s.name} <span className="text-[11px] text-zinc-400">(#{s.id})</span></div>
-                <div className="text-[11px] text-zinc-400">{s.location || s.type || 'stream'}</div>
+                <div className="text-[11px] text-zinc-400">{s.location || s.type || messages.common.streamFallback}</div>
               </div>
 
               <div className="mb-2 flex items-center gap-2 text-[11px] text-zinc-400">
-                <span>{s.enabled ? 'Enabled' : 'Disabled'}</span>
+                <span>{s.enabled ? messages.common.enabled : messages.common.disabled}</span>
                 <span>·</span>
-                <span>{s.isActive ? 'Live' : 'Idle'}</span>
+                <span>{s.isActive ? messages.common.live : messages.common.idle}</span>
                 <span>·</span>
-                <span>{s.viewerCount} Viewer</span>
+                <span>{messages.videoSettings.viewers(s.viewerCount)}</span>
               </div>
 
               <div className="grid grid-cols-2 gap-2 mb-2">
                 <div>
-                  <label className="block text-xs text-zinc-300">Auflösung</label>
+                  <label className="block text-xs text-zinc-300">{messages.videoSettings.resolution}</label>
                   <select className="w-full text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={presetValue} onChange={e => {
                     const val = e.target.value;
                     if (val === 'custom') {
@@ -203,43 +205,43 @@ export default function VideoSettingsControl(props: { carId?: number; canManageE
                     }
                   }}>
                     {resolutionPresets.map(p => (
-                      <option key={p.key} value={p.key === 'custom' ? 'custom' : `${p.w}x${p.h}`}>{p.key === 'custom' ? 'Custom…' : `${p.w}×${p.h}`}</option>
+                      <option key={p.key} value={p.key === 'custom' ? 'custom' : `${p.w}x${p.h}`}>{p.key === 'custom' ? `${messages.common.custom}...` : `${p.w}×${p.h}`}</option>
                     ))}
                   </select>
 
                   {cfg.resolutionMode === 'custom' && (
                     <div className="mt-1 flex gap-1">
-                      <input type="number" className="w-1/2 text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={cfg.width ?? ''} onChange={e => updateFieldFor(s.id, 'width', e.target.value ? Number(e.target.value) : s.width)} placeholder="Width" />
-                      <input type="number" className="w-1/2 text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={cfg.height ?? ''} onChange={e => updateFieldFor(s.id, 'height', e.target.value ? Number(e.target.value) : s.height)} placeholder="Height" />
+                      <input type="number" className="w-1/2 text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={cfg.width ?? ''} onChange={e => updateFieldFor(s.id, 'width', e.target.value ? Number(e.target.value) : s.width)} placeholder={messages.common.width} />
+                      <input type="number" className="w-1/2 text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={cfg.height ?? ''} onChange={e => updateFieldFor(s.id, 'height', e.target.value ? Number(e.target.value) : s.height)} placeholder={messages.common.height} />
                     </div>
                   )}
                 </div>
 
                 <div>
-                  <label className="block text-xs text-zinc-300">Framerate</label>
+                  <label className="block text-xs text-zinc-300">{messages.common.framerate}</label>
                   <input type="number" className="w-full text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={cfg.framerate ?? s.framerate ?? ''} onChange={e => updateFieldFor(s.id, 'framerate', e.target.value ? Number(e.target.value) : s.framerate)} />
                 </div>
 
                 <div>
-                  <label className="block text-xs text-zinc-300">Bitrate (kbps)</label>
+                  <label className="block text-xs text-zinc-300">{messages.common.bitrateKbps}</label>
                   <input type="number" className="w-full text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={cfg.bitrateKbps ?? s.bitrateKbps ?? ''} onChange={e => updateFieldFor(s.id, 'bitrateKbps', e.target.value ? Number(e.target.value) : 0)} />
                 </div>
 
                 <div>
-                  <label className="block text-xs text-zinc-300">Helligkeit</label>
+                  <label className="block text-xs text-zinc-300">{messages.common.brightness}</label>
                   <input type="range" min="0" max="100" className="w-full" value={Math.round(((cfg.brightness ?? s.brightness ?? 0.5) as number) * 100)} onChange={e => updateFieldFor(s.id, 'brightness', Number(e.target.value) / 100)} />
                 </div>
               </div>
 
               <div className="flex gap-2">
-                <button className="px-2 py-1 text-xs rounded bg-zinc-700 hover:bg-zinc-600 text-zinc-100" onClick={() => handleSave(s.id)} disabled={busyMap[s.id]}>{busyMap[s.id] ? '...' : 'Speichern'}</button>
+                <button className="px-2 py-1 text-xs rounded bg-zinc-700 hover:bg-zinc-600 text-zinc-100" onClick={() => handleSave(s.id)} disabled={busyMap[s.id]}>{busyMap[s.id] ? '...' : messages.videoSettings.save}</button>
                 {props.canManageEnabled && (
                   <button
                     className={`px-2 py-1 text-xs rounded text-zinc-100 ${s.enabled ? 'bg-amber-700 hover:bg-amber-600' : 'bg-green-700 hover:bg-green-600'}`}
                     onClick={() => handleEnable(s.id, !s.enabled)}
                     disabled={busyMap[s.id]}
                   >
-                    {s.enabled ? 'Disable' : 'Enable'}
+                    {s.enabled ? messages.videoSettings.disable : messages.videoSettings.enable}
                   </button>
                 )}
               </div>
@@ -250,7 +252,7 @@ export default function VideoSettingsControl(props: { carId?: number; canManageE
         {error && <div className="text-red-600 text-sm">{error}</div>}
         {!props.canManageEnabled && carId && (
           <div className="text-[11px] text-zinc-400">
-            Enable oder Disable ist nur als angemeldeter Fahrer mit aktiver Fahrersitzung verfügbar.
+            {messages.videoSettings.toggleEnabledHint}
           </div>
         )}
       </div>
