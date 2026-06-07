@@ -36,12 +36,12 @@ public class UserController : ControllerBase
         }
 
         var idEncoder = ServiceProvider.GetRequiredService<Sqids.SqidsEncoder<long>>();
-        
+
         if (!string.IsNullOrEmpty(sessionToken))
         {
             var sessionId = idEncoder.Decode(sessionToken).FirstOrDefault();
             var user = await DbContext.Users.FirstOrDefaultAsync(u => u.SessionId == sessionId);
-            
+
             if (user != null)
             {
                 user.LastSeen = DateTime.UtcNow;
@@ -53,16 +53,17 @@ public class UserController : ControllerBase
                     sessionToken,
                     userName = user.Name,
                     hasControlledCar = user.HasControlledCar,
-                    loginName = user.LoginName
+                    loginName = user.LoginName,
+                    recoveryKey = (string?)null
                 });
             }
-            
+
             Logger.LogWarning("Session token exists but user not found in DB. SessionId: {SessionId}", sessionId);
         }
-        
+
         var nextSessionId = await DbContext.GetNextUserSessionId();
         var newSessionToken = idEncoder.Encode(nextSessionId);
-        
+
         var newUser = new User
         {
             LastSeen = DateTime.UtcNow,
@@ -70,7 +71,7 @@ public class UserController : ControllerBase
             Name = $"User_{nextSessionId}"
         };
         DbContext.Users.Add(newUser);
-        await DbContext.SaveChangesAsync();
+        var recoveryKey = await EnsureAndStoreRecoveryKeyAsync(newUser);
 
         var claims = new[] { new Claim(ClaimTypes.NameIdentifier, newSessionToken) };
         var identity = new ClaimsIdentity(claims, "cookie");
@@ -85,7 +86,8 @@ public class UserController : ControllerBase
             sessionToken = newSessionToken,
             userName = newUser.Name,
             hasControlledCar = newUser.HasControlledCar,
-            loginName = newUser.LoginName
+            loginName = newUser.LoginName,
+            recoveryKey
         });
     }
 
@@ -106,19 +108,19 @@ public class UserController : ControllerBase
             {
                 return Unauthorized(new { message = "Invalid password" });
             }
-            
+
             existingUser.LastSeen = DateTime.UtcNow;
             existingUser.LastLogin = DateTime.UtcNow;
             await DbContext.SaveChangesAsync();
-            
+
             var idEncoder = ServiceProvider.GetRequiredService<Sqids.SqidsEncoder<long>>();
             var sessionToken = idEncoder.Encode(existingUser.SessionId);
-            
+
             var claims = new[] { new Claim(ClaimTypes.NameIdentifier, sessionToken) };
             var identity = new ClaimsIdentity(claims, "cookie");
             var principal = new ClaimsPrincipal(identity);
             await HttpContext.SignInAsync("cookie", principal);
-            
+
             return Ok(new
             {
                 authenticated = true,
@@ -126,10 +128,11 @@ public class UserController : ControllerBase
                 sessionToken,
                 userName = existingUser.Name,
                 hasControlledCar = existingUser.HasControlledCar,
-                loginName = existingUser.LoginName
+                loginName = existingUser.LoginName,
+                recoveryKey = (string?)null
             });
         }
-        
+
         var nextSessionId = await DbContext.GetNextUserSessionId();
         var newUser = new User
         {
@@ -140,18 +143,18 @@ public class UserController : ControllerBase
             LoginName = model.UserName
         };
         newUser.SetPassword(model.Password);
-        
+
         DbContext.Users.Add(newUser);
-        await DbContext.SaveChangesAsync();
-        
+        var recoveryKey = await EnsureAndStoreRecoveryKeyAsync(newUser);
+
         var newIdEncoder = ServiceProvider.GetRequiredService<Sqids.SqidsEncoder<long>>();
         var newSessionToken = newIdEncoder.Encode(newUser.SessionId);
-        
+
         var newClaims = new[] { new Claim(ClaimTypes.NameIdentifier, newSessionToken) };
         var newIdentity = new ClaimsIdentity(newClaims, "cookie");
         var newPrincipal = new ClaimsPrincipal(newIdentity);
         await HttpContext.SignInAsync("cookie", newPrincipal);
-        
+
         return Ok(new
         {
             authenticated = true,
@@ -159,7 +162,8 @@ public class UserController : ControllerBase
             sessionToken = newSessionToken,
             userName = newUser.Name,
             hasControlledCar = newUser.HasControlledCar,
-            loginName = newUser.LoginName
+            loginName = newUser.LoginName,
+            recoveryKey
         });
     }
 
@@ -168,6 +172,71 @@ public class UserController : ControllerBase
     {
         await HttpContext.SignOutAsync("cookie");
         return Ok(new { message = "Logged out successfully" });
+    }
+
+    [HttpPost("recover-session")]
+    public async Task<IActionResult> RecoverSession([FromBody] RecoverSessionRequest model)
+    {
+        if (string.IsNullOrWhiteSpace(model.RecoveryKey))
+        {
+            return BadRequest(new { message = "Recovery key is required" });
+        }
+
+        var normalized = LteCar.Server.Data.User.NormalizeRecoveryKey(model.RecoveryKey);
+        if (normalized.Length != 16)
+        {
+            return Unauthorized(new { message = "Invalid recovery key" });
+        }
+
+        using var sha256 = System.Security.Cryptography.SHA256.Create();
+        var hash = Convert.ToBase64String(sha256.ComputeHash(System.Text.Encoding.UTF8.GetBytes(normalized)));
+
+        var user = await DbContext.Users.FirstOrDefaultAsync(u => u.RecoveryKeyHash == hash);
+        if (user == null)
+        {
+            return Unauthorized(new { message = "Invalid recovery key" });
+        }
+
+        user.LastSeen = DateTime.UtcNow;
+        user.LastLogin = DateTime.UtcNow;
+        await DbContext.SaveChangesAsync();
+
+        var idEncoder = ServiceProvider.GetRequiredService<Sqids.SqidsEncoder<long>>();
+        var sessionToken = idEncoder.Encode(user.SessionId);
+
+        var claims = new[] { new Claim(ClaimTypes.NameIdentifier, sessionToken) };
+        var identity = new ClaimsIdentity(claims, "cookie");
+        var principal = new ClaimsPrincipal(identity);
+        await HttpContext.SignInAsync("cookie", principal);
+
+        Logger.LogInformation("User {UserId} recovered session via recovery key", user.Id);
+
+        return Ok(new
+        {
+            authenticated = true,
+            userId = user.Id,
+            sessionToken,
+            userName = user.Name,
+            hasControlledCar = user.HasControlledCar,
+            loginName = user.LoginName,
+            recoveryKey = (string?)null
+        });
+    }
+
+    [HttpPost("regenerate-recovery-key")]
+    public async Task<IActionResult> RegenerateRecoveryKey()
+    {
+        var user = await GetCurrentUserAsync();
+        if (user == null)
+        {
+            return Unauthorized(new { message = "You must be logged in to regenerate a recovery key" });
+        }
+
+        var newKey = LteCar.Server.Data.User.GenerateRecoveryKey();
+        user.SetRecoveryKey(newKey);
+        await DbContext.SaveChangesAsync();
+
+        return Ok(new { recoveryKey = newKey });
     }
 
     [HttpPost("claim-anonymous-session")]
@@ -263,11 +332,23 @@ public class UserController : ControllerBase
         var sessionToken = User.FindFirstValue(ClaimTypes.NameIdentifier);
         if (string.IsNullOrEmpty(sessionToken))
             return null;
-        
+
         var idEncoder = ServiceProvider.GetRequiredService<Sqids.SqidsEncoder<long>>();
         var sessionId = idEncoder.Decode(sessionToken).FirstOrDefault();
 
         return await DbContext.Users.FirstOrDefaultAsync(u => u.SessionId == sessionId);
+    }
+
+    private async Task<string?> EnsureAndStoreRecoveryKeyAsync(User user)
+    {
+        if (!string.IsNullOrEmpty(user.RecoveryKeyHash))
+            return null;
+
+        var key = LteCar.Server.Data.User.GenerateRecoveryKey();
+        user.SetRecoveryKey(key);
+        await DbContext.SaveChangesAsync();
+        Logger.LogInformation("Generated new recovery key for user {UserId}", user.Id);
+        return key;
     }
 
     public class LoginRequest
@@ -279,5 +360,10 @@ public class UserController : ControllerBase
     public class ApplyTransferRequest
     {
         public string TransferCode { get; set; } = string.Empty;
+    }
+
+    public class RecoverSessionRequest
+    {
+        public string RecoveryKey { get; set; } = string.Empty;
     }
 }

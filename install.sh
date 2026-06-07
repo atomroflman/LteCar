@@ -340,7 +340,8 @@ if [ "$DEPLOY_MODE" = "server" ]; then
                 echo "User '$RUN_USER' added to the docker group."
             fi
         fi
-        COMPOSE_CMD="docker compose"
+            COMPOSE_CMD="docker compose"
+            COMPOSE_PULL_ARGS=(--ignore-buildable)
     else
         if ! command -v podman &>/dev/null; then
             echo "Installing Podman ..."
@@ -349,6 +350,7 @@ if [ "$DEPLOY_MODE" = "server" ]; then
             echo "Podman already installed: $(podman --version)"
         fi
         COMPOSE_CMD="podman compose"
+        COMPOSE_PULL_ARGS=()
     fi
 
     # ── Phase 2: Compose stack ───────────────────────────────────────
@@ -358,7 +360,7 @@ if [ "$DEPLOY_MODE" = "server" ]; then
     if [ "$INSTALL_MODE" = "compose-full" ]; then
         COMPOSE_FILE="$REPO_DIR/docker-compose.yml"
     elif [ "$INSTALL_MODE" = "compose-debug" ]; then
-        COMPOSE_FILE="$REPO_DIR/docker-compose.debug.yml"
+        COMPOSE_FILE="$REPO_DIR/docker-compose.dev.yml"
     fi
 
     if [ ! -f "$COMPOSE_FILE" ]; then
@@ -368,7 +370,7 @@ if [ "$DEPLOY_MODE" = "server" ]; then
 
     echo "Compose file: $COMPOSE_FILE"
     echo "Pulling/building images ..."
-    run_as_user $COMPOSE_CMD -f "$COMPOSE_FILE" pull --ignore-buildable
+    run_as_user $COMPOSE_CMD -f "$COMPOSE_FILE" pull "${COMPOSE_PULL_ARGS[@]}"
     run_as_user $COMPOSE_CMD -f "$COMPOSE_FILE" build
 
     # ── Phase 3: systemd service (optional) ─────────────────────────

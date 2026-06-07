@@ -20,6 +20,9 @@ services:
     build:
       context: .
       dockerfile: Server/Dockerfile
+      args:
+        GIT_BRANCH: ${GIT_BRANCH:-master}
+        GIT_COMMIT: ${GIT_COMMIT:-unknown}
     restart: unless-stopped
     depends_on:
       postgres:
@@ -34,6 +37,8 @@ services:
       JanusConfiguration__PortRangeStart: "10000"
       JanusConfiguration__PortRangeEnd: "10200"
       FileTransfer__StoragePath: /app/data/ltecar
+    volumes:
+      - ltecar-server-data:/app/DataProtectionKeys
 
   janus:
     image: docker.io/canyan/janus-gateway:latest
@@ -65,3 +70,4 @@ services:
 
 volumes:
   postgres-data:
+  ltecar-server-data:

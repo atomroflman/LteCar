@@ -100,15 +100,8 @@ builder.Services.AddAuthentication("cookie")
 
 var app = builder.Build();
 var configuration = app.Configuration;
-using (var scope = app.Services.CreateScope())
-{
-    var dbContext = scope.ServiceProvider.GetRequiredService<LteCarContext>();
-    dbContext.Database.Migrate();
-}
-
 var logger = app.Services.GetRequiredService<ILogger<Program>>();
-
-logger.LogInformation("Database migrations applied successfully.");
+ApplyDatabaseMigrations(app.Services, logger);
 
 app.Use(async(ctx, next) => {
     try
@@ -149,3 +142,34 @@ app.MapHub<CarBashHub>(HubPaths.CarBashHub);
 app.Services.ValidateConfiguration();
 
 app.Run();
+
+static void ApplyDatabaseMigrations(IServiceProvider services, ILogger logger)
+{
+    const int maxAttempts = 10;
+    var delay = TimeSpan.FromSeconds(5);
+
+    for (var attempt = 1; attempt <= maxAttempts; attempt++)
+    {
+        try
+        {
+            using var scope = services.CreateScope();
+            var dbContext = scope.ServiceProvider.GetRequiredService<LteCarContext>();
+            dbContext.Database.Migrate();
+            logger.LogInformation("Database migrations applied successfully.");
+            return;
+        }
+        catch (Exception ex) when (attempt < maxAttempts)
+        {
+            logger.LogWarning(ex,
+                "Database migration attempt {Attempt} of {MaxAttempts} failed. Retrying in {DelaySeconds} seconds.",
+                attempt,
+                maxAttempts,
+                delay.TotalSeconds);
+            Thread.Sleep(delay);
+        }
+    }
+
+    using var finalScope = services.CreateScope();
+    var finalDbContext = finalScope.ServiceProvider.GetRequiredService<LteCarContext>();
+    finalDbContext.Database.Migrate();
+}

@@ -1,4 +1,6 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
+ARG GIT_BRANCH=master
+ARG GIT_COMMIT=unknown
 WORKDIR /src
 
 COPY Server/LteCar.Server.csproj Server/
@@ -7,7 +9,8 @@ RUN dotnet restore Server/LteCar.Server.csproj
 
 COPY Server/ Server/
 COPY Shared/ Shared/
-RUN dotnet publish Server/LteCar.Server.csproj -c Release -o /app/publish /p:UseAppHost=false
+RUN dotnet publish Server/LteCar.Server.csproj -c Release -o /app/publish /p:UseAppHost=false \
+    /p:BuildInfoBranch="$GIT_BRANCH" /p:BuildInfoCommit="$GIT_COMMIT"
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS runtime
 WORKDIR /app

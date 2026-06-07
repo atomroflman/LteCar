@@ -42,21 +42,26 @@
   <Target Name="GenerateServerBuildInfo" BeforeTargets="BeforeBuild">
     <MakeDir Directories="$(MSBuildProjectDirectory)/Generated" />
 
-    <Exec Command="git -C &quot;$(MSBuildProjectDirectory)/..&quot; branch --show-current"
+    <!-- Allow overriding via MSBuild properties passed from Docker build args -->
+    <Exec Condition="'$(BuildInfoBranch)' == ''"
+          Command="git -C &quot;$(MSBuildProjectDirectory)/..&quot; branch --show-current"
           ConsoleToMSBuild="true"
           IgnoreExitCode="true">
       <Output TaskParameter="ConsoleOutput" ItemName="_BuildBranchOutput" />
     </Exec>
 
-    <Exec Command="git -C &quot;$(MSBuildProjectDirectory)/..&quot; rev-parse HEAD"
+    <Exec Condition="'$(BuildInfoCommit)' == ''"
+          Command="git -C &quot;$(MSBuildProjectDirectory)/..&quot; rev-parse HEAD"
           ConsoleToMSBuild="true"
           IgnoreExitCode="true">
       <Output TaskParameter="ConsoleOutput" ItemName="_BuildCommitOutput" />
     </Exec>
 
     <PropertyGroup>
-      <ResolvedBuildBranch>@(_BuildBranchOutput->'%(Identity)')</ResolvedBuildBranch>
-      <ResolvedBuildCommit>@(_BuildCommitOutput->'%(Identity)')</ResolvedBuildCommit>
+      <ResolvedBuildBranch Condition="'$(BuildInfoBranch)' != ''">$(BuildInfoBranch)</ResolvedBuildBranch>
+      <ResolvedBuildBranch Condition="'$(ResolvedBuildBranch)' == ''">@(_BuildBranchOutput->'%(Identity)')</ResolvedBuildBranch>
+      <ResolvedBuildCommit Condition="'$(BuildInfoCommit)' != ''">$(BuildInfoCommit)</ResolvedBuildCommit>
+      <ResolvedBuildCommit Condition="'$(ResolvedBuildCommit)' == ''">@(_BuildCommitOutput->'%(Identity)')</ResolvedBuildCommit>
       <ResolvedBuildBranch Condition="'$(ResolvedBuildBranch)' == ''">master</ResolvedBuildBranch>
       <ResolvedBuildCommit Condition="'$(ResolvedBuildCommit)' == ''">unknown</ResolvedBuildCommit>
     </PropertyGroup>

@@ -43,7 +43,9 @@ public class ServerBuildInfoService : IServerBuildInfoService
                 .Where(parts => parts.Length == 2)
                 .ToDictionary(parts => parts[0], parts => parts[1], StringComparer.OrdinalIgnoreCase);
 
-            var branch = values.TryGetValue("Branch", out var storedBranch) && !string.IsNullOrWhiteSpace(storedBranch)
+            var branch = values.TryGetValue("Branch", out var storedBranch)
+                && !string.IsNullOrWhiteSpace(storedBranch)
+                && !storedBranch.StartsWith("fatal:", StringComparison.OrdinalIgnoreCase)
                 ? storedBranch
                 : "master";
             var commit = values.TryGetValue("Commit", out var storedCommit)
