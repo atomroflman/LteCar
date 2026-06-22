@@ -110,7 +110,6 @@ const deMessages = {
     viewerCount: (count: number) => `${count} ${count === 1 ? 'Zuschauer' : 'Zuschauer'}`,
     noStreamSelected: 'Kein Stream ausgewahlt.',
     streamDisabledHint: 'Dieser Stream ist deaktiviert und wird erst wieder geoffnet, wenn ihn ein angemeldeter Fahrer aktiviert.',
-    carOfflineHint: 'Das Fahrzeug ist aktuell offline. Der ausgewahlte Stream bleibt vorgemerkt und wird automatisch wieder gestartet, sobald sich das Fahrzeug neu verbindet.',
     tabInactiveHint: 'Der Stream ist pausiert, weil dieser Browser-Tab nicht aktiv ist.',
   },
   videoSettings: {
@@ -425,7 +424,6 @@ const enMessages: Messages = {
     viewerCount: (count: number) => `${count} ${count === 1 ? 'viewer' : 'viewers'}`,
     noStreamSelected: 'No stream selected.',
     streamDisabledHint: 'This stream is disabled and will only reopen when an authenticated driver enables it again.',
-    carOfflineHint: 'The vehicle is currently offline. The selected stream will stay queued and resume automatically once the vehicle reconnects.',
     tabInactiveHint: 'The stream is paused because this browser tab is not active.',
   },
   videoSettings: {

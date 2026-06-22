@@ -41,9 +41,7 @@ export default function CarVideoPanel({ carId }: CarVideoPanelProps): JSX.Elemen
   const [error, setError] = useState<string | null>(null);
   const [documentVisible, setDocumentVisible] = useState(true);
   const [reconnectVersion, setReconnectVersion] = useState(0);
-  const liveCarStates = useCarUiStore(state => state.states);
   const connectCarUi = useCarUiStore(state => state.connect);
-  const carConnected = carId ? (liveCarStates[carId]?.isConnected ?? false) : null;
 
   useEffect(() => {
     void connectCarUi();
@@ -283,19 +281,13 @@ export default function CarVideoPanel({ carId }: CarVideoPanelProps): JSX.Elemen
         </div>
       )}
 
-      {selectedStream && carConnected === false && (
-        <div className="rounded-2xl border border-amber-900 bg-amber-950/50 p-6 text-sm text-amber-200">
-          {messages.carVideoPanel.carOfflineHint}
-        </div>
-      )}
-
       {selectedStream && selectedStream.enabled && !documentVisible && (
         <div className="rounded-2xl border border-zinc-700 bg-zinc-900 p-6 text-sm text-zinc-300">
           {messages.carVideoPanel.tabInactiveHint}
         </div>
       )}
 
-      {selectedStream && selectedStream.enabled && documentVisible && carConnected !== false && (
+      {selectedStream && selectedStream.enabled && documentVisible && (
         <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-black shadow-sm">
           <VideoStream key={selectedStream.id} streamId={selectedStream.id} streamName={selectedStream.name} />
         </div>
