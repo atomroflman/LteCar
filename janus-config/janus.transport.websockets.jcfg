@@ -3,5 +3,6 @@ general: {
 	ws = true
 	ws_port = 8188
 	ws_interface = "eth0"
+	ws_ip = "0.0.0.0"
 	wss = false
 }
