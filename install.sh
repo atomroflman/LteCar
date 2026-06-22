@@ -393,9 +393,17 @@ if [ "$DEPLOY_MODE" = "server" ]; then
     if [ "$COMPOSE_ENGINE" = "docker" ]; then
         ENGINE_BIN="/usr/bin/docker"
         AFTER_TARGET="docker.service"
+        EXEC_START_PRE=""
     else
         ENGINE_BIN="/usr/bin/podman"
         AFTER_TARGET="podman.service"
+        # Rootless podman-compose v1.0.6 can't `up -d` over existing stopped
+        # containers without exiting non-zero. ExecStartPre brings back any
+        # existing containers so `up -d` becomes a no-op on warm starts.
+        # `|| true` so missing containers on a first-ever boot don't abort.
+        # Wrapped in `/bin/sh -c` because systemd ExecStartPre does not invoke
+        # a shell – `|| true` would otherwise be passed to podman as args.
+        EXEC_START_PRE="ExecStartPre=/bin/sh -c '$ENGINE_BIN start ltecar_postgres_1 ltecar_janus_1 ltecar_server_1 ltecar_client_1 ltecar_nginx_1 || true'"
     fi
 
     cat > /etc/systemd/system/ltecar.service <<EOF
@@ -403,15 +411,22 @@ if [ "$DEPLOY_MODE" = "server" ]; then
 Description=LteCar compose stack
 Wants=network-online.target
 After=network-online.target $AFTER_TARGET
+# Limit restart attempts to 5 in 10 minutes when ExecStart fails
+# (e.g. transient podman/docker daemon hiccup on cold boot).
+StartLimitIntervalSec=600
+StartLimitBurst=5
 
 [Service]
 Type=oneshot
 RemainAfterExit=yes
 User=$RUN_USER
 WorkingDirectory=$REPO_DIR
+$EXEC_START_PRE
 ExecStart=$ENGINE_BIN compose -f $COMPOSE_FILE up -d
 ExecStop=$ENGINE_BIN compose -f $COMPOSE_FILE down
 TimeoutStartSec=0
+Restart=on-failure
+RestartSec=30s
 
 [Install]
 WantedBy=multi-user.target
@@ -419,6 +434,19 @@ EOF
 
     systemctl daemon-reload
     systemctl enable --now ltecar.service
+
+    # Rootless podman kills its containers when the owning user's session
+    # ends. Without linger the stack dies whenever greg-e (or whoever owns
+    # the containers) logs out / the SSH session drops. Only relevant for
+    # podman, but harmless to enable for docker users as well.
+    if command -v loginctl &>/dev/null; then
+        if ! loginctl show-user "$RUN_USER" 2>/dev/null | grep -q "Linger=yes"; then
+            loginctl enable-linger "$RUN_USER"
+            echo "Enabled systemd linger for user '$RUN_USER' (rootless podman survives logout)."
+        else
+            echo "systemd linger already enabled for user '$RUN_USER'."
+        fi
+    fi
 
     echo ""
     systemctl status ltecar.service --no-pager || true
