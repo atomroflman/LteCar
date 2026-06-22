@@ -42,6 +42,17 @@ services:
       # The LteCar Server is the single source of truth for mountpoints;
       # see janus-config/janus.plugin.streaming.jcfg.
       - ./janus-config/janus.plugin.streaming.jcfg:/usr/local/etc/janus/janus.plugin.streaming.jcfg:ro
+      # Override the main janus.jcfg to enable WebRTC ICE NAT traversal.
+      # Without these the canyanjanus image runs without a STUN server
+      # and tries to resolve browser-sent mDNS (.local) candidates,
+      # which always fails in the container (no avahi / libnss-mdns),
+      # so every browser→Janus WebRTC peer connection fails ICE.
+      # Configured:
+      #   stun_server = stun.l.google.com:19302 — for srflx candidates
+      #   ignore_mdns = true — drop .local candidates entirely
+      #   ice_enforce_list = "eth0" — restrict to container NIC
+      #   ignore_unreachable_ice_server = true — survive STUN outages
+      - ./janus-config/janus.jcfg:/usr/local/etc/janus/janus.jcfg:ro
     healthcheck:
       # canyanjanus ships without curl/wget. Use bash's /dev/tcp built-in to
       # do a raw HTTP/1.0 GET and check for "200" in the status line.
