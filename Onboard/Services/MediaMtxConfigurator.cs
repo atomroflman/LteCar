@@ -171,8 +171,9 @@ public class MediaMtxConfigurator : IMediaMtxConfigurator, IDisposable
             return content[..pathsStart] + "paths:\n" + newPathsSection + "\n";
         }
 
+        var allOthersLineEnd = content.IndexOf('\n', allOthersIndex);
         var prefix = content[..pathsStart];
-        var suffix = content[allOthersIndex..];
+        var suffix = allOthersLineEnd >= 0 ? content[(allOthersLineEnd + 1)..] : string.Empty;
         return prefix + "paths:\n" + newPathsSection + "\n" + suffix;
     }
 
