@@ -1,0 +1,11 @@
+# MediaMTX configuration template for LteCar
+#
+# The Onboard service overwrites the paths: section at runtime based
+# on the active streams in Onboard/channelMap.json. Everything below
+# the "paths:" header is regenerated whenever a stream is started or
+# stopped. Keep the "paths:" header (and the trailing "all_others:"
+# block as the anchor) so MediaMtxConfigurator.ReplacePathsSection
+# can locate the section.
+
+paths:
+  all_others:
