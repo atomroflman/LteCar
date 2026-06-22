@@ -410,7 +410,7 @@ export default function VideoStream({ streamId, streamName, audioEnabled = false
   const formattedFps = typeof fps === 'number' && Number.isFinite(fps) ? `${fps.toFixed(1)} fps` : '--';
 
   return (
-    <div className="relative w-full">
+    <div className="relative flex h-full min-h-0 w-full items-center justify-center">
       {overlayVisible && (
         <div className="absolute top-2 left-2 bg-black/70 text-white px-3 py-2 rounded text-sm z-10 space-y-1">
           <div className="flex items-start justify-between gap-4">
@@ -451,8 +451,7 @@ export default function VideoStream({ streamId, streamName, audioEnabled = false
         autoPlay
         playsInline
         muted={!audioEnabled}
-        className="w-full h-auto bg-black"
-        style={{ maxHeight: '80vh' }}
+        className="h-full max-w-full bg-black object-contain"
       />
       <audio
         ref={audioRef}

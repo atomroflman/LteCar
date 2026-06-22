@@ -243,8 +243,8 @@ export default function CarVideoPanel({ carId }: CarVideoPanelProps): JSX.Elemen
   }
 
   return (
-    <div className="flex w-full flex-col gap-3">
-      <div className="flex flex-wrap gap-2">
+    <div className="flex h-full w-full min-h-0 flex-col gap-3">
+      <div className="flex shrink-0 flex-wrap gap-2">
         {streams.map(stream => {
           const isSelected = stream.id === selectedStreamId;
           const buttonClasses = isSelected
@@ -288,7 +288,7 @@ export default function CarVideoPanel({ carId }: CarVideoPanelProps): JSX.Elemen
       )}
 
       {selectedStream && selectedStream.enabled && documentVisible && (
-        <div className="overflow-hidden rounded-2xl border border-zinc-200 bg-black shadow-sm">
+        <div className="flex min-h-0 flex-1 overflow-hidden rounded-2xl border border-zinc-200 bg-black shadow-sm">
           <VideoStream key={selectedStream.id} streamId={selectedStream.id} streamName={selectedStream.name} />
         </div>
       )}
