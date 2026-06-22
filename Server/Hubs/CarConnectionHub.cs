@@ -289,6 +289,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
                 await dbContext.SaveChangesAsync();
             }
             db.IsActive = value.Enabled;
+            db.Enabled = value.Enabled;
             db.ProcessArguments = JsonSerializer.Serialize(value);
             videoIds[value.StreamId] = db.Id;
         }

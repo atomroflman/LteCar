@@ -47,6 +47,16 @@ services:
       sh -c 'exec janus --nat-1-1=${JANUS_NAT_1_1:-127.0.0.1} --full-trickle'
     ports:
       - "10000-10200:10000-10200/udp"
+      # Required: HTTP/WebSocket control plane so the Server and Browser
+      # can reach Janus. The default `canyan/janus-gateway` image binds
+      # IPv6-only; an explicit `ip = "0.0.0.0"` in the mounted
+      # `janus.transport.http.jcfg` / `janus.transport.websockets.jcfg`
+      # (see `janus-config/`) is required to expose them on IPv4.
+      - "8088:8088"
+      - "8188:8188"
+    volumes:
+      - ./janus-config/janus.transport.http.jcfg:/usr/local/etc/janus/janus.transport.http.jcfg:ro
+      - ./janus-config/janus.transport.websockets.jcfg:/usr/local/etc/janus/janus.transport.websockets.jcfg:ro
 
   client:
     build:

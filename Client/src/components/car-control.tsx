@@ -34,13 +34,16 @@ export default function CarControl() {
     isConnected: liveCarStates[car.id]?.isConnected ?? car.isConnected,
   })) ?? null;
   const selectedCar = carsWithLiveStatus?.find(car => car.id === flowControl.carId);
+  const carOnline = selectedCar?.isConnected ?? null;
 
-  // Status colors based on connection and updates
-  const statusStyles = flowControl.carSession
-    ? (updatesEnabled
-        ? { bg: 'bg-green-900/30', border: 'border-green-700', text: 'text-green-300', dot: 'bg-green-500' }
-        : { bg: 'bg-yellow-900/30', border: 'border-yellow-700', text: 'text-yellow-300', dot: 'bg-yellow-400' })
-    : { bg: 'bg-red-900/30', border: 'border-red-700', text: 'text-red-300', dot: 'bg-red-500' };
+  // Status colors based on vehicle connection, session presence and updates
+  const statusStyles = !flowControl.carSession
+    ? { bg: 'bg-red-900/30', border: 'border-red-700', text: 'text-red-300', dot: 'bg-red-500' }
+    : carOnline === false
+      ? { bg: 'bg-yellow-900/30', border: 'border-yellow-700', text: 'text-yellow-300', dot: 'bg-yellow-400' }
+      : !updatesEnabled
+        ? { bg: 'bg-yellow-900/30', border: 'border-yellow-700', text: 'text-yellow-300', dot: 'bg-yellow-400' }
+        : { bg: 'bg-green-900/30', border: 'border-green-700', text: 'text-green-300', dot: 'bg-green-500' };
 
   useEffect(() => {
     let cancelled = false;
@@ -197,6 +200,11 @@ export default function CarControl() {
             <div className="mt-1 text-[11px] opacity-80">
               {messages.carControl.carIdSession(flowControl.carId!, String(flowControl.carSession))}
             </div>
+            {carOnline === false && (
+              <div className="mt-1 text-[11px] opacity-90">
+                {messages.carControl.vehicleOfflineHint}
+              </div>
+            )}
           </div>
           <div className="mt-2 flex items-center space-x-1">
             <button
