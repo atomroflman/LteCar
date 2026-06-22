@@ -9,4 +9,16 @@
 # mis-position the split point.
 
 paths:
+  frontCamera:
+    source: rpiCamera
+    runOnInit: ffmpeg -t 2147483647 -i rtsp://localhost:8554/frontCamera -c copy -f rtp rtp://lte-rc.northeurope.cloudapp.azure.com:10000?pkt_size=1300
+    runOnInitRestart: yes
+    rpiCameraCamID: 0
+    rpiCameraWidth: 1024
+    rpiCameraHeight: 768
+    rpiCameraFPS: 22
+    rpiCameraTextOverlay: '%Y-%m-%d %H:%M:%S - frontCamera'
+    rpiCameraBrightness: 0.3
+    rpiCameraBitrate: 1000000
+    rpiCameraIDRPeriod: 60
   all_others:
