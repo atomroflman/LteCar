@@ -62,6 +62,10 @@ services:
     volumes:
       - ./janus-config/janus.transport.http.jcfg:/usr/local/etc/janus/janus.transport.http.jcfg:ro
       - ./janus-config/janus.transport.websockets.jcfg:/usr/local/etc/janus/janus.transport.websockets.jcfg:ro
+      # Override the canyanjanus image's hardcoded sample mountpoints.
+      # The LteCar Server is the single source of truth for mountpoints;
+      # see janus-config/janus.plugin.streaming.jcfg.
+      - ./janus-config/janus.plugin.streaming.jcfg:/usr/local/etc/janus/janus.plugin.streaming.jcfg:ro
 
   client:
     build:
