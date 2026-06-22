@@ -596,6 +596,8 @@ if [ "$DEPLOY_MODE" = "onboard" ]; then
 Description=LteCar Onboard Client
 After=network-online.target
 Wants=network-online.target
+# Endless retry: Onboard must always come back, even after a hard crash.
+StartLimitIntervalSec=infinity
 
 [Service]
 Type=simple
