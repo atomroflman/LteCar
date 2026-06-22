@@ -23,7 +23,7 @@ public class JanusPluginMessageListResponseBody
 public class JanusStreamInfo
 {
     [JsonPropertyName("id")]
-    public string Id { get; set; }
+    public uint Id { get; set; }
     [JsonPropertyName("description")]
     public string Description { get; set; }
     [JsonPropertyName("type")]

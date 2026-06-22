@@ -203,39 +203,36 @@ public class VideoStreamReceiverService
                         {
                             Request = "list"
                         }
-                    }, 
-                    Logger, 
+                    },
+                    Logger,
                     $"Checking existing streams for port {stream.JanusPort.Value}: ");
-                
-                bool janusOwnsPort = false;
-                
-                if (listResponse?.Body?.Streams?.Any(s => s.Id == stream.JanusId) ?? false)
-                {
-                    janusOwnsPort = true;
-                }
-                // If the plugin returned streams, check whether any match our stored JanusId or port
-                if (!janusOwnsPort && listResponse?.Body?.Streams != null)
-                {
-                    janusOwnsPort = listResponse.Body.Streams.Any(s =>
-                        string.Equals(s.Id, stream.JanusId, StringComparison.OrdinalIgnoreCase) ||
-                        (!string.IsNullOrEmpty(s.Description) && stream.JanusPort.HasValue && s.Description.Contains(stream.JanusPort.Value.ToString()))
-                    );
-                }
 
-                if (janusOwnsPort)
+                var existingStreams = listResponse?.Body?.Streams;
+                if (existingStreams != null && existingStreams.Count > 0)
                 {
-                    janusPort = stream.JanusPort!.Value;
-                    Logger.LogInformation($"Janus already has a stream using UDP port {janusPort} for stream '{stream.StreamId}'");
-                    // Persist JanusPort into database (if needed)
-                    using var scope = _serviceProvider.CreateScope();
-                    var db = scope.ServiceProvider.GetRequiredService<LteCarContext>();
-                    var dbStream = await db.CarVideoStreams.FindAsync(stream.Id);
-                    if (dbStream != null)
+                    // If Janus already has a mountpoint with the same numeric Id as our DB Id
+                    // (e.g. leftover from a previous server run, or a default sample), destroy it
+                    // so we can recreate it cleanly bound to the current session/handle.
+                    var stale = existingStreams.FirstOrDefault(s => s.Id == (uint)stream.Id);
+                    if (stale != null)
                     {
-                        dbStream.JanusPort = janusPort;
-                        await db.SaveChangesAsync();
+                        Logger.LogInformation(
+                            $"Janus has stale mountpoint with id {stale.Id} (description='{stale.Description}'); destroying it before creating a new one for stream '{stream.StreamId}'");
+                        await client.PostJsonAsync<JanusMessageRequest<JanusMountpointActionBody>, JanusPluginMessageResponse<object>>(
+                            $"janus/{sessionId}/{handleId}",
+                            new JanusMessageRequest<JanusMountpointActionBody>()
+                            {
+                                Janus = "message",
+                                Transaction = transaction,
+                                Body = new JanusMountpointActionBody()
+                                {
+                                    Request = "destroy",
+                                    Id = stale.Id
+                                }
+                            },
+                            Logger,
+                            $"Destroying stale Janus mountpoint {stale.Id} for stream '{stream.StreamId}': ");
                     }
-                    return; // Endpoint already exists on Janus; nothing more to do
                 }
             }
             catch (Exception ex)
@@ -444,6 +441,19 @@ public class VideoStreamReceiverService
             stream.IsActive = false;
             await ctx.SaveChangesAsync();
 
+            // Tear down the Janus mountpoint so the next ActivateStream can create it fresh.
+            // We do this on a brand-new session/handle: the original one is gone after a
+            // server restart, and even when the server is still alive the streaming plugin
+            // accepts "destroy" on any handle attached to the same plugin.
+            try
+            {
+                await DestroyJanusMountpointAsync(streamId);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, $"Failed to destroy Janus mountpoint for stream '{streamId}'; it may need to be cleared manually");
+            }
+
             if (_activeStreamProxies.TryRemove(streamId, out var streamInfo))
             {
                 Logger.LogDebug($"Found active process for stream '{streamId}', stopping it.");
@@ -483,6 +493,72 @@ public class VideoStreamReceiverService
         }
         Logger.LogInformation($"Stopped {stoppedCount} streams for car '{carId}'");
         return stoppedCount > 0;
+    }
+
+    /// <summary>
+    /// Destroys the Janus streaming-plugin mountpoint whose numeric id equals
+    /// <paramref name="mountpointDbId"/>. Uses a fresh session/handle, which is the only
+    /// safe option after a server restart (the original handle is gone) and is accepted
+    /// by the streaming plugin regardless of which handle originally created the mountpoint.
+    /// Tolerates "no such mountpoint" errors.
+    /// </summary>
+    public async Task DestroyJanusMountpointAsync(int mountpointDbId)
+    {
+        var janusHost = JanusConfig.Value.HostName;
+        if (string.IsNullOrEmpty(janusHost)) janusHost = "localhost";
+        var janusBase = new UriBuilder("http", janusHost, 8088).Uri;
+
+        using var client = new HttpClient { BaseAddress = janusBase };
+        var transaction = Guid.NewGuid().ToString("N");
+
+        var session = await client.PostJsonAsync<JanusRequestBase, JanusCreateTransactionResponse>(
+            "janus", new JanusRequestBase() { Janus = "create", Transaction = transaction },
+            Logger, $"Creating Janus session to destroy mountpoint {mountpointDbId}: ");
+        var sessionId = session!.Data.Id;
+
+        try
+        {
+            var pluginSession = await client.PostJsonAsync<JanusAttachPluginRequest, JanusAttachPluginResponse>(
+                $"janus/{sessionId}", new JanusAttachPluginRequest()
+                {
+                    Janus = "attach",
+                    Transaction = transaction,
+                    Plugin = "janus.plugin.streaming"
+                },
+                Logger, $"Attaching streaming plugin to destroy mountpoint {mountpointDbId}: ");
+            var handleId = pluginSession!.Data.Id;
+
+            await client.PostJsonAsync<JanusMessageRequest<JanusMountpointActionBody>, JanusPluginMessageResponse<object>>(
+                $"janus/{sessionId}/{handleId}",
+                new JanusMessageRequest<JanusMountpointActionBody>()
+                {
+                    Janus = "message",
+                    Transaction = transaction,
+                    Body = new JanusMountpointActionBody()
+                    {
+                        Request = "destroy",
+                        Id = (uint)mountpointDbId
+                    }
+                },
+                Logger, $"Destroying Janus mountpoint {mountpointDbId}: ");
+
+            Logger.LogInformation($"Destroyed Janus mountpoint {mountpointDbId} (session {sessionId}, handle {handleId})");
+        }
+        finally
+        {
+            // Best-effort: destroy the throwaway session. Failure here is harmless.
+            try
+            {
+                await client.PostAsync(
+                    $"janus/{sessionId}",
+                    new StringContent(
+                        System.Text.Json.JsonSerializer.Serialize(new { janus = "destroy", transaction }),
+                        System.Text.Encoding.UTF8,
+                        "application/json"),
+                    new CancellationTokenSource(TimeSpan.FromSeconds(2)).Token);
+            }
+            catch { /* ignore */ }
+        }
     }
 
 }
