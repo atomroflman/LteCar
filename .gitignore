@@ -21,3 +21,6 @@ Builds/*/carIdentityKey.txt
 Builds/*/ssh_key
 Builds/*/ssh_key.pub
 Server/Generated/**/*
+
+# opencode config (project-local agent/skill config, not part of the app)
+.opencode/
