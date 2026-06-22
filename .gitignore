@@ -28,3 +28,6 @@ Server/Generated/**/*
 # Onboard runtime config (truck-local, edited in place)
 Onboard/channelMap.json
 Onboard/*.bak
+
+# Server runtime env (deployment-specific, contains public hostname)
+.env

@@ -43,6 +43,11 @@ services:
   janus:
     image: docker.io/canyan/janus-gateway:latest
     restart: unless-stopped
+    # Public hostname/IP for WebRTC NAT traversal. Read from .env (server-local,
+    # git-ignored). If unset, falls back to 127.0.0.1 which only works for
+    # in-network clients and breaks WebRTC for external browsers.
+    environment:
+      JANUS_NAT_1_1: ${JANUS_NAT_1_1:-}
     command: >-
       sh -c 'exec janus --nat-1-1=${JANUS_NAT_1_1:-127.0.0.1} --full-trickle'
     ports:
