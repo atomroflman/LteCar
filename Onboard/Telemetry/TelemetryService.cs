@@ -5,12 +5,19 @@ using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
+using System.Reflection;
+using System.Text.Json;
 using TypedSignalR.Client;
 
 namespace LteCar.Onboard.Telemetry;
 
 public class TelemetryService : IHubConnectionObserver, ITelemetryClient
 {
+    private static readonly JsonSerializerOptions JsonSerializerOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
+
     private int _tick = 0;
     private HubConnection? _connection;
     private ITelemetryServer? _server;
@@ -85,7 +92,7 @@ public class TelemetryService : IHubConnectionObserver, ITelemetryClient
     public async Task Tick()
     {
         _tick++;
-        foreach (var reader in _telemetryReaders)
+        foreach (var reader in _telemetryReaders.ToList())
         {
             var interval = reader.Value.ReadIntervalTicks;
             if (interval <= 0 || _tick % interval == 0)
@@ -107,14 +114,27 @@ public class TelemetryService : IHubConnectionObserver, ITelemetryClient
         }
     }
 
-    public async Task OnClosed(Exception? exception)
+    public Task OnClosed(Exception? exception)
     {
-        Logger.LogError(exception, exception.Message);
+        if (exception == null)
+        {
+            Logger.LogError("Telemetry connection closed.");
+            return Task.CompletedTask;
+        }
+
+        Logger.LogError(exception, "Telemetry connection closed unexpectedly.");
+        return Task.CompletedTask;
     }
 
     public async Task OnReconnected(string? connectionId)
     {
-        await UpdateTelemetry("Telemetry Connection", connectionId);
+        if (string.IsNullOrWhiteSpace(connectionId))
+        {
+            Logger.LogWarning("Telemetry connection reconnected without a connection id.");
+            return;
+        }
+
+        await UpdateTelemetry("Telemetry Connection", connectionId!);
     }
 
     public async Task OnReconnecting(Exception? exception)
@@ -147,17 +167,88 @@ public class TelemetryService : IHubConnectionObserver, ITelemetryClient
             ? channel 
             : throw new ArgumentException($"Telemetry channel {channelName} not found.");
         
-        var readerType = Type.GetType(definition.TelemetryType);
-        var reader = ServiceProvider.GetRequiredService(readerType) as TelemetryReaderBase;
+        var resolvedReaderType = Type.GetType(definition.TelemetryType);
+        if (resolvedReaderType == null)
+        {
+            Logger.LogError("Telemetry reader type {Reader} could not be resolved.", definition.TelemetryType);
+            return null;
+        }
+
+        var reader = ServiceProvider.GetRequiredService(resolvedReaderType) as TelemetryReaderBase;
         if (reader == null)
         {
-            Logger.LogError("Telemetry reader type {Reader} not found.", readerType);
+            Logger.LogError("Telemetry reader type {Reader} not found.", resolvedReaderType);
             return null;
         }
         reader.ReadIntervalTicks = definition.ReadIntervalTicks;
+        foreach (var option in definition.Options)
+        {
+            var property = resolvedReaderType.GetProperty(option.Key, BindingFlags.IgnoreCase | BindingFlags.Public | BindingFlags.Instance);
+            if (property != null && property.CanWrite)
+            {
+                try
+                {
+                    if (IsNullOptionValue(option.Value))
+                    {
+                        Logger.LogWarning("Option {Option} for channel {Channel} has null value. Skipping.", option.Key, channelName);
+                        continue;
+                    }
+
+                    var convertedValue = ConvertOptionValue(option.Value, property.PropertyType);
+                    property.SetValue(reader, convertedValue);
+                    Logger.LogDebug("Set option {Option} for channel {Channel} to {Value}", option.Key, channelName, option.Value);
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, "Failed to set option {Option} for channel {Channel} with value {Value}", option.Key, channelName, option.Value);
+                }
+            }
+            else
+            {
+                Logger.LogWarning("Option {Option} not found or not writable on reader type {Reader} for channel {Channel}", option.Key, resolvedReaderType.Name, channelName);
+            }
+        }
         _telemetryReaders.Add(channelName, reader);
         Logger.LogInformation("Subscribed to telemetry channel: {Channel}", channelName);
         return reader;
+    }
+
+    private static bool IsNullOptionValue(object? value) =>
+        value == null || value is JsonElement { ValueKind: JsonValueKind.Null or JsonValueKind.Undefined };
+
+    private static object? ConvertOptionValue(object value, Type targetType)
+    {
+        var underlyingType = Nullable.GetUnderlyingType(targetType) ?? targetType;
+        if (value is JsonElement jsonElement)
+        {
+            return jsonElement.Deserialize(underlyingType, JsonSerializerOptions);
+        }
+
+        if (underlyingType.IsInstanceOfType(value))
+        {
+            return value;
+        }
+
+        if (underlyingType.IsEnum)
+        {
+            return value is string enumName
+                ? Enum.Parse(underlyingType, enumName, ignoreCase: true)
+                : Enum.ToObject(underlyingType, value);
+        }
+
+        if (underlyingType == typeof(Guid) && value is string guidText)
+        {
+            return Guid.Parse(guidText);
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize(JsonSerializer.Serialize(value), underlyingType, JsonSerializerOptions);
+        }
+        catch (JsonException)
+        {
+            return Convert.ChangeType(value, underlyingType);
+        }
     }
 
     public Task UnsubscribeFromTelemetryChannel(string channelName)

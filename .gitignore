@@ -24,3 +24,7 @@ Server/Generated/**/*
 
 # opencode config (project-local agent/skill config, not part of the app)
 .opencode/
+
+# Onboard runtime config (truck-local, edited in place)
+Onboard/channelMap.json
+Onboard/*.bak
