@@ -71,6 +71,7 @@ var configuration = new ConfigurationBuilder()
     })
     .AddJsonFile("appSettings.json", optional: false)
     .AddJsonFile("appSettings.development.json", optional: true)
+    .AddEnvironmentVariables()
     .Build();
 
 var channelMap = await configLoader.LoadConfigsAsync();
