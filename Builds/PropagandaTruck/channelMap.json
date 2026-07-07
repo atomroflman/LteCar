@@ -122,6 +122,87 @@
     "lifetime": {
       "telemetryType": "LteCar.Onboard.Telemetry.ApplicationLifetimeReader"
     },
+    "battery.voltage": {
+      "telemetryType": "LteCar.Onboard.Telemetry.JbdBmsTelemetryReader",
+      "readIntervalTicks": 50,
+      "options": {
+        "groupKey": "battery",
+        "jbdToolPath": "/home/greg-e/jbdtool/jbdtool",
+        "channel": "A5:C2:37:55:36:B6"
+      }
+    },
+    "battery.current": {
+      "telemetryType": "LteCar.Onboard.Telemetry.JbdBmsTelemetryReader",
+      "readIntervalTicks": 50,
+      "options": {
+        "groupKey": "battery",
+        "jbdToolPath": "/home/greg-e/jbdtool/jbdtool",
+        "channel": "A5:C2:37:55:36:B6"
+      }
+    },
+    "battery.soc": {
+      "telemetryType": "LteCar.Onboard.Telemetry.JbdBmsTelemetryReader",
+      "readIntervalTicks": 50,
+      "options": {
+        "groupKey": "battery",
+        "jbdToolPath": "/home/greg-e/jbdtool/jbdtool",
+        "channel": "A5:C2:37:55:36:B6"
+      }
+    },
+    "battery.capacity": {
+      "telemetryType": "LteCar.Onboard.Telemetry.JbdBmsTelemetryReader",
+      "readIntervalTicks": 50,
+      "options": {
+        "groupKey": "battery",
+        "jbdToolPath": "/home/greg-e/jbdtool/jbdtool",
+        "channel": "A5:C2:37:55:36:B6"
+      }
+    },
+    "battery.cycles": {
+      "telemetryType": "LteCar.Onboard.Telemetry.JbdBmsTelemetryReader",
+      "readIntervalTicks": 50,
+      "options": {
+        "groupKey": "battery",
+        "jbdToolPath": "/home/greg-e/jbdtool/jbdtool",
+        "channel": "A5:C2:37:55:36:B6"
+      }
+    },
+    "battery.cellsMin": {
+      "telemetryType": "LteCar.Onboard.Telemetry.JbdBmsTelemetryReader",
+      "readIntervalTicks": 50,
+      "options": {
+        "groupKey": "battery",
+        "jbdToolPath": "/home/greg-e/jbdtool/jbdtool",
+        "channel": "A5:C2:37:55:36:B6"
+      }
+    },
+    "battery.cellsMax": {
+      "telemetryType": "LteCar.Onboard.Telemetry.JbdBmsTelemetryReader",
+      "readIntervalTicks": 50,
+      "options": {
+        "groupKey": "battery",
+        "jbdToolPath": "/home/greg-e/jbdtool/jbdtool",
+        "channel": "A5:C2:37:55:36:B6"
+      }
+    },
+    "battery.cellsDiff": {
+      "telemetryType": "LteCar.Onboard.Telemetry.JbdBmsTelemetryReader",
+      "readIntervalTicks": 50,
+      "options": {
+        "groupKey": "battery",
+        "jbdToolPath": "/home/greg-e/jbdtool/jbdtool",
+        "channel": "A5:C2:37:55:36:B6"
+      }
+    },
+    "battery.temperature": {
+      "telemetryType": "LteCar.Onboard.Telemetry.JbdBmsTelemetryReader",
+      "readIntervalTicks": 50,
+      "options": {
+        "groupKey": "battery",
+        "jbdToolPath": "/home/greg-e/jbdtool/jbdtool",
+        "channel": "A5:C2:37:55:36:B6"
+      }
+    },
     "battery": {
       "telemetryType": "LteCar.Onboard.Telemetry.JbdBmsTelemetryReader",
       "readIntervalTicks": 50,
