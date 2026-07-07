@@ -28,6 +28,15 @@ if (args.Length > 0 && args[0].Equals("setup", StringComparison.OrdinalIgnoreCas
     return;
 }
 
+// Telemetry-Probe-Modus: liest konfigurierte Reader lokal und zeigt Werte an,
+// ohne eine Serververbindung aufzubauen oder irgendetwas zu senden.
+if (args.Length > 0 && args[0].Equals("telemetry-probe", StringComparison.OrdinalIgnoreCase))
+{
+    var probeConfigLoader = new ConfigLoader(defaultConfigDir, configDirArg ?? configDirEnv);
+    await LteCar.Onboard.Telemetry.TelemetryProbeTool.RunAsync(probeConfigLoader);
+    return;
+}
+
 var configLoader = new ConfigLoader(defaultConfigDir, configDirArg ?? configDirEnv);
 
 if (configDirArg != null || configDirEnv != null)
