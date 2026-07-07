@@ -82,6 +82,9 @@ namespace LteCar.Server.Controllers
             {
                 id = c.Id,
                 channelName = c.ChannelName,
+                dataType = c.DataType.ToString().ToLowerInvariant(),
+                unit = c.Unit,
+                decimals = c.Decimals,
                 subscribed = subscribedIds.Contains(c.Id),
             }));
         }

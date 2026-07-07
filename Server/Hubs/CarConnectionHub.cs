@@ -162,6 +162,9 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
             }
             channelDb.TelemetryType = channel.Value.TelemetryType;
             channelDb.ReadIntervalTicks = channel.Value.ReadIntervalTicks;
+            channelDb.DataType = channel.Value.DataType;
+            channelDb.Unit = channel.Value.Unit;
+            channelDb.Decimals = channel.Value.Decimals;
         }
         // Remove missing telemetry channels
         foreach (var channel in dbContext.CarTelemetry.Where(c => c.CarId == car.Id))

@@ -7,5 +7,9 @@ namespace LteCar.Server.Data
         public Car Car { get; set; } = null!;
         public int ReadIntervalTicks { get; set; }
         public string TelemetryType { get; set; }
+
+        public LteCar.Shared.Channels.TelemetryDataType DataType { get; set; } = LteCar.Shared.Channels.TelemetryDataType.String;
+        public string? Unit { get; set; }
+        public byte? Decimals { get; set; }
     }
 }

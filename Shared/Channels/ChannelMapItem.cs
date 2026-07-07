@@ -42,6 +42,9 @@ public class TelemetryChannelMapItem : ChannelMapItem
 {
     [Key(12)][JsonPropertyName("readIntervalTicks")] public int ReadIntervalTicks { get; set; }
     [Key(13)][JsonPropertyName("telemetryType")] public string TelemetryType { get; set; } = string.Empty;
+    [Key(14)][JsonPropertyName("dataType")] public TelemetryDataType DataType { get; set; } = TelemetryDataType.String;
+    [Key(15)][JsonPropertyName("unit")] public string? Unit { get; set; }
+    [Key(16)][JsonPropertyName("decimals")] public byte? Decimals { get; set; }
 }
 
 

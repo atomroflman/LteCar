@@ -125,6 +125,9 @@
     "battery.voltage": {
       "telemetryType": "LteCar.Onboard.Telemetry.JbdBmsTelemetryReader",
       "readIntervalTicks": 50,
+      "dataType": "Number",
+      "unit": "V",
+      "decimals": 2,
       "options": {
         "groupKey": "battery",
         "jbdToolPath": "/home/greg-e/jbdtool/jbdtool",
@@ -134,6 +137,9 @@
     "battery.current": {
       "telemetryType": "LteCar.Onboard.Telemetry.JbdBmsTelemetryReader",
       "readIntervalTicks": 50,
+      "dataType": "Number",
+      "unit": "A",
+      "decimals": 2,
       "options": {
         "groupKey": "battery",
         "jbdToolPath": "/home/greg-e/jbdtool/jbdtool",
@@ -143,6 +149,9 @@
     "battery.soc": {
       "telemetryType": "LteCar.Onboard.Telemetry.JbdBmsTelemetryReader",
       "readIntervalTicks": 50,
+      "dataType": "Integer",
+      "unit": "%",
+      "decimals": 0,
       "options": {
         "groupKey": "battery",
         "jbdToolPath": "/home/greg-e/jbdtool/jbdtool",
@@ -152,6 +161,9 @@
     "battery.capacity": {
       "telemetryType": "LteCar.Onboard.Telemetry.JbdBmsTelemetryReader",
       "readIntervalTicks": 50,
+      "dataType": "Number",
+      "unit": "Ah",
+      "decimals": 1,
       "options": {
         "groupKey": "battery",
         "jbdToolPath": "/home/greg-e/jbdtool/jbdtool",
@@ -161,6 +173,7 @@
     "battery.cycles": {
       "telemetryType": "LteCar.Onboard.Telemetry.JbdBmsTelemetryReader",
       "readIntervalTicks": 50,
+      "dataType": "Integer",
       "options": {
         "groupKey": "battery",
         "jbdToolPath": "/home/greg-e/jbdtool/jbdtool",
@@ -170,6 +183,9 @@
     "battery.cellsMin": {
       "telemetryType": "LteCar.Onboard.Telemetry.JbdBmsTelemetryReader",
       "readIntervalTicks": 50,
+      "dataType": "Number",
+      "unit": "V",
+      "decimals": 3,
       "options": {
         "groupKey": "battery",
         "jbdToolPath": "/home/greg-e/jbdtool/jbdtool",
@@ -179,6 +195,9 @@
     "battery.cellsMax": {
       "telemetryType": "LteCar.Onboard.Telemetry.JbdBmsTelemetryReader",
       "readIntervalTicks": 50,
+      "dataType": "Number",
+      "unit": "V",
+      "decimals": 3,
       "options": {
         "groupKey": "battery",
         "jbdToolPath": "/home/greg-e/jbdtool/jbdtool",
@@ -188,6 +207,9 @@
     "battery.cellsDiff": {
       "telemetryType": "LteCar.Onboard.Telemetry.JbdBmsTelemetryReader",
       "readIntervalTicks": 50,
+      "dataType": "Number",
+      "unit": "V",
+      "decimals": 3,
       "options": {
         "groupKey": "battery",
         "jbdToolPath": "/home/greg-e/jbdtool/jbdtool",
@@ -197,6 +219,9 @@
     "battery.temperature": {
       "telemetryType": "LteCar.Onboard.Telemetry.JbdBmsTelemetryReader",
       "readIntervalTicks": 50,
+      "dataType": "Number",
+      "unit": "°C",
+      "decimals": 1,
       "options": {
         "groupKey": "battery",
         "jbdToolPath": "/home/greg-e/jbdtool/jbdtool",
