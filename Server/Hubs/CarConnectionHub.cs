@@ -20,19 +20,37 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
     //      - Normalized ChannelMap + dictionaries name->int id for bandwidth-efficient future messages
     // 3. OpenCarConnection now only needs the hash to determine if a legacy update is required.
     // This reduces startup round trips and prepares for ID-based messaging.
-    public IHubContext<CarUiHub, ICarUiClient> UiHub { get; }
     public ILogger<CarConnectionHub> Logger { get; }
     private readonly VideoStreamReceiverService _streamService;
     private readonly IConfigurationService _configService;
     private readonly CarConnectionStore _connectionStore;
-    
-    public CarConnectionHub(IHubContext<CarUiHub, ICarUiClient> uiHub, IConfigurationService configService, ILogger<CarConnectionHub> logger, VideoStreamReceiverService streamService, CarConnectionStore connectionStore)
+
+    public CarConnectionHub(IConfigurationService configService, ILogger<CarConnectionHub> logger, VideoStreamReceiverService streamService, CarConnectionStore connectionStore)
     {
-        UiHub = uiHub;
         Logger = logger;
         _streamService = streamService;
         _configService = configService;
         _connectionStore = connectionStore;
+    }
+
+    public Task<CarStateModel[]> UiClientConnected()
+    {
+        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
+        var states = dbContext.Cars
+            .AsNoTracking()
+            .ToList()
+            .Select(car => {
+                var hasConnectionInfo = _connectionStore.TryGetValue(car.Id.ToString(), out var connectionInfo);
+                return new CarStateModel
+                {
+                    Id = car.Id.ToString(),
+                    IsConnected = hasConnectionInfo,
+                    DriverId = hasConnectionInfo ? connectionInfo?.DriverId : null,
+                    DriverName = hasConnectionInfo ? connectionInfo?.DriverName : null
+                };
+            })
+            .ToArray();
+        return Task.FromResult(states);
     }
     
     public async Task<CarConfiguration> OpenCarConnection(string carIdentityKey, string channelMapHash)
@@ -76,7 +94,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
         var connectionInfo = _connectionStore.RegisterConnection(car.Id.ToString(), Context.ConnectionId);
         connectionInfo.CarConfiguration = carConfig;
 
-        await UiHub.Clients.All.CarStateUpdated(new CarStateModel() {
+        await Clients.All.CarStateUpdated(new CarStateModel() {
             Id = car.Id.ToString(),
             IsConnected = true,
             DriverId = connectionInfo.DriverId,
@@ -102,7 +120,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
         Logger.LogWarning($"Client disconnected: {exception}");
         if (_connectionStore.TryRemoveConnection(Context.ConnectionId, out var carId, out var connectionInfo) && carId != null)
         {
-            await UiHub.Clients.All.CarStateUpdated(new CarStateModel()
+            await Clients.All.CarStateUpdated(new CarStateModel()
             {
                 Id = carId,
                 IsConnected = false,

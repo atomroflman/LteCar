@@ -17,7 +17,7 @@ public class CarControlHub : Hub<ICarControlClient>, ICarControlServer
 {
     public ILogger<CarControlHub> Logger { get; }
     public SqidsEncoder<long> SqidsEncoder { get; }
-    public IHubContext<CarUiHub, ICarUiClient> CarUiHubContext { get; }
+    public IHubContext<CarConnectionHub, IConnectionHubClient> ConnectionHubContext { get; }
 
     private readonly IConfigurationService _configService;
     private readonly LteCarContext _context;
@@ -25,13 +25,13 @@ public class CarControlHub : Hub<ICarControlClient>, ICarControlServer
 
     private static BiDictionary<string, string> _connectionMap = new BiDictionary<string, string>();
 
-    public CarControlHub(IConfigurationService configService, ILogger<CarControlHub> logger, LteCarContext context, SqidsEncoder<long> sqidsEncoder, IHubContext<CarUiHub, ICarUiClient> carUiHubContext, CarConnectionStore connectionStore)
+    public CarControlHub(IConfigurationService configService, ILogger<CarControlHub> logger, LteCarContext context, SqidsEncoder<long> sqidsEncoder, IHubContext<CarConnectionHub, IConnectionHubClient> connectionHubContext, CarConnectionStore connectionStore)
     {
         _configService = configService;
         Logger = logger;
         _context = context;
         SqidsEncoder = sqidsEncoder;
-        CarUiHubContext = carUiHubContext;
+        ConnectionHubContext = connectionHubContext;
         _connectionStore = connectionStore;
     }
 
@@ -233,7 +233,7 @@ public class CarControlHub : Hub<ICarControlClient>, ICarControlServer
         connectionInfo.DriverId = activeDriver?.Id.ToString();
         connectionInfo.DriverName = activeDriver?.Name ?? activeDriver?.LoginName;
 
-        await CarUiHubContext.Clients.All.CarStateUpdated(new CarStateModel
+        await ConnectionHubContext.Clients.All.CarStateUpdated(new CarStateModel
         {
             Id = carId.ToString(),
             IsConnected = true,
@@ -264,7 +264,7 @@ public class CarControlHub : Hub<ICarControlClient>, ICarControlServer
     {
         var controller = _context.Users.Where(u => u.ActiveVehicleId == carId)
             .FirstOrDefault();
-        await CarUiHubContext.Clients.All.SendBashOutput(carId, output, isError);
+        await ConnectionHubContext.Clients.All.SendBashOutput(carId, output, isError);
     }
 
     /// <summary>

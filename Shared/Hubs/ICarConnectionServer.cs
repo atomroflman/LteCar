@@ -8,4 +8,5 @@ public interface ICarConnectionServer
     Task UpdateChannelMap(int carId, ChannelMap channelMap);
     Task<ChannelMapSyncResponse> SyncChannelMap(ChannelMapSyncRequest request);
     Task ReportFileTransferStatus(FileTransferStatusUpdate update);
+    Task<CarStateModel[]> UiClientConnected();
 }

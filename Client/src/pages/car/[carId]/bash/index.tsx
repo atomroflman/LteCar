@@ -21,7 +21,7 @@ export default function CarBashPage(): JSX.Element {
         if (!carId) return;
 
         var uiConnection = new HubConnectionBuilder()
-            .withUrl("/hubs/carui")
+            .withUrl("/hubs/connection")
             .withAutomaticReconnect()
             .configureLogging(LogLevel.Warning)
             .build();
