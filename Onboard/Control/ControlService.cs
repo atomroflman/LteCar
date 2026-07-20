@@ -15,7 +15,7 @@ using System.Diagnostics;
 
 namespace LteCar.Onboard.Control;
 
-public class ControlService : IConnectionHubClient, IHubConnectionObserver
+public class ControlService : IControlClient, IHubConnectionObserver
 {
     public IServiceProvider ServiceProvider { get; }
     public ILogger<ControlService> Logger { get; }
@@ -92,8 +92,9 @@ public class ControlService : IConnectionHubClient, IHubConnectionObserver
     }
 
     // ponytail: CarStateUpdated + SendBashOutput target the browser UI, not the Onboard.
-    // The merged hub exposes them on IConnectionHubClient, so the Onboard has to
-    // accept the calls — no-op is correct.
+    // IControlClient (which the merged hub declares alongside the telemetry +
+    // video subsets) still lists them, so the Onboard accepts the calls —
+    // no-op is correct.
     public Task CarStateUpdated(CarStateModel state) => Task.CompletedTask;
     public Task SendBashOutput(int carId, string output, bool isError) => Task.CompletedTask;
 

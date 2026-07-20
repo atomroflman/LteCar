@@ -1,7 +1,10 @@
 using LteCar.Shared.Video;
 
-namespace LteCar.Server.Hubs;
+namespace LteCar.Shared.HubClients;
 
+// ponytail: subset of the merged hub's client interface used by the Onboard's
+// VideoStreamService. See ITelemetryClient for the dispatch-by-method-name
+// rationale.
 public interface ICarVideoClient
 {
     /// <summary>

@@ -2,8 +2,11 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using LteCar.Onboard.Control;
 using LteCar.Onboard.Services;
+using LteCar.Onboard.Telemetry;
+using LteCar.Onboard.Video;
 using LteCar.Shared;
 using LteCar.Shared.Channels;
+using LteCar.Shared.HubClients;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -32,6 +35,9 @@ public class ServerConnectionService
     private int? _serverAssignedCarId;
 
     public bool IsConnected => _connection?.State == HubConnectionState.Connected;
+
+    public HubConnection Connection =>
+        _connection ?? throw new InvalidOperationException("Connection not established yet.");
 
     public IConnectionHubServer GetProxy()
     {
@@ -96,10 +102,18 @@ public class ServerConnectionService
         };
         await _connection.StartAsync();
 
-        // Register ControlService so the merged hub can push control/file-transfer
-        // calls back to the Onboard over this same connection.
+        // Register each Onboard service under its own narrow SignalR-client
+        // interface so the merged hub can push the matching subset of calls
+        // back to us over this one connection. The hub is typed
+        // Hub<IControlClient, ITelemetryClient, ICarVideoClient>; SignalR
+        // matches handlers by method name, so each service is reachable via
+        // its declared subset.
         var controlService = ServiceProvider.GetRequiredService<ControlService>();
-        _connection.Register<IConnectionHubClient>(controlService);
+        _connection.Register<IControlClient>(controlService);
+        var telemetryService = ServiceProvider.GetRequiredService<TelemetryService>();
+        _connection.Register<ITelemetryClient>(telemetryService);
+        var videoStreamService = ServiceProvider.GetRequiredService<VideoStreamService>();
+        _connection.Register<ICarVideoClient>(videoStreamService);
 
         Logger.LogInformation($"Connected to server: {_connection.State}");
         await _connection.InvokeAsync("Test");

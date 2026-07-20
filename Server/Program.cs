@@ -131,8 +131,6 @@ app.UseAuthorization();
 
 app.MapControllers();
 app.MapHub<CarConnectionHub>(HubPaths.CarConnectionHub);
-app.MapHub<TelemetryHub>(HubPaths.TelemetryHub);
-app.MapHub<CarVideoHub>(HubPaths.CarVideoHub);
 app.MapHub<UserChannelHub>(HubPaths.UserChannelHub);
 app.MapHub<CarBashHub>(HubPaths.CarBashHub);
 

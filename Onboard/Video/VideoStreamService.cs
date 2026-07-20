@@ -2,10 +2,11 @@ using System.Diagnostics;
 using LteCar.Server.Hubs;
 using LteCar.Shared;
 using LteCar.Shared.Channels;
+using LteCar.Shared.HubClients;
+using LteCar.Shared.Hubs;
 using LteCar.Shared.Video;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using TypedSignalR.Client;
 
 namespace LteCar.Onboard.Video;
 
@@ -29,7 +30,7 @@ public class VideoStreamService : IDisposable, ICarVideoClient, IHubConnectionOb
     public ServerCarConfigurationService ConfigService { get; }
     public ServerConnectionService ServerConnectionService { get; }
     public IConfiguration Configuration { get; }
-    public ICarVideoServer CarVideoServer { get; set; }
+    public IConnectionHubServer CarVideoServer { get; set; }
     private readonly ChannelMap _channelMap;
     private readonly IMediaMtxConfigurator _mediaMtxConfigurator;
     private readonly Dictionary<string, int> _activeStreamPorts = new();
@@ -127,10 +128,7 @@ public class VideoStreamService : IDisposable, ICarVideoClient, IHubConnectionOb
 
     public async Task Connect()
     {
-        var hubConnection = ServerConnectionService.ConnectToHub(HubPaths.CarVideoHub);
-        CarVideoServer = hubConnection.CreateHubProxy<ICarVideoServer>();
-        hubConnection.Register<ICarVideoClient>(this);
-        await hubConnection.StartAsync();
+        CarVideoServer = ServerConnectionService.GetProxy();
         await CarVideoServer.ConnectCar(Configuration.GetValue<string>("CarIdentityKey"));
     }
 }

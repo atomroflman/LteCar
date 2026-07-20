@@ -65,7 +65,7 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => ({
     const savedSubscriptions = channels.filter((c) => c.subscribed).map((c) => c.channelName);
 
     const connection = new signalR.HubConnectionBuilder()
-      .withUrl("/hubs/telemetry")
+      .withUrl("/hubs/connection")
       .withAutomaticReconnect()
       .build();
 

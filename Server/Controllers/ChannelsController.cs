@@ -3,6 +3,7 @@ using LteCar.Server.Data;
 using LteCar.Server.Hubs;
 using LteCar.Shared;
 using LteCar.Shared.Channels;
+using LteCar.Shared.HubClients;
 using LteCar.Shared.Video;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;

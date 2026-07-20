@@ -8,7 +8,9 @@ using LteCar.Server.Services;
 using LteCar.Shared;
 using LteCar.Shared.Channels;
 using LteCar.Shared.FileTransfer;
+using LteCar.Shared.HubClients;
 using LteCar.Shared.Video;
+using MessagePack;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 using Sqids;
@@ -25,23 +27,34 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
     // 3. OpenCarConnection now only needs the hash to determine if a legacy update is required.
     // This reduces startup round trips and prepares for ID-based messaging.
     //
-    // ponytail: this hub also serves control + file-transfer traffic (formerly CarControlHub)
-    // because the Onboard opens a single connection to it. Splitting them meant the vehicle
-    // held two SignalR sockets for no reason.
+    // ponytail: this hub is the single vehicle-side hub. It used to be CarConnectionHub
+    // + CarControlHub + TelemetryHub + CarVideoHub across four sockets. The Onboard now
+    // opens one SignalR connection that carries control, telemetry, video signaling,
+    // file transfer, channel CRUD, and connection state. Browser pages go to the same URL.
     public ILogger<CarConnectionHub> Logger { get; }
     private readonly VideoStreamReceiverService _streamService;
     private readonly IConfigurationService _configService;
     private readonly CarConnectionStore _connectionStore;
     private readonly SqidsEncoder<long> _sqidsEncoder;
+    private readonly ActiveVideoStreamViewerRegistry _viewerRegistry;
 
-    public CarConnectionHub(IConfigurationService configService, ILogger<CarConnectionHub> logger, VideoStreamReceiverService streamService, CarConnectionStore connectionStore, SqidsEncoder<long> sqidsEncoder)
+    public CarConnectionHub(
+        IConfigurationService configService,
+        ILogger<CarConnectionHub> logger,
+        VideoStreamReceiverService streamService,
+        CarConnectionStore connectionStore,
+        SqidsEncoder<long> sqidsEncoder,
+        ActiveVideoStreamViewerRegistry viewerRegistry)
     {
         Logger = logger;
         _streamService = streamService;
         _configService = configService;
         _connectionStore = connectionStore;
         _sqidsEncoder = sqidsEncoder;
+        _viewerRegistry = viewerRegistry;
     }
+
+    public VideoStreamReceiverService VideoStreamReceiverService => _streamService;
 
     public Task<CarStateModel[]> UiClientConnected()
     {
@@ -153,6 +166,16 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
                 DriverId = connectionInfo?.DriverId,
                 DriverName = connectionInfo?.DriverName
             });
+        }
+
+        var stoppedStreamIds = _viewerRegistry.RemoveConnection(Context.ConnectionId);
+        foreach (var streamId in stoppedStreamIds)
+        {
+            var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
+            var stream = await dbContext.CarVideoStreams.FirstOrDefaultAsync(s => s.Id == streamId);
+            if (stream == null)
+                continue;
+            await StopStreamForViewersAsync(stream);
         }
 
         await base.OnDisconnectedAsync(exception);
@@ -746,5 +769,315 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
         var sessionId = _sqidsEncoder.Decode(sessionToken).FirstOrDefault();
         var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
         return await dbContext.Users.FirstOrDefaultAsync(u => u.SessionId == sessionId);
+    }
+
+    // -- Telemetry (formerly TelemetryHub) ------------------------------------------
+
+    public Task UpdateTelemetry(string carId, string valueName, string value)
+    {
+        return Clients.Group($"car:{carId}").UpdateTelemetry(valueName, value);
+    }
+
+    public Task SubscribeToCarTelemetry(string carId)
+    {
+        return Groups.AddToGroupAsync(Context.ConnectionId, $"car:{carId}");
+    }
+
+    public Task UnsubscribeFromCarTelemetry(string carId)
+    {
+        return Groups.RemoveFromGroupAsync(Context.ConnectionId, $"car:{carId}");
+    }
+
+    public Task RegisterAsOnboard(string carId)
+    {
+        return Groups.AddToGroupAsync(Context.ConnectionId, $"onboard-{carId}");
+    }
+
+    public async Task SubscribeToChannel(string carId, string channelName)
+    {
+        await Clients.Group($"onboard-{carId}").SubscribeToTelemetryChannel(channelName);
+        await PersistTelemetrySubscription(carId, channelName, add: true);
+    }
+
+    public async Task UnsubscribeFromChannel(string carId, string channelName)
+    {
+        await Clients.Group($"onboard-{carId}").UnsubscribeFromTelemetryChannel(channelName);
+        await PersistTelemetrySubscription(carId, channelName, add: false);
+    }
+
+    private async Task PersistTelemetrySubscription(string carId, string channelName, bool add)
+    {
+        var db = Context.GetHttpContext()?.RequestServices.GetService<LteCarContext>();
+        if (db == null) return;
+        if (!int.TryParse(carId, out var carIdInt)) return;
+
+        var user = await HubUserHelper.GetUserAsync(Context.GetHttpContext()!, db);
+        if (user == null) return;
+
+        var setup = await db.UserSetups
+            .FirstOrDefaultAsync(s => s.UserId == user.Id && s.CarId == carIdInt);
+        if (setup == null) return;
+
+        var telemetry = await db.CarTelemetry
+            .FirstOrDefaultAsync(t => t.CarId == carIdInt && t.ChannelName == channelName);
+        if (telemetry == null) return;
+
+        var existing = await db.UserSetupTelemetries
+            .FirstOrDefaultAsync(t => t.UserSetupId == setup.Id && t.CarTelemetryId == telemetry.Id);
+
+        if (add && existing == null)
+        {
+            db.UserSetupTelemetries.Add(new UserSetupTelemetry
+            {
+                UserSetupId = setup.Id,
+                CarTelemetryId = telemetry.Id,
+            });
+            await db.SaveChangesAsync();
+        }
+        else if (!add && existing != null)
+        {
+            db.UserSetupTelemetries.Remove(existing);
+            await db.SaveChangesAsync();
+        }
+    }
+
+    // -- Video (formerly CarVideoHub) ----------------------------------------------
+
+    public async Task ConnectCar(string carIdentityKey)
+    {
+        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
+        var car = dbContext.Cars
+            .Include(c => c.VideoStreams)
+            .FirstOrDefault(c => c.CarIdentityKey == carIdentityKey);
+        if (car == null)
+        {
+            Logger.LogWarning("Car with identity key {CarIdentityKey} not found", carIdentityKey);
+            throw new InvalidOperationException($"Car with identity key {carIdentityKey} not found!");
+        }
+        await this.AddCarToGroupAsync(car.Id);
+        Logger.LogInformation("Car {CarIdentityKey} connected with ID {CarId}. Synchronizing viewer-driven video streams.", carIdentityKey, car.Id);
+
+        foreach (var stream in car.VideoStreams.Where(stream => stream.Enabled && _viewerRegistry.GetViewerCount(stream.Id) > 0))
+        {
+            await StartStreamForViewersAsync(stream);
+        }
+    }
+
+    public async Task StartVideoStream(int streamId)
+    {
+        var stream = await GetStreamAsync(streamId);
+        await StartStreamForViewersAsync(stream);
+    }
+
+    private async Task SanitizeStreamSettings(CarVideoStream s)
+    {
+        if (s.BitrateKbps < 256 || s.BitrateKbps > 100000)
+        {
+            Logger.LogWarning("Sanitizing bitrate {BitrateKbps} for stream {StreamId}", s.BitrateKbps, s.StreamId);
+            s.BitrateKbps = Math.Clamp(s.BitrateKbps, 256, 100000);
+        }
+        if (s.Framerate < 1 || s.Framerate > 60)
+        {
+            Logger.LogWarning("Sanitizing framerate {Framerate} for stream {StreamId}", s.Framerate, s.StreamId);
+            s.Framerate = Math.Clamp(s.Framerate, 1, 60);
+        }
+        if (s.Width < 160 || s.Width > 4096)
+        {
+            Logger.LogWarning("Sanitizing width {Width} for stream {StreamId}", s.Width, s.StreamId);
+            s.Width = Math.Clamp(s.Width, 160, 4096);
+        }
+        if (s.Height < 120 || s.Height > 2160)
+        {
+            Logger.LogWarning("Sanitizing height {Height} for stream {StreamId}", s.Height, s.StreamId);
+            s.Height = Math.Clamp(s.Height, 120, 2160);
+        }
+        if (s.Brightness < -1 || s.Brightness > 1)
+        {
+            Logger.LogWarning("Sanitizing brightness {Brightness} for stream {StreamId}", s.Brightness, s.StreamId);
+            s.Brightness = Math.Clamp(s.Brightness, -1, 1);
+        }
+        if (s.BitrateKbps % 64 != 0)
+        {
+            var original = s.BitrateKbps;
+            s.BitrateKbps = (s.BitrateKbps / 64) * 64;
+            Logger.LogWarning("Adjusting bitrate {OriginalBitrateKbps} to nearest multiple of 64: {AdjustedBitrateKbps} for stream {StreamId}", original, s.BitrateKbps, s.StreamId);
+        }
+        if (s.Port < _configService.Janus.PortRangeStart || s.Port > _configService.Janus.PortRangeEnd)
+        {
+            Logger.LogWarning("Sanitizing port {Port} for stream {StreamId}", s.Port, s.StreamId);
+            s.Port = _streamService.FindFreePort(s.Protocol);
+        }
+    }
+
+    public async Task<IReadOnlyList<VideoStreamInfoModel>> GetVideoStreamsForCar(int carId)
+    {
+        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
+        var streams = await dbContext.CarVideoStreams
+            .Where(s => s.CarId == carId)
+            .OrderBy(s => s.Priority)
+            .ThenBy(s => s.Name)
+            .ToListAsync();
+
+        return streams
+            .Select(s => new VideoStreamInfoModel()
+            {
+                Id = s.Id,
+                Name = s.Name,
+                StreamId = s.StreamId,
+                Type = s.Type,
+                Location = s.Location,
+                Priority = s.Priority,
+                Width = s.Width,
+                Height = s.Height,
+                BitrateKbps = s.BitrateKbps,
+                Framerate = s.Framerate,
+                Brightness = s.Brightness,
+                Enabled = s.Enabled,
+                IsActive = s.IsActive,
+                ViewerCount = _viewerRegistry.GetViewerCount(s.Id)
+            })
+            .ToList();
+    }
+
+    public async Task ActivateStream(int streamId)
+    {
+        var stream = await GetStreamAsync(streamId);
+        if (!stream.Enabled)
+        {
+            throw new HubException($"Stream {stream.Name} is disabled.");
+        }
+        var firstViewer = _viewerRegistry.Activate(Context.ConnectionId, streamId);
+        Logger.LogInformation("Connection {ConnectionId} activated stream {StreamId}. Viewers: {ViewerCount}", Context.ConnectionId, streamId, _viewerRegistry.GetViewerCount(streamId));
+        if (firstViewer)
+        {
+            await StartStreamForViewersAsync(stream);
+        }
+    }
+
+    public async Task DeactivateStream(int streamId)
+    {
+        var stream = await GetStreamAsync(streamId);
+        var lastViewer = _viewerRegistry.Deactivate(Context.ConnectionId, streamId);
+        Logger.LogInformation("Connection {ConnectionId} deactivated stream {StreamId}. Viewers: {ViewerCount}", Context.ConnectionId, streamId, _viewerRegistry.GetViewerCount(streamId));
+        if (lastViewer)
+        {
+            await StopStreamForViewersAsync(stream);
+        }
+    }
+
+    public async Task StopVideoStream(int streamId)
+    {
+        var stream = await GetStreamAsync(streamId);
+        _viewerRegistry.ClearStream(streamId);
+        await StopStreamForViewersAsync(stream);
+    }
+
+    public async Task ChangeVideoStreamSettings(int streamId, VideoSettingsModel settings)
+    {
+        var stream = await GetStreamAsync(streamId);
+        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
+        Logger.LogInformation("Stopping video stream {StreamId} ({StreamName}) for car {CarId}", stream.Id, stream.Name, stream.CarId);
+        await Clients.Car(stream.CarId).StopVideoStream(stream.StreamId);
+        await _streamService.StopStream(streamId);
+        Logger.LogInformation("Changing video stream settings for stream {StreamId} ({StreamName}) for car {CarId}", stream.Id, stream.Name, stream.CarId);
+        settings.ApplySettings(stream);
+        await SanitizeStreamSettings(stream);
+        await dbContext.SaveChangesAsync();
+
+        if (_viewerRegistry.GetViewerCount(streamId) == 0)
+        {
+            return;
+        }
+
+        Logger.LogInformation("Restarting video stream {StreamId} ({StreamName}) for car {CarId} with new settings", stream.Id, stream.Name, stream.CarId);
+        var settingsToApply = new VideoSettings()
+        {
+            Height = stream.Height,
+            Width = stream.Width,
+            Framerate = stream.Framerate,
+            BitrateKbps = stream.BitrateKbps,
+            Brightness = stream.Brightness,
+            Protocol = stream.Protocol,
+            TargetPort = stream.Port
+        };
+        await Clients.Car(stream.CarId).StartVideoStream(stream.StreamId, settingsToApply);
+    }
+
+    public async Task SetVideoStreamEnabled(int carId, int streamId, bool enabled)
+    {
+        await EnsureDriverCanManageStreamAsync(carId);
+
+        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
+        var stream = await dbContext.CarVideoStreams
+            .FirstOrDefaultAsync(s => s.Id == streamId && s.CarId == carId)
+            ?? throw new InvalidOperationException($"Video stream with ID {streamId} not found for car {carId}.");
+
+        if (stream.Enabled == enabled)
+        {
+            return;
+        }
+
+        stream.Enabled = enabled;
+        await dbContext.SaveChangesAsync();
+        Logger.LogInformation("Driver changed enabled state for stream {StreamId} on car {CarId} to {Enabled}", streamId, carId, enabled);
+
+        if (enabled)
+        {
+            return;
+        }
+
+        _viewerRegistry.ClearStream(streamId);
+        await StopStreamForViewersAsync(stream);
+    }
+
+    private async Task<CarVideoStream> GetStreamAsync(int streamId)
+    {
+        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
+        return await dbContext.CarVideoStreams
+            .FirstOrDefaultAsync(s => s.Id == streamId)
+            ?? throw new InvalidOperationException($"Video stream with ID {streamId} not found.");
+    }
+
+    private async Task StartStreamForViewersAsync(CarVideoStream stream)
+    {
+        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
+        Logger.LogInformation("Starting video stream {StreamId} ({StreamName}) for car {CarId}", stream.Id, stream.Name, stream.CarId);
+        var settings = await _streamService.StartStreamAsync(stream.Id);
+        stream.IsActive = true;
+        await dbContext.SaveChangesAsync();
+        await Clients.Car(stream.CarId).StartVideoStream(stream.StreamId, settings);
+    }
+
+    private async Task StopStreamForViewersAsync(CarVideoStream stream)
+    {
+        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
+        Logger.LogInformation("Stopping video stream {StreamId} ({StreamName}) for car {CarId}", stream.Id, stream.Name, stream.CarId);
+        await Clients.Car(stream.CarId).StopVideoStream(stream.StreamId);
+        await _streamService.StopStream(stream.Id);
+        stream.IsActive = false;
+        await dbContext.SaveChangesAsync();
+    }
+
+    private async Task EnsureDriverCanManageStreamAsync(int carId)
+    {
+        var httpContext = Context.GetHttpContext()
+            ?? throw new HubException("No HTTP context available for video hub request.");
+        var dbContext = httpContext.RequestServices.GetRequiredService<LteCarContext>();
+        var user = await HubUserHelper.GetUserAsync(httpContext, dbContext);
+        if (user == null || string.IsNullOrWhiteSpace(user.LoginName))
+        {
+            throw new HubException("You must be logged in to enable or disable streams.");
+        }
+
+        var hasSetup = await dbContext.UserSetups.AnyAsync(setup => setup.UserId == user.Id && setup.CarId == carId);
+        if (!hasSetup)
+        {
+            throw new HubException("You do not have access to manage this vehicle.");
+        }
+
+        if (user.ActiveVehicleId != carId)
+        {
+            throw new HubException("You must actively control this vehicle to change stream enable state.");
+        }
     }
 }

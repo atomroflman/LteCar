@@ -4,6 +4,7 @@ using LteCar.Server.Data;
 using LteCar.Server.Hubs;
 using LteCar.Shared;
 using LteCar.Shared.FileTransfer;
+using LteCar.Shared.HubClients;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;

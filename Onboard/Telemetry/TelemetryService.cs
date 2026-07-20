@@ -21,8 +21,7 @@ public class TelemetryService : IHubConnectionObserver, ITelemetryClient
     private const string GroupKeyOption = "groupKey";
 
     private int _tick = 0;
-    private HubConnection? _connection;
-    private ITelemetryServer? _server;
+    private IConnectionHubServer? _server;
     private string? _carId;
     private bool _reconnectHandlersAttached;
 
@@ -66,20 +65,20 @@ public class TelemetryService : IHubConnectionObserver, ITelemetryClient
 
     public async Task ConnectToServer()
     {
-        _connection = ServerConnectionService.ConnectToHub(HubPaths.TelemetryHub);
-        AttachReconnectHandlers(_connection);
-        await _connection.StartAsync();
-        _server = _connection.CreateHubProxy<ITelemetryServer>();
-        _connection.Register<ITelemetryClient>(this);
+        if (!ServerConnectionService.IsConnected)
+        {
+            Logger.LogError("Cannot connect telemetry: ServerConnectionService is not connected.");
+            return;
+        }
+        AttachReconnectHandlers(ServerConnectionService.Connection);
+        _server = ServerConnectionService.GetProxy();
         _carId = CarConfigurationService.ServerAssignedCarId?.ToString();
         if (string.IsNullOrEmpty(_carId))
         {
             Logger.LogWarning("ServerAssignedCarId not available yet. Telemetry updates will fail until CarId is set.");
+            return;
         }
-        else
-        {
-            await _server.RegisterAsOnboard(_carId);
-        }
+        await _server.RegisterAsOnboard(_carId);
         Logger.LogInformation("Connected to telemetry server with CarId: {CarId}", _carId);
     }
 
@@ -146,7 +145,7 @@ public class TelemetryService : IHubConnectionObserver, ITelemetryClient
         _carId = newId;
         Logger.LogInformation("ServerAssignedCarId changed to {CarId}. Re-registering as onboard.", _carId);
 
-        if (_server != null && _connection?.State == HubConnectionState.Connected)
+        if (_server != null && ServerConnectionService.IsConnected)
         {
             _ = Task.Run(async () =>
             {
@@ -169,7 +168,7 @@ public class TelemetryService : IHubConnectionObserver, ITelemetryClient
 
     public async Task UpdateTelemetry(string valueName, string value)
     {
-        if (_connection == null)
+        if (!ServerConnectionService.IsConnected)
         {
             Logger.LogError("Cannot send telemetry: Connection is not established.");
             return;
@@ -177,11 +176,6 @@ public class TelemetryService : IHubConnectionObserver, ITelemetryClient
         if (_server == null)
         {
             Logger.LogError("Cannot send telemetry: Server proxy is not set.");
-            return;
-        }
-        if (_connection.State != HubConnectionState.Connected)
-        {
-            Logger.LogError("Cannot send telemetry: Connection is not in a connected state. State: {State}", _connection.State);
             return;
         }
         if (_carId == null)

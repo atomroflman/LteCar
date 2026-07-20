@@ -77,7 +77,7 @@ export default function VideoSettingsControl(props: { carId?: number; canManageE
       try {
         const signalR = await import("@microsoft/signalr");
         conn = new signalR.HubConnectionBuilder()
-          .withUrl('/hubs/video')
+          .withUrl('/hubs/connection')
           .withAutomaticReconnect()
           .build();
 
