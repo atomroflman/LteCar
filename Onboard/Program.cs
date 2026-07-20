@@ -7,6 +7,7 @@ using LteCar.Onboard;
 using LteCar.Onboard.Control;
 using LteCar.Onboard.Control.ControlTypes;
 using LteCar.Onboard.Hardware;
+using LteCar.Onboard.Services;
 using LteCar.Onboard.Setup;
 using LteCar.Onboard.Telemetry;
 using LteCar.Onboard.Video;
@@ -35,6 +36,14 @@ if (args.Length > 0 && args[0].Equals("telemetry-probe", StringComparison.Ordina
     var probeConfigLoader = new ConfigLoader(defaultConfigDir, configDirArg ?? configDirEnv);
     await LteCar.Onboard.Telemetry.TelemetryProbeTool.RunAsync(probeConfigLoader);
     return;
+}
+
+// Update-Modus: git pull + dotnet publish + systemctl restart (falls Service vorhanden).
+// Siehe Onboard/Update/UpdateTool.cs.
+if (args.Length > 0 && args[0].Equals("update", StringComparison.OrdinalIgnoreCase))
+{
+    var exitCode = await LteCar.Onboard.Update.UpdateTool.RunAsync(configDirArg ?? configDirEnv ?? defaultConfigDir);
+    Environment.Exit(exitCode);
 }
 
 var configLoader = new ConfigLoader(defaultConfigDir, configDirArg ?? configDirEnv);
@@ -93,6 +102,7 @@ serviceCollection.AddSingleton<ChannelMap>(channelMap);
 serviceCollection.AddSingleton<IConfiguration>(configuration);
 
 // Hub Connections
+serviceCollection.AddSingleton<IOnboardBuildInfoService, OnboardBuildInfoService>();
 serviceCollection.AddSingleton<ServerConnectionService>();
 serviceCollection.AddSingleton<IMediaMtxConfigurator, MediaMtxConfigurator>();
 serviceCollection.AddSingleton<VideoStreamService>();

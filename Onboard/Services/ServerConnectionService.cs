@@ -1,4 +1,6 @@
+using System.Net.Http.Json;
 using System.Text.Json;
+using LteCar.Onboard.Services;
 using LteCar.Shared.Channels;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Configuration;
@@ -21,16 +23,25 @@ public class ServerConnectionService
 
     private readonly ChannelMap _channelMap;
     private readonly IConfiguration _configuration;
+    private readonly IOnboardBuildInfoService _buildInfo;
+    private readonly HttpClient _http;
     private HubConnection _connection;
     private ChannelMapSyncResponse? _lastSync;
     private int? _serverAssignedCarId;
 
-    public ServerConnectionService(ChannelMap channelMap, IConfiguration configuration, IServiceProvider serviceProvider, ILogger<ServerConnectionService> logger)
+    public ServerConnectionService(
+        ChannelMap channelMap,
+        IConfiguration configuration,
+        IServiceProvider serviceProvider,
+        ILogger<ServerConnectionService> logger,
+        IOnboardBuildInfoService buildInfo)
     {
         ServiceProvider = serviceProvider;
         Logger = logger;
         _channelMap = channelMap;
         _configuration = configuration;
+        _buildInfo = buildInfo;
+        _http = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
     }
 
     public UriBuilder GetServerUriBuilder() 
@@ -73,10 +84,12 @@ public class ServerConnectionService
             return Task.CompletedTask;
         };
         await _connection.StartAsync();
-        
+
         Logger.LogInformation($"Connected to server: {_connection.State}");
         await _connection.InvokeAsync("Test");
         Logger.LogDebug($"Tested... Open connection with carIdentityKey: {carIdentityKey}");
+
+        await CheckServerVersionAsync();
         
         var connectionServer = _connection.CreateHubProxy<ICarConnectionServer>();
         Logger.LogDebug("Proxy created...");
@@ -176,4 +189,51 @@ public class ServerConnectionService
             return false;
         }
     }
+
+    // ponytail: fetches /api/version once on connect and warns on branch/commit mismatch.
+    // Single-shot, fire-and-log: we don't retry on transient failures and we don't act
+    // (auto-update would need a separate opt-in flag — out of scope here).
+    private async Task CheckServerVersionAsync()
+    {
+        try
+        {
+            var builder = GetServerUriBuilder();
+            builder.Path = "/api/version";
+            var url = builder.Uri.ToString();
+
+            var remote = await _http.GetFromJsonAsync<ServerVersionDto>(url);
+            if (remote is null)
+            {
+                Logger.LogWarning("Server version endpoint returned empty body ({Url})", url);
+                return;
+            }
+
+            var local = _buildInfo.GetBuildInfo();
+            var shortLocal = ShortenCommit(local.Commit);
+            var shortRemote = ShortenCommit(remote.Commit);
+
+            Logger.LogInformation("Version: local {LocalBranch}@{LocalCommit} | server {RemoteBranch}@{RemoteCommit}",
+                local.Branch, shortLocal, remote.Branch ?? "?", shortRemote);
+
+            var branchMismatch = !string.Equals(local.Branch, remote.Branch, StringComparison.OrdinalIgnoreCase);
+            var commitMismatch = local.Commit is not null && remote.Commit is not null
+                && !string.Equals(local.Commit, remote.Commit, StringComparison.OrdinalIgnoreCase);
+
+            if (branchMismatch || commitMismatch)
+            {
+                Logger.LogWarning(
+                    "Version mismatch with server. Local={LocalBranch}@{LocalCommit}, Server={RemoteBranch}@{RemoteCommit}. Run 'dotnet run -- update' to sync.",
+                    local.Branch, shortLocal, remote.Branch ?? "?", shortRemote);
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to check server version");
+        }
+    }
+
+    private static string ShortenCommit(string? commit) =>
+        string.IsNullOrEmpty(commit) || commit.Length < 8 ? commit ?? "?" : commit[..8];
+
+    private sealed record ServerVersionDto(string? Branch, string? Commit);
 }
