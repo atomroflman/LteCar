@@ -1,6 +1,8 @@
 using CSharpVitamins;
+using LteCar.Onboard.Data;
 using LteCar.Onboard.Telemetry;
 using LteCar.Shared;
+using LteCar.Shared.Channels;
 using LteCar.Shared.FileTransfer;
 using LteCar.Server.Hubs;
 using LteCar.Shared.HubClients;
@@ -23,6 +25,8 @@ public class ControlService : ICarControlClient, IHubConnectionObserver
     public ServerConnectionService ServerConnectionService { get; }
     public SshKeyService SshKeyService { get; }
     public ServerCarConfigurationService CarConfigurationService { get; }
+    public OnboardChannelStore ChannelStore { get; }
+    public ChannelMap ChannelMap { get; }
     public Process BashProcess { get; } = new Process();
 
     private HubConnection _connection;
@@ -30,7 +34,7 @@ public class ControlService : ICarControlClient, IHubConnectionObserver
     private DateTime _lastControlUpdate = DateTime.Now;
     private ICarControlServer _server;
 
-    public ControlService(ILogger<ControlService> logger, TelemetryService telemetryService, ControlExecutionService control, IServiceProvider serviceProvider, IConfiguration configuration, ServerConnectionService serverConnectionService, SshKeyService sshKeyService, ServerCarConfigurationService carConfigurationService)
+    public ControlService(ILogger<ControlService> logger, TelemetryService telemetryService, ControlExecutionService control, IServiceProvider serviceProvider, IConfiguration configuration, ServerConnectionService serverConnectionService, SshKeyService sshKeyService, ServerCarConfigurationService carConfigurationService, OnboardChannelStore channelStore, ChannelMap channelMap)
     {
         Logger = logger;
         TelemetryService = telemetryService;
@@ -40,6 +44,8 @@ public class ControlService : ICarControlClient, IHubConnectionObserver
         ServerConnectionService = serverConnectionService;
         SshKeyService = sshKeyService;
         CarConfigurationService = carConfigurationService;
+        ChannelStore = channelStore;
+        ChannelMap = channelMap;
         BashProcess.StartInfo.FileName = "/bin/bash";
         BashProcess.StartInfo.RedirectStandardInput = true;
         BashProcess.StartInfo.RedirectStandardOutput = true;
@@ -279,5 +285,62 @@ public class ControlService : ICarControlClient, IHubConnectionObserver
             notification.Token, notification.FileName, notification.FileSizeBytes);
         // TODO: download from /api/filetransfer/{token}/download, save to FileTransferBasePath, report status
         await Task.CompletedTask;
+    }
+
+    // ponytail: server pushes per-channel updates; we apply them locally so the next
+    // SyncChannelMap carries them back. LWW already happens in the hub's SyncChannelMap,
+    // so we trust the server's value (ModifiedAt stamp already set by controller).
+    public async Task UpsertControlChannel(string dictKey, ControlChannelMapItem item)
+    {
+        if (string.IsNullOrEmpty(dictKey) || item == null) return;
+        ChannelMap.ControlChannels[dictKey] = item;
+        await ChannelStore.UpsertControlChannelAsync(dictKey, item);
+        Logger.LogInformation("UpsertControlChannel {Key}", dictKey);
+    }
+
+    public async Task DeleteControlChannel(string dictKey)
+    {
+        if (string.IsNullOrEmpty(dictKey)) return;
+        if (ChannelMap.ControlChannels.Remove(dictKey))
+        {
+            await ChannelStore.DeleteControlChannelAsync(dictKey);
+            Logger.LogInformation("DeleteControlChannel {Key}", dictKey);
+        }
+    }
+
+    public async Task UpsertTelemetryChannel(string dictKey, TelemetryChannelMapItem item)
+    {
+        if (string.IsNullOrEmpty(dictKey) || item == null) return;
+        ChannelMap.TelemetryChannels[dictKey] = item;
+        await ChannelStore.UpsertTelemetryChannelAsync(dictKey, item);
+        Logger.LogInformation("UpsertTelemetryChannel {Key}", dictKey);
+    }
+
+    public async Task DeleteTelemetryChannel(string dictKey)
+    {
+        if (string.IsNullOrEmpty(dictKey)) return;
+        if (ChannelMap.TelemetryChannels.Remove(dictKey))
+        {
+            await ChannelStore.DeleteTelemetryChannelAsync(dictKey);
+            Logger.LogInformation("DeleteTelemetryChannel {Key}", dictKey);
+        }
+    }
+
+    public async Task UpsertVideoStream(string dictKey, VideoStreamMapItem item)
+    {
+        if (string.IsNullOrEmpty(dictKey) || item == null) return;
+        ChannelMap.VideoStreams[dictKey] = item;
+        await ChannelStore.UpsertVideoStreamAsync(dictKey, item);
+        Logger.LogInformation("UpsertVideoStream {Key}", dictKey);
+    }
+
+    public async Task DeleteVideoStream(string dictKey)
+    {
+        if (string.IsNullOrEmpty(dictKey)) return;
+        if (ChannelMap.VideoStreams.Remove(dictKey))
+        {
+            await ChannelStore.DeleteVideoStreamAsync(dictKey);
+            Logger.LogInformation("DeleteVideoStream {Key}", dictKey);
+        }
     }
 }

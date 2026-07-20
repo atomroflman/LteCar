@@ -6,6 +6,7 @@ using Spectre.Console;
 using LteCar.Onboard;
 using LteCar.Onboard.Control;
 using LteCar.Onboard.Control.ControlTypes;
+using LteCar.Onboard.Data;
 using LteCar.Onboard.Hardware;
 using LteCar.Onboard.Services;
 using LteCar.Onboard.Setup;
@@ -92,14 +93,31 @@ var configuration = new ConfigurationBuilder()
     .AddEnvironmentVariables()
     .Build();
 
-var channelMap = await configLoader.LoadConfigsAsync();
-if (channelMap == null)
-    throw new Exception("channelMap.json could not be loaded");
+ChannelMap channelMap;
+var channelsDbPath = Path.Combine(configLoader.ConfigDir, "channels.sqlite");
+var channelStoreLogger = LoggerFactory.Create(b => b.AddConsole()).CreateLogger<OnboardChannelStore>();
+var channelStore = new OnboardChannelStore(channelsDbPath, channelStoreLogger);
+await channelStore.InitializeAsync();
+
+if (File.Exists(channelsDbPath))
+{
+    channelMap = await channelStore.LoadAsync();
+    AnsiConsole.MarkupLine($"[green]Loaded channel map from SQLite ({channelMap.ControlChannels.Count} control, {channelMap.TelemetryChannels.Count} telemetry, {channelMap.VideoStreams.Count} video)[/]");
+}
+else
+{
+    channelMap = await configLoader.LoadConfigsAsync();
+    if (channelMap == null)
+        throw new Exception("channelMap.json could not be loaded");
+    await channelStore.ReplaceAllAsync(channelMap);
+    AnsiConsole.MarkupLine($"[green]Migrated channelMap.json to SQLite at {channelsDbPath}[/]");
+}
 
 var serviceCollection = new ServiceCollection();
 // Configuration
 serviceCollection.AddSingleton<ChannelMap>(channelMap);
 serviceCollection.AddSingleton<IConfiguration>(configuration);
+serviceCollection.AddSingleton(channelStore);
 
 // Hub Connections
 serviceCollection.AddSingleton<IOnboardBuildInfoService, OnboardBuildInfoService>();
