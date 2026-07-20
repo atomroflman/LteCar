@@ -1,4 +1,5 @@
 using System.Text.Json;
+using LteCar.Onboard.Services;
 using LteCar.Shared.Channels;
 using LteCar.Shared.Hubs;
 using Microsoft.AspNetCore.SignalR.Client;
@@ -48,6 +49,7 @@ public class VehicleConnectionManager : IVehicleConnectionManager, IDisposable
     private readonly IConfiguration _configuration;
     private readonly ILogger<VehicleConnectionManager> _logger;
     private readonly IServiceProvider _serviceProvider;
+    private readonly IOnboardBuildInfoService _buildInfo;
     private readonly List<IVehicleService> _discoveredServices = new();
     private HubConnection _connection;
     private ChannelMapSyncResponse? _lastSync;
@@ -63,13 +65,15 @@ public class VehicleConnectionManager : IVehicleConnectionManager, IDisposable
         ChannelMap channelMap,
         IConfiguration configuration,
         ILogger<VehicleConnectionManager> logger,
-        IServiceProvider serviceProvider)
+        IServiceProvider serviceProvider,
+        IOnboardBuildInfoService buildInfo)
     {
         _channelMap = channelMap;
         _configuration = configuration;
         _logger = logger;
         _serviceProvider = serviceProvider;
-        
+        _buildInfo = buildInfo;
+
         _connection = CreateHubConnection();
         SetupConnectionHandlers();
         DiscoverServices();
@@ -188,7 +192,17 @@ public class VehicleConnectionManager : IVehicleConnectionManager, IDisposable
             _logger.LogInformation("Server indicates channel map mismatch, syncing...");
             await SyncChannelMapAsync();
         }
-        
+
+        var buildInfo = _buildInfo.GetBuildInfo();
+        try
+        {
+            await connectionServer.ReportOnboardVersion(buildInfo.Branch, buildInfo.Commit);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to report onboard version to server");
+        }
+
         ConnectionStateChanged?.Invoke(this, HubConnectionState.Connected);
         
         foreach (var service in _discoveredServices)
@@ -246,7 +260,30 @@ public class VehicleConnectionManager : IVehicleConnectionManager, IDisposable
         
         var response = await _connection.InvokeAsync<ChannelMapSyncResponse>("SyncChannelMap", request);
         _lastSync = response;
-        
+
+        // Apply merged map to local in-memory state so subsequent hashes agree with server.
+        // Server's response carries the LWW-merged values + ModifiedAt for each item.
+        foreach (var kv in response.ChannelMap.ControlChannels)
+        {
+            _channelMap.ControlChannels[kv.Key] = kv.Value;
+        }
+        foreach (var kv in response.ChannelMap.TelemetryChannels)
+        {
+            _channelMap.TelemetryChannels[kv.Key] = kv.Value;
+        }
+        foreach (var kv in response.ChannelMap.VideoStreams)
+        {
+            // VideoStreams dictionary may use StreamId as key; align by StreamId for safety
+            if (!string.IsNullOrEmpty(kv.Value.StreamId))
+            {
+                _channelMap.VideoStreams[kv.Value.StreamId] = kv.Value;
+            }
+            else
+            {
+                _channelMap.VideoStreams[kv.Key] = kv.Value;
+            }
+        }
+
         try
         {
             await File.WriteAllTextAsync("channelMap.server.json", JsonSerializer.Serialize(response, new JsonSerializerOptions { WriteIndented = true }));
@@ -255,7 +292,7 @@ public class VehicleConnectionManager : IVehicleConnectionManager, IDisposable
         {
             _logger.LogError(ex, "Failed to persist channel map sync response");
         }
-        
+
         _logger.LogInformation("Channel map synced. Hash: {Hash}", response.Hash);
         return response;
     }

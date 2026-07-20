@@ -3,17 +3,20 @@ using System;
 using LteCar.Server.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
+using LteCar.Server.Migrations;
 
 #nullable disable
 
 namespace LteCar.Server.Migrations
 {
     [DbContext(typeof(LteCarContext))]
-    partial class LteCarContextModelSnapshot : ModelSnapshot
+    [Migration("20260720000000_AddChannelModifiedAt")]
+    partial class AddChannelModifiedAt
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -65,18 +68,11 @@ namespace LteCar.Server.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
-                    b.Property<int?>("Address")
-                        .HasColumnType("integer");
-
                     b.Property<int>("CarId")
                         .HasColumnType("integer");
 
                     b.Property<string>("ChannelName")
                         .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<string>("ControlType")
                         .HasMaxLength(64)
                         .HasColumnType("character varying(64)");
 
@@ -93,18 +89,7 @@ namespace LteCar.Server.Migrations
                     b.Property<DateTime?>("ModifiedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<string>("OptionsJson")
-                        .HasColumnType("text");
-
-                    b.Property<string>("PinManager")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
                     b.Property<bool>("RequiresAxis")
-                        .HasColumnType("boolean");
-
-                    b.Property<bool>("TestDisabled")
                         .HasColumnType("boolean");
 
                     b.HasKey("Id");

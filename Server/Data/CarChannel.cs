@@ -12,6 +12,14 @@ namespace LteCar.Server.Data
         public bool IsEnabled { get; set; }
         public bool RequiresAxis { get; set; }
         public int? MaxResendInterval { get; set; }
+        [MaxLength(64)]
+        public string? ControlType { get; set; }
+        [MaxLength(64)]
+        public string PinManager { get; set; } = "default";
+        public int? Address { get; set; }
+        public string? OptionsJson { get; set; }
+        public bool TestDisabled { get; set; }
+        public DateTime? ModifiedAt { get; set; }
         public int CarId { get; set; }
         public Car Car { get; set; }
         public ICollection<UserSetupCarChannelNode> SetupNodes { get; set; }

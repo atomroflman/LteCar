@@ -69,4 +69,5 @@ public class CarVideoStream : EntityBase, IVideoSettings
     public int Framerate { get; set; } = 30;
     public float Brightness { get; set; } = 0.5f;
     public string? JanusId { get; set; }
+    public DateTime? ModifiedAt { get; set; }
 }

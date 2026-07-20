@@ -117,6 +117,16 @@ public class ServerConnectionService
         Logger.LogDebug($"OpenCarConnection called: {JsonSerializer.Serialize(config)}");
         var configService = ServiceProvider.GetRequiredService<ServerCarConfigurationService>();
         configService.UpdateConfiguration(config);
+
+        var buildInfo = _buildInfo.GetBuildInfo();
+        try
+        {
+            await connectionServer.ReportOnboardVersion(buildInfo.Branch, buildInfo.Commit);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to report onboard version to server");
+        }
     }
 
     public async Task<ChannelMapSyncResponse?> SyncChannelMapAsync()

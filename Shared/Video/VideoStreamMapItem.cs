@@ -51,4 +51,8 @@ public class VideoStreamMapItem
     [Key(11)]
     [JsonPropertyName("bitrate")]
     public int? Bitrate { get; set; }
+
+    [Key(12)]
+    [JsonPropertyName("modifiedAt")]
+    public DateTime? ModifiedAt { get; set; }
 }

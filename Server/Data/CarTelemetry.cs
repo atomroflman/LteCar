@@ -11,5 +11,6 @@ namespace LteCar.Server.Data
         public LteCar.Shared.Channels.TelemetryDataType DataType { get; set; } = LteCar.Shared.Channels.TelemetryDataType.String;
         public string? Unit { get; set; }
         public byte? Decimals { get; set; }
+        public DateTime? ModifiedAt { get; set; }
     }
 }

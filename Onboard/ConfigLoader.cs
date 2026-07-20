@@ -154,6 +154,14 @@ public class ConfigLoader
             {
                 PropertyNamingPolicy = JsonNamingPolicy.CamelCase
             });
+            // ponytail: stamp first-load JSON so LWW has a baseline; Phase 2 moves this to SQLite.
+            var now = DateTime.UtcNow;
+            if (channelMap != null)
+            {
+                foreach (var c in channelMap.ControlChannels.Values) c.ModifiedAt ??= now;
+                foreach (var t in channelMap.TelemetryChannels.Values) t.ModifiedAt ??= now;
+                foreach (var v in channelMap.VideoStreams.Values) v.ModifiedAt ??= now;
+            }
         }
 
         return channelMap;

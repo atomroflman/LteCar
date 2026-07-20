@@ -5,6 +5,7 @@ using LteCar.Shared.FileTransfer;
 public interface ICarConnectionServer
 {
     Task<CarConfiguration> OpenCarConnection(string carIdentityKey, string channelMapHash);
+    Task ReportOnboardVersion(string branch, string? commit);
     Task UpdateChannelMap(int carId, ChannelMap channelMap);
     Task<ChannelMapSyncResponse> SyncChannelMap(ChannelMapSyncRequest request);
     Task ReportFileTransferStatus(FileTransferStatusUpdate update);

@@ -109,6 +109,22 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
         Logger.LogInformation("Test Invoked");
     }
 
+    public Task ReportOnboardVersion(string branch, string? commit)
+    {
+        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
+        var car = dbContext.Cars.FirstOrDefault(c => Context.ConnectionId != null && _connectionStore.Values.Any(v => v.ConnectionId == Context.ConnectionId));
+        var carId = car?.Id.ToString()
+            ?? _connectionStore.FirstOrDefault(kv => kv.Value.ConnectionId == Context.ConnectionId).Key;
+        if (carId == null)
+        {
+            Logger.LogWarning("ReportOnboardVersion received without an active car connection");
+            return Task.CompletedTask;
+        }
+        _connectionStore.TrySetOnboardVersion(carId, branch, commit);
+        Logger.LogInformation("Car {CarId} reports onboard version {Branch}@{Commit}", carId, branch, commit);
+        return Task.CompletedTask;
+    }
+
     public override Task OnConnectedAsync()
     {
         Logger.LogInformation($"Client connected: {Clients.Caller}");
@@ -244,21 +260,58 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
 
         var map = request.ChannelMap ?? new ChannelMap();
 
-        // Ensure DB entries and build numeric ID maps
+        // Last-write-wins per channel. The incoming item's ModifiedAt is the onboard's
+        // last-write timestamp. Server compares against its own ModifiedAt and takes the
+        // newer side. After this loop, `map` carries the merged values for the response,
+        // and `car.ChannelMapHash` is computed from this merged map.
         var controlIds = new Dictionary<string,int>();
         foreach (var kv in map.ControlChannels)
         {
             var db = dbContext.CarChannels.FirstOrDefault(c => c.ChannelName == kv.Key && c.CarId == car.Id);
+            var incomingTime = kv.Value.ModifiedAt;
             if (db == null)
             {
-                db = new CarChannel { ChannelName = kv.Key, CarId = car.Id };
+                db = new CarChannel
+                {
+                    ChannelName = kv.Key,
+                    CarId = car.Id,
+                    MaxResendInterval = kv.Value.MaxResendInterval,
+                    ControlType = kv.Value.ControlType,
+                    PinManager = string.IsNullOrEmpty(kv.Value.PinManager) ? "default" : kv.Value.PinManager,
+                    Address = kv.Value.Address,
+                    OptionsJson = kv.Value.Options != null && kv.Value.Options.Count > 0
+                        ? JsonSerializer.Serialize(kv.Value.Options)
+                        : null,
+                    TestDisabled = kv.Value.TestDisabled,
+                    ModifiedAt = incomingTime ?? DateTime.UtcNow,
+                };
                 dbContext.CarChannels.Add(db);
                 await dbContext.SaveChangesAsync();
             }
-            db.MaxResendInterval = kv.Value.MaxResendInterval;
+            else if (incomingTime.HasValue && (db.ModifiedAt == null || incomingTime.Value > db.ModifiedAt.Value))
+            {
+                db.MaxResendInterval = kv.Value.MaxResendInterval;
+                db.ControlType = kv.Value.ControlType;
+                db.PinManager = string.IsNullOrEmpty(kv.Value.PinManager) ? "default" : kv.Value.PinManager;
+                db.Address = kv.Value.Address;
+                db.OptionsJson = kv.Value.Options != null && kv.Value.Options.Count > 0
+                    ? JsonSerializer.Serialize(kv.Value.Options)
+                    : null;
+                db.TestDisabled = kv.Value.TestDisabled;
+                db.ModifiedAt = incomingTime;
+            }
+            // Patch merged values back into the map so the response carries DB's view
+            kv.Value.MaxResendInterval = db.MaxResendInterval;
+            kv.Value.ControlType = db.ControlType;
+            kv.Value.PinManager = db.PinManager;
+            kv.Value.Address = db.Address;
+            kv.Value.Options = !string.IsNullOrEmpty(db.OptionsJson)
+                ? JsonSerializer.Deserialize<Dictionary<string, object>>(db.OptionsJson) ?? new()
+                : new Dictionary<string, object>();
+            kv.Value.TestDisabled = db.TestDisabled;
+            kv.Value.ModifiedAt = db.ModifiedAt;
             controlIds[kv.Key] = db.Id;
         }
-        // Remove stale
         foreach (var stale in dbContext.CarChannels.Where(c => c.CarId == car.Id).ToList())
         {
             if (!map.ControlChannels.ContainsKey(stale.ChannelName))
@@ -271,23 +324,38 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
         foreach (var kv in map.TelemetryChannels)
         {
             var db = dbContext.CarTelemetry.FirstOrDefault(c => c.ChannelName == kv.Key && c.CarId == car.Id);
+            var incomingTime = kv.Value.ModifiedAt;
             if (db == null)
             {
-                db = new CarTelemetry 
-                { 
-                    ChannelName = kv.Key, 
+                db = new CarTelemetry
+                {
+                    ChannelName = kv.Key,
                     CarId = car.Id,
                     TelemetryType = kv.Value.TelemetryType,
-                    ReadIntervalTicks = kv.Value.ReadIntervalTicks
+                    ReadIntervalTicks = kv.Value.ReadIntervalTicks,
+                    DataType = kv.Value.DataType,
+                    Unit = kv.Value.Unit,
+                    Decimals = kv.Value.Decimals,
+                    ModifiedAt = incomingTime ?? DateTime.UtcNow,
                 };
                 dbContext.CarTelemetry.Add(db);
                 await dbContext.SaveChangesAsync();
             }
-            else
+            else if (incomingTime.HasValue && (db.ModifiedAt == null || incomingTime.Value > db.ModifiedAt.Value))
             {
                 db.TelemetryType = kv.Value.TelemetryType;
                 db.ReadIntervalTicks = kv.Value.ReadIntervalTicks;
+                db.DataType = kv.Value.DataType;
+                db.Unit = kv.Value.Unit;
+                db.Decimals = kv.Value.Decimals;
+                db.ModifiedAt = incomingTime;
             }
+            kv.Value.TelemetryType = db.TelemetryType;
+            kv.Value.ReadIntervalTicks = db.ReadIntervalTicks;
+            kv.Value.DataType = db.DataType;
+            kv.Value.Unit = db.Unit;
+            kv.Value.Decimals = db.Decimals;
+            kv.Value.ModifiedAt = db.ModifiedAt;
             telemetryIds[kv.Key] = db.Id;
         }
         foreach (var stale in dbContext.CarTelemetry.Where(c => c.CarId == car.Id).ToList())
@@ -303,15 +371,38 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
         {
             var value = kv.Value;
             var db = dbContext.CarVideoStreams.FirstOrDefault(s => s.StreamId == value.StreamId && s.CarId == car.Id);
+            var incomingTime = value.ModifiedAt;
             if (db == null)
             {
-                db = new CarVideoStream { StreamId = value.StreamId, CarId = car.Id, StartTime = DateTime.UtcNow };
+                db = new CarVideoStream
+                {
+                    StreamId = value.StreamId,
+                    CarId = car.Id,
+                    StartTime = DateTime.UtcNow,
+                    Name = value.Name ?? value.StreamId,
+                    Type = value.Type ?? "unknown",
+                    Location = value.Location,
+                    IsActive = value.Enabled,
+                    Enabled = value.Enabled,
+                    ModifiedAt = incomingTime ?? DateTime.UtcNow,
+                };
                 dbContext.CarVideoStreams.Add(db);
                 await dbContext.SaveChangesAsync();
             }
-            db.IsActive = value.Enabled;
-            db.Enabled = value.Enabled;
-            db.ProcessArguments = JsonSerializer.Serialize(value);
+            else if (incomingTime.HasValue && (db.ModifiedAt == null || incomingTime.Value > db.ModifiedAt.Value))
+            {
+                db.Name = value.Name ?? value.StreamId;
+                db.Type = value.Type ?? "unknown";
+                db.Location = value.Location;
+                db.IsActive = value.Enabled;
+                db.Enabled = value.Enabled;
+                db.ModifiedAt = incomingTime;
+            }
+            value.Name = db.Name;
+            value.Type = db.Type;
+            value.Location = db.Location;
+            value.Enabled = db.Enabled;
+            value.ModifiedAt = db.ModifiedAt;
             videoIds[value.StreamId] = db.Id;
         }
         foreach (var stale in dbContext.CarVideoStreams.Where(s => s.CarId == car.Id).ToList())
@@ -324,15 +415,8 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
 
         await dbContext.SaveChangesAsync();
 
-        // Compute hash (canonical JSON with sorted keys)
-        string hash;
-        {
-            var options = new JsonSerializerOptions { WriteIndented = false };
-            var canonical = JsonSerializer.Serialize(map, options);
-            using var sha = SHA256.Create();
-            var bytes = sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(canonical));
-            hash = Convert.ToHexString(bytes);
-        }
+        // Hash from the merged map (server's view of the world)
+        var hash = ChannelMapHashProvider.GenerateHash(map);
         car.ChannelMapHash = hash;
         car.LastSeen = DateTime.UtcNow;
         await dbContext.SaveChangesAsync();
