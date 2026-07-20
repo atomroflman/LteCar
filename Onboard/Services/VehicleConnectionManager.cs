@@ -172,7 +172,7 @@ public class VehicleConnectionManager : IVehicleConnectionManager, IDisposable
         await _connection.StartAsync();
         _logger.LogDebug("Connection started, state: {State}", _connection.State);
         
-        var connectionServer = _connection.CreateHubProxy<ICarConnectionServer>();
+        var connectionServer = _connection.CreateHubProxy<IConnectionHubServer>();
         
         var channelMapHash = _lastSync?.Hash ?? ChannelMapHashProvider.GenerateHash(_channelMap);
         var config = await connectionServer.OpenCarConnection(carIdentityKey, channelMapHash);
@@ -222,7 +222,7 @@ public class VehicleConnectionManager : IVehicleConnectionManager, IDisposable
     {
         try
         {
-            var connectionServer = _connection.CreateHubProxy<ICarConnectionServer>();
+            var connectionServer = _connection.CreateHubProxy<IConnectionHubServer>();
             var carIdentityKey = _configuration.GetValue<string>("CarIdentityKey");
             var config = await connectionServer.OpenCarConnection(carIdentityKey ?? "", "");
             return config?.ServerAssignedCarId;
@@ -248,7 +248,7 @@ public class VehicleConnectionManager : IVehicleConnectionManager, IDisposable
             return null;
         }
         
-        var proxy = _connection.CreateHubProxy<ICarConnectionServer>();
+        var proxy = _connection.CreateHubProxy<IConnectionHubServer>();
         var request = new ChannelMapSyncRequest 
         { 
             CarId = ServerAssignedCarId.Value, 

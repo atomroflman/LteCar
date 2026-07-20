@@ -2,8 +2,8 @@ using System.Security.Cryptography;
 using LteCar.Server.Configuration;
 using LteCar.Server.Data;
 using LteCar.Server.Hubs;
+using LteCar.Shared;
 using LteCar.Shared.FileTransfer;
-using LteCar.Shared.HubClients;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
@@ -15,13 +15,13 @@ namespace LteCar.Server.Controllers;
 [Route("api/filetransfer")]
 public class FileTransferController : ControllerBase
 {
-    private readonly IHubContext<CarControlHub, ICarControlClient> _controlHub;
+    private readonly IHubContext<CarConnectionHub, IConnectionHubClient> _controlHub;
     private readonly IConfigurationService _config;
     private readonly ILogger<FileTransferController> _logger;
 
     public FileTransferController(
         LteCarContext context,
-        IHubContext<CarControlHub, ICarControlClient> controlHub,
+        IHubContext<CarConnectionHub, IConnectionHubClient> controlHub,
         IConfigurationService config,
         ILogger<FileTransferController> logger) : base(context)
     {

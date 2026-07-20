@@ -545,7 +545,7 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
     var { connection } = get();
     if (!get().connection) {
         connection = new signalR.HubConnectionBuilder()
-        .withUrl(`/hubs/control`)
+        .withUrl(`/hubs/connection`)
         .withAutomaticReconnect()
         .build();
         await connection.start();

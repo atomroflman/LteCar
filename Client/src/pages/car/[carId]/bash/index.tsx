@@ -27,7 +27,7 @@ export default function CarBashPage(): JSX.Element {
             .build();
 
         var controlConnection = new HubConnectionBuilder()
-            .withUrl("/hubs/carcontrol")
+            .withUrl("/hubs/connection")
             .withAutomaticReconnect()
             .configureLogging(LogLevel.Warning)
             .build();
@@ -80,8 +80,10 @@ export default function CarBashPage(): JSX.Element {
     async function sendChunk(chunk: string) {
         if (!carControlConn.current) return;
         try {
-            // Use ExecuteBashCommand from CarControlHub (carId, sessionId, command)
-            // sessionId is currently unknown on client; send empty string and let server handle authentication if needed.
+            // Send bash command via the merged hub. sessionId is unknown on the client;
+            // the server previously threw NotImplementedException for this so the path was
+            // already broken — left here for context. The Onboard's BashToolService +
+            // CarBashHub are the actual bash path; wiring the UI to those is a separate task.
             await carControlConn.current.invoke("ExecuteBashCommand", Number(carId), "", chunk);
         } catch (ex) {
             appendOutput(messages.bashPage.sendFailed(String(ex)), true);

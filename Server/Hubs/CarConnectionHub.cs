@@ -1,17 +1,21 @@
+using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text.Json;
+using System.Diagnostics;
 using LteCar.Server.Configuration;
 using LteCar.Server.Data;
+using LteCar.Server.Services;
 using LteCar.Shared;
 using LteCar.Shared.Channels;
 using LteCar.Shared.FileTransfer;
 using LteCar.Shared.Video;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+using Sqids;
 
 namespace LteCar.Server.Hubs;
 
-public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
+public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
 {
     // Handshake Overview:
     // 1. Car connects and (optionally) calls SyncChannelMap first sending full ChannelMap.
@@ -20,17 +24,23 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
     //      - Normalized ChannelMap + dictionaries name->int id for bandwidth-efficient future messages
     // 3. OpenCarConnection now only needs the hash to determine if a legacy update is required.
     // This reduces startup round trips and prepares for ID-based messaging.
+    //
+    // ponytail: this hub also serves control + file-transfer traffic (formerly CarControlHub)
+    // because the Onboard opens a single connection to it. Splitting them meant the vehicle
+    // held two SignalR sockets for no reason.
     public ILogger<CarConnectionHub> Logger { get; }
     private readonly VideoStreamReceiverService _streamService;
     private readonly IConfigurationService _configService;
     private readonly CarConnectionStore _connectionStore;
+    private readonly SqidsEncoder<long> _sqidsEncoder;
 
-    public CarConnectionHub(IConfigurationService configService, ILogger<CarConnectionHub> logger, VideoStreamReceiverService streamService, CarConnectionStore connectionStore)
+    public CarConnectionHub(IConfigurationService configService, ILogger<CarConnectionHub> logger, VideoStreamReceiverService streamService, CarConnectionStore connectionStore, SqidsEncoder<long> sqidsEncoder)
     {
         Logger = logger;
         _streamService = streamService;
         _configService = configService;
         _connectionStore = connectionStore;
+        _sqidsEncoder = sqidsEncoder;
     }
 
     public Task<CarStateModel[]> UiClientConnected()
@@ -499,5 +509,242 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, ICarConnectionServer
 
         transfer.Status = update.Status;
         await dbContext.SaveChangesAsync();
+    }
+
+    // -- Control session methods (relay to the car's ControlService) ----------------
+
+    public async Task RegisterForControl(int carId)
+    {
+        Logger.LogDebug($"Invoked: RegisterForControl({carId}) => connection {Context.ConnectionId}");
+        await Groups.AddToGroupAsync(Context.ConnectionId, $"Car-{carId}");
+    }
+
+    public async Task<string?> AquireCarControl(int carId, SshAuthenticationRequest authRequest)
+    {
+        Logger.LogDebug($"Invoked: AquireCarControl({carId}, challenge={authRequest.Challenge[..Math.Min(10, authRequest.Challenge.Length)]}...) as {Context.User?.Identity?.Name}");
+        if (!_connectionStore.TryGetValue(carId.ToString(), out var connectionInfo))
+        {
+            Logger.LogDebug("Car not connected");
+            return null;
+        }
+        var session = await Clients.Client(connectionInfo.ConnectionId).AquireCarControl(authRequest);
+        Logger.LogDebug($"Session returned: {session}");
+
+        if (!string.IsNullOrEmpty(session))
+        {
+            await EnsureUserCarSetupExists(carId);
+            await MarkUserAsActiveVehicle(carId);
+            await MarkUserAsHasControlledCar(carId);
+            await UpdateCarUiDriverStateAsync(carId);
+        }
+        return session;
+    }
+
+    public async Task ReleaseCarControl(int carId, string sessionId)
+    {
+        Logger.LogDebug($"Invoked: ReleaseCarControl({carId}, {sessionId})");
+        if (!_connectionStore.TryGetValue(carId.ToString(), out var connectionInfo))
+            return;
+        await Clients.Client(connectionInfo.ConnectionId).ReleaseCarControl(sessionId);
+        await ClearUserActiveVehicle(carId);
+        await UpdateCarUiDriverStateAsync(carId);
+    }
+
+    public async Task UpdateChannel(int carId, string sessionId, int channelId, decimal value)
+    {
+        Logger.LogDebug($"Invoked: UpdateChannel({carId}, {sessionId}, {channelId}, {value})");
+        if (!_connectionStore.TryGetValue(carId.ToString(), out var connectionInfo))
+            return;
+        // TODO: Cache einbauen
+        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
+        var channelName = dbContext.Set<CarChannel>().FirstOrDefault(e => e.Id == channelId)?.ChannelName;
+        if (channelName == null)
+        {
+            Logger.LogError($"Channel ID: {channelId} unknown");
+            return;
+        }
+        await Clients.Client(connectionInfo.ConnectionId).UpdateChannel(sessionId, channelName, value);
+    }
+
+    public async Task<string?> GetChallenge(int carId)
+    {
+        Logger.LogDebug($"Invoked: GetChallenge({carId})");
+        if (!_connectionStore.TryGetValue(carId.ToString(), out var connectionInfo))
+            return null;
+        var challenge = await Clients.Client(connectionInfo.ConnectionId).GetChallenge();
+        Logger.LogDebug($"Challenge returned: {challenge?[..Math.Min(20, challenge?.Length ?? 0)]}...");
+        return challenge;
+    }
+
+    public async Task<FileUploadApproval?> RequestFileUpload(int carId, string sessionId, string filePath)
+    {
+        if (!_connectionStore.TryGetValue(carId.ToString(), out var connectionInfo))
+            return null;
+
+        var approved = await Clients.Client(connectionInfo.ConnectionId).ApproveFileUpload(sessionId, filePath);
+        if (!approved)
+            return null;
+
+        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
+        var transfer = new FileTransfer
+        {
+            CarId = carId,
+            FileName = filePath,
+            Status = FileTransferStatus.Uploading
+        };
+        dbContext.FileTransfers.Add(transfer);
+        await dbContext.SaveChangesAsync();
+
+        Logger.LogInformation("File upload approved for car {CarId}, path '{FilePath}', transfer {TransferId}",
+            carId, filePath, transfer.Id);
+
+        return new FileUploadApproval { Token = transfer.DownloadToken };
+    }
+
+    public async Task<ListFilesResponse?> ListFilesOnDevice(int carId, string sessionId, string path)
+    {
+        if (!_connectionStore.TryGetValue(carId.ToString(), out var connectionInfo))
+            return null;
+        return await Clients.Client(connectionInfo.ConnectionId).ListFiles(sessionId, path);
+    }
+
+    public async Task<bool> DeleteFileOnDevice(int carId, string sessionId, string filePath)
+    {
+        if (!_connectionStore.TryGetValue(carId.ToString(), out var connectionInfo))
+            return false;
+        return await Clients.Client(connectionInfo.ConnectionId).DeleteFile(sessionId, filePath);
+    }
+
+    public async Task<PingCarResult?> PingCar(int carId)
+    {
+        if (!_connectionStore.TryGetValue(carId.ToString(), out var connectionInfo))
+        {
+            Logger.LogDebug($"PingCar: Car {carId} not connected");
+            return null;
+        }
+        var sw = Stopwatch.StartNew();
+        var carTimestamp = await Clients.Client(connectionInfo.ConnectionId).Ping();
+        sw.Stop();
+        return new PingCarResult(carTimestamp, sw.Elapsed.TotalMilliseconds);
+    }
+
+    public async Task SendBashOutput(int carId, string output, bool isError)
+    {
+        await Clients.All.SendBashOutput(carId, output, isError);
+    }
+
+    // -- User state plumbing --------------------------------------------------------
+
+    private async Task EnsureUserCarSetupExists(int carId)
+    {
+        try
+        {
+            var user = await GetCurrentUserAsync();
+            if (user == null)
+            {
+                Logger.LogWarning($"No authenticated user found for car {carId}");
+                return;
+            }
+            var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
+            var car = await dbContext.Cars.FirstOrDefaultAsync(c => c.Id == carId);
+            if (car == null)
+            {
+                Logger.LogWarning($"Car with ID {carId} not found. Car should have been registered via OpenCarConnection.");
+                return;
+            }
+            var existingSetup = await dbContext.UserSetups
+                .FirstOrDefaultAsync(u => u.UserId == user.Id && u.CarId == car.Id);
+            if (existingSetup == null)
+            {
+                Logger.LogInformation($"Creating UserCarSetup for user {user.Id} and car {carId}");
+                dbContext.UserSetups.Add(new UserCarSetup { UserId = user.Id, CarId = car.Id });
+                await dbContext.SaveChangesAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, $"Error ensuring UserCarSetup exists for car {carId}");
+        }
+    }
+
+    private async Task MarkUserAsHasControlledCar(int carId)
+    {
+        try
+        {
+            var user = await GetCurrentUserAsync();
+            if (user == null) return;
+            if (!user.HasControlledCar)
+            {
+                user.HasControlledCar = true;
+                var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
+                await dbContext.SaveChangesAsync();
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, $"Error marking user as having controlled car {carId}");
+        }
+    }
+
+    private async Task MarkUserAsActiveVehicle(int carId)
+    {
+        try
+        {
+            var user = await GetCurrentUserAsync();
+            if (user == null) return;
+            if (user.ActiveVehicleId == carId) return;
+            user.ActiveVehicleId = carId;
+            var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
+            await dbContext.SaveChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error marking active vehicle for car {CarId}", carId);
+        }
+    }
+
+    private async Task ClearUserActiveVehicle(int carId)
+    {
+        try
+        {
+            var user = await GetCurrentUserAsync();
+            if (user == null || user.ActiveVehicleId != carId) return;
+            user.ActiveVehicleId = null;
+            var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
+            await dbContext.SaveChangesAsync();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error clearing active vehicle for car {CarId}", carId);
+        }
+    }
+
+    private async Task UpdateCarUiDriverStateAsync(int carId)
+    {
+        if (!_connectionStore.TryGetValue(carId.ToString(), out var connectionInfo))
+            return;
+        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
+        var activeDriver = await dbContext.Users.FirstOrDefaultAsync(user => user.ActiveVehicleId == carId);
+        connectionInfo.DriverId = activeDriver?.Id.ToString();
+        connectionInfo.DriverName = activeDriver?.Name ?? activeDriver?.LoginName;
+        await Clients.All.CarStateUpdated(new CarStateModel
+        {
+            Id = carId.ToString(),
+            IsConnected = true,
+            DriverId = connectionInfo.DriverId,
+            DriverName = connectionInfo.DriverName
+        });
+    }
+
+    private async Task<User?> GetCurrentUserAsync()
+    {
+        if (Context.User?.Identity?.IsAuthenticated != true)
+            return null;
+        var sessionToken = Context.User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrEmpty(sessionToken))
+            return null;
+        var sessionId = _sqidsEncoder.Decode(sessionToken).FirstOrDefault();
+        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
+        return await dbContext.Users.FirstOrDefaultAsync(u => u.SessionId == sessionId);
     }
 }

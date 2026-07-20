@@ -15,7 +15,7 @@ using System.Diagnostics;
 
 namespace LteCar.Onboard.Control;
 
-public class ControlService : ICarControlClient, IHubConnectionObserver
+public class ControlService : IConnectionHubClient, IHubConnectionObserver
 {
     public IServiceProvider ServiceProvider { get; }
     public ILogger<ControlService> Logger { get; }
@@ -29,10 +29,9 @@ public class ControlService : ICarControlClient, IHubConnectionObserver
     public ChannelMap ChannelMap { get; }
     public Process BashProcess { get; } = new Process();
 
-    private HubConnection _connection;
     private string? _sessionId;
     private DateTime _lastControlUpdate = DateTime.Now;
-    private ICarControlServer _server;
+    private IConnectionHubServer _server;
 
     public ControlService(ILogger<ControlService> logger, TelemetryService telemetryService, ControlExecutionService control, IServiceProvider serviceProvider, IConfiguration configuration, ServerConnectionService serverConnectionService, SshKeyService sshKeyService, ServerCarConfigurationService carConfigurationService, OnboardChannelStore channelStore, ChannelMap channelMap)
     {
@@ -57,9 +56,9 @@ public class ControlService : ICarControlClient, IHubConnectionObserver
             if (!string.IsNullOrEmpty(args.Data))
             {
                 Logger.LogInformation($"[Bash Output] {args.Data}");
-                if (_connection != null && _connection.State == HubConnectionState.Connected && this.CarConfigurationService.ServerAssignedCarId.HasValue)
+                if (ServerConnectionService.IsConnected && this.CarConfigurationService.ServerAssignedCarId.HasValue && _server != null)
                 {
-                    _server?.SendBashOutput(CarConfigurationService.ServerAssignedCarId!.Value, args.Data, false);
+                    _server.SendBashOutput(CarConfigurationService.ServerAssignedCarId!.Value, args.Data, false);
                 }
             }
         };
@@ -68,9 +67,9 @@ public class ControlService : ICarControlClient, IHubConnectionObserver
             if (!string.IsNullOrEmpty(args.Data))
             {
                 Logger.LogError($"[Bash Error] {args.Data}");
-                if (_connection != null && _connection.State == HubConnectionState.Connected && this.CarConfigurationService.ServerAssignedCarId.HasValue)
+                if (ServerConnectionService.IsConnected && this.CarConfigurationService.ServerAssignedCarId.HasValue && _server != null)
                 {
-                    _server?.SendBashOutput(CarConfigurationService.ServerAssignedCarId!.Value, args.Data, true);
+                    _server.SendBashOutput(CarConfigurationService.ServerAssignedCarId!.Value, args.Data, true);
                 }
             }
         };
@@ -83,7 +82,7 @@ public class ControlService : ICarControlClient, IHubConnectionObserver
         Control.ReleaseControl();
     }
 
-    public async Task ExecuteBashCommand(string sessionId, string command) 
+    public async Task ExecuteBashCommand(string sessionId, string command)
     {
         if (_sessionId != sessionId)
             return;
@@ -92,12 +91,20 @@ public class ControlService : ICarControlClient, IHubConnectionObserver
         await BashProcess.StandardInput.FlushAsync();
     }
 
+    // ponytail: CarStateUpdated + SendBashOutput target the browser UI, not the Onboard.
+    // The merged hub exposes them on IConnectionHubClient, so the Onboard has to
+    // accept the calls — no-op is correct.
+    public Task CarStateUpdated(CarStateModel state) => Task.CompletedTask;
+    public Task SendBashOutput(int carId, string output, bool isError) => Task.CompletedTask;
+
     public async Task ConnectToServer()
     {
-        _connection = ServerConnectionService.ConnectToHub(HubPaths.CarControlHub);
-        _connection.Register<ICarControlClient>(this);
-        await _connection.StartAsync();
-        _server = _connection.CreateHubProxy<ICarControlServer>();
+        if (!ServerConnectionService.IsConnected)
+        {
+            Logger.LogError("Cannot connect control: ServerConnectionService is not connected.");
+            return;
+        }
+        _server = ServerConnectionService.GetProxy();
         var carId = CarConfigurationService.ServerAssignedCarId;
         if (!carId.HasValue)
         {

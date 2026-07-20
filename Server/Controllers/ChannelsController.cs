@@ -1,8 +1,8 @@
 using System.Text.Json;
 using LteCar.Server.Data;
 using LteCar.Server.Hubs;
+using LteCar.Shared;
 using LteCar.Shared.Channels;
-using LteCar.Shared.HubClients;
 using LteCar.Shared.Video;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.SignalR;
@@ -17,10 +17,10 @@ namespace LteCar.Server.Controllers;
 [Route("api/cars/{carId:int}/channels")]
 public class ChannelsController : ControllerBase
 {
-    private readonly IHubContext<CarControlHub, ICarControlClient> _controlHub;
+    private readonly IHubContext<CarConnectionHub, IConnectionHubClient> _controlHub;
     private readonly ILogger<ChannelsController> _logger;
 
-    public ChannelsController(LteCarContext context, IHubContext<CarControlHub, ICarControlClient> controlHub, ILogger<ChannelsController> logger) : base(context)
+    public ChannelsController(LteCarContext context, IHubContext<CarConnectionHub, IConnectionHubClient> controlHub, ILogger<ChannelsController> logger) : base(context)
     {
         _controlHub = controlHub;
         _logger = logger;

@@ -1,6 +1,8 @@
 using System.Net.Http.Json;
 using System.Text.Json;
+using LteCar.Onboard.Control;
 using LteCar.Onboard.Services;
+using LteCar.Shared;
 using LteCar.Shared.Channels;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.Extensions.Configuration;
@@ -28,6 +30,15 @@ public class ServerConnectionService
     private HubConnection _connection;
     private ChannelMapSyncResponse? _lastSync;
     private int? _serverAssignedCarId;
+
+    public bool IsConnected => _connection?.State == HubConnectionState.Connected;
+
+    public IConnectionHubServer GetProxy()
+    {
+        if (_connection == null)
+            throw new InvalidOperationException("Connection not established yet.");
+        return _connection.CreateHubProxy<IConnectionHubServer>();
+    }
 
     public ServerConnectionService(
         ChannelMap channelMap,
@@ -85,13 +96,18 @@ public class ServerConnectionService
         };
         await _connection.StartAsync();
 
+        // Register ControlService so the merged hub can push control/file-transfer
+        // calls back to the Onboard over this same connection.
+        var controlService = ServiceProvider.GetRequiredService<ControlService>();
+        _connection.Register<IConnectionHubClient>(controlService);
+
         Logger.LogInformation($"Connected to server: {_connection.State}");
         await _connection.InvokeAsync("Test");
         Logger.LogDebug($"Tested... Open connection with carIdentityKey: {carIdentityKey}");
 
         await CheckServerVersionAsync();
         
-        var connectionServer = _connection.CreateHubProxy<ICarConnectionServer>();
+        var connectionServer = _connection.CreateHubProxy<IConnectionHubServer>();
         Logger.LogDebug("Proxy created...");
         
         // Prefer hash from last SyncChannelMap (if sync already performed before OpenCarConnection is called)
@@ -141,7 +157,7 @@ public class ServerConnectionService
             Logger.LogError("Cannot sync channel map. Server-assigned CarId not available. Call ConnectToServer first.");
             return null;
         }
-        var proxy = _connection.CreateHubProxy<ICarConnectionServer>();
+        var proxy = _connection.CreateHubProxy<IConnectionHubServer>();
         var request = new ChannelMapSyncRequest { CarId = _serverAssignedCarId.Value, ChannelMap = _channelMap };
         Logger.LogInformation("Sending ChannelMapSyncRequest for CarId {CarId} with {Control} control, {Telemetry} telemetry, {Video} video streams", 
             _serverAssignedCarId.Value, _channelMap.ControlChannels.Count, _channelMap.TelemetryChannels.Count, _channelMap.VideoStreams.Count);
