@@ -43,7 +43,7 @@ export const useCarUiStore = create<CarUiState>((set) => ({
     _connectPromise = (async () => {
       const signalR = await import('@microsoft/signalr');
       const connection = new signalR.HubConnectionBuilder()
-        .withUrl('/hubs/carui')
+        .withUrl('/hubs/connection')
         .withAutomaticReconnect()
         .build();
 

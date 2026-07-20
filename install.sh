@@ -18,28 +18,57 @@ RUN_USER_HOME=$(eval echo "~$RUN_USER")
 REPO_URL="https://github.com/atomroflman/LteCar.git"
 
 # ── Package manager detection ────────────────────────────────────────
+# PM is one of: apt-get, apt, pacman. Anything else aborts the installer.
+PM=""
 if command -v apt-get &>/dev/null; then
-    APT="apt-get"
+    PM="apt-get"
 elif command -v apt &>/dev/null; then
-    APT="apt"
+    PM="apt"
+elif command -v pacman &>/dev/null; then
+    PM="pacman"
 else
-    echo "Error: neither apt-get nor apt found. This installer requires a Debian/Ubuntu-based system."
+    echo "Error: no supported package manager found (apt, apt-get, pacman)."
     exit 1
 fi
 
-pkg_install() {
-    "$APT" install -y "$@"
+# Update is silent on pacman (it's always fresh) and loud on apt.
+pkg_update() {
+    case "$PM" in
+        apt|apt-get) "$PM" update -y ;;
+        pacman)      pacman -Sy --noconfirm ;;
+    esac
 }
 
-pkg_update() {
-    "$APT" update -y
+# Default install aborts on missing package (keeps existing set -e behaviour).
+pkg_install() {
+    case "$PM" in
+        apt|apt-get) "$PM" install -y "$@" ;;
+        pacman)      pacman -S --noconfirm --needed "$@" ;;
+    esac
+}
+
+# Try to install a single package; return 0 on success, 1 on failure.
+# Used for optional packages (e.g. mediamtx) where a missing repo entry
+# should fall back to an alternative install path instead of aborting.
+pkg_install_optional() {
+    case "$PM" in
+        apt|apt-get) "$PM" install -y "$@" >/dev/null 2>&1 ;;
+        pacman)      pacman -S --noconfirm --needed "$@" >/dev/null 2>&1 ;;
+    esac
 }
 
 pkg_candidate_exists() {
     local package_name="$1"
-    local candidate
-    candidate=$(apt-cache policy "$package_name" 2>/dev/null | awk '/Candidate:/ { print $2 }')
-    [ -n "$candidate" ] && [ "$candidate" != "(none)" ]
+    case "$PM" in
+        apt|apt-get)
+            local candidate
+            candidate=$(apt-cache policy "$package_name" 2>/dev/null | awk '/Candidate:/ { print $2 }')
+            [ -n "$candidate" ] && [ "$candidate" != "(none)" ]
+            ;;
+        pacman)
+            pacman -Si "$package_name" >/dev/null 2>&1
+            ;;
+    esac
 }
 
 prompt_with_default() {
@@ -505,34 +534,43 @@ if [ "$DEPLOY_MODE" = "onboard" ]; then
     EXTERN_DIR="$REPO_DIR/Onboard/Extern"
     MEDIAMTX_DEST="$EXTERN_DIR/mediamtx"
 
-    # Detect architecture
-    ARCH=$(uname -m)
-    case "$ARCH" in
-        aarch64)        MEDIAMTX_ARCH="linux_arm64" ;;
-        armv7l|armv7)   MEDIAMTX_ARCH="linux_armv7" ;;
-        armv6l)         MEDIAMTX_ARCH="linux_armv6" ;;
-        x86_64)         MEDIAMTX_ARCH="linux_amd64" ;;
-        *)
-            echo "Unsupported architecture: $ARCH"
-            exit 1
-            ;;
-    esac
+    # Prefer the local package manager. If mediamtx isn't available in the
+    # configured repos (common — Debian, Raspbian and most Arch setups don't
+    # ship it), fall back to fetching the upstream tarball into the repo.
+    echo "Trying local package manager ($PM) for mediamtx ..."
+    if pkg_install_optional mediamtx; then
+        echo "mediamtx installed via $PM (system-wide; the app will pick it up from PATH)."
+    else
+        echo "mediamtx not in configured $PM repos — falling back to GitHub tarball."
 
-    MEDIAMTX_TARBALL="mediamtx_${MEDIAMTX_VERSION}_${MEDIAMTX_ARCH}.tar.gz"
-    MEDIAMTX_URL="https://github.com/bluenviron/mediamtx/releases/download/${MEDIAMTX_VERSION}/${MEDIAMTX_TARBALL}"
+        ARCH=$(uname -m)
+        case "$ARCH" in
+            aarch64)        MEDIAMTX_ARCH="linux_arm64" ;;
+            armv7l|armv7)   MEDIAMTX_ARCH="linux_armv7" ;;
+            armv6l)         MEDIAMTX_ARCH="linux_armv6" ;;
+            x86_64)         MEDIAMTX_ARCH="linux_amd64" ;;
+            *)
+                echo "Unsupported architecture: $ARCH"
+                exit 1
+                ;;
+        esac
 
-    echo "Architecture : $ARCH -> $MEDIAMTX_ARCH"
-    echo "Version      : $MEDIAMTX_VERSION"
-    echo "Downloading  : $MEDIAMTX_URL"
+        MEDIAMTX_TARBALL="mediamtx_${MEDIAMTX_VERSION}_${MEDIAMTX_ARCH}.tar.gz"
+        MEDIAMTX_URL="https://github.com/bluenviron/mediamtx/releases/download/${MEDIAMTX_VERSION}/${MEDIAMTX_TARBALL}"
 
-    TMP_DIR=$(mktemp -d)
-    curl -fsSL "$MEDIAMTX_URL" -o "$TMP_DIR/$MEDIAMTX_TARBALL"
-    tar -xzf "$TMP_DIR/$MEDIAMTX_TARBALL" -C "$TMP_DIR" mediamtx
-    install -m 755 "$TMP_DIR/mediamtx" "$MEDIAMTX_DEST"
-    chown "$RUN_USER:$RUN_USER" "$MEDIAMTX_DEST"
-    rm -rf "$TMP_DIR"
+        echo "Architecture : $ARCH -> $MEDIAMTX_ARCH"
+        echo "Version      : $MEDIAMTX_VERSION"
+        echo "Downloading  : $MEDIAMTX_URL"
 
-    echo "mediamtx installed to $MEDIAMTX_DEST"
+        TMP_DIR=$(mktemp -d)
+        curl -fsSL "$MEDIAMTX_URL" -o "$TMP_DIR/$MEDIAMTX_TARBALL"
+        tar -xzf "$TMP_DIR/$MEDIAMTX_TARBALL" -C "$TMP_DIR" mediamtx
+        install -m 755 "$TMP_DIR/mediamtx" "$MEDIAMTX_DEST"
+        chown "$RUN_USER:$RUN_USER" "$MEDIAMTX_DEST"
+        rm -rf "$TMP_DIR"
+
+        echo "mediamtx installed to $MEDIAMTX_DEST"
+    fi
 
     # ── Phase 3: .NET SDK ────────────────────────────────────────────
     echo ""

@@ -38,6 +38,7 @@ public class MediaMtxConfigurator : IMediaMtxConfigurator, IDisposable
     private readonly IConfiguration _configuration;
     private readonly string _configPath;
     private readonly string _backupPath;
+    private readonly string _mediamtxBinary;
     private MediaMtxConfiguration _currentConfig;
     private string _originalConfig;
     private Process? _mediamtxProcess;
@@ -52,9 +53,40 @@ public class MediaMtxConfigurator : IMediaMtxConfigurator, IDisposable
         _configuration = configuration;
         _configPath = Path.GetFullPath("./Extern/mediamtx.yml");
         _backupPath = Path.GetFullPath("./Extern/mediamtx.yml.backup");
-        
+
+        _mediamtxBinary = ResolveMediaMtxBinary(_logger);
+        if (string.IsNullOrEmpty(_mediamtxBinary))
+        {
+            _logger.LogError("mediamtx binary not found. Install it via your package manager (apt/pacman) or place it at {Path}.",
+                Path.GetFullPath("./Extern/mediamtx"));
+        }
+
         _currentConfig = LoadCurrentConfiguration();
         _originalConfig = File.ReadAllText(_configPath);
+    }
+
+    private static string? ResolveMediaMtxBinary(ILogger logger)
+    {
+        var pathDirs = (Environment.GetEnvironmentVariable("PATH") ?? string.Empty)
+            .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries);
+        foreach (var dir in pathDirs)
+        {
+            var candidate = Path.Combine(dir, "mediamtx");
+            if (File.Exists(candidate))
+            {
+                logger.LogInformation("Using mediamtx from PATH: {Path}", candidate);
+                return candidate;
+            }
+        }
+
+        var vendored = Path.GetFullPath("./Extern/mediamtx");
+        if (File.Exists(vendored))
+        {
+            logger.LogInformation("Using vendored mediamtx at {Path}", vendored);
+            return vendored;
+        }
+
+        return null;
     }
 
     private MediaMtxConfiguration LoadCurrentConfiguration()
@@ -311,10 +343,16 @@ public class MediaMtxConfigurator : IMediaMtxConfigurator, IDisposable
             return;
         }
 
+        if (string.IsNullOrEmpty(_mediamtxBinary))
+        {
+            _logger.LogError("Cannot start MediaMTX: binary not found.");
+            return;
+        }
+
         var startInfo = new ProcessStartInfo
         {
             FileName = "bash",
-            Arguments = $"-c \"{Path.GetFullPath("./Extern/mediamtx")} {Path.GetFullPath("./Extern/mediamtx.yml")}\"",
+            Arguments = $"-c \"{_mediamtxBinary} {_configPath}\"",
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,

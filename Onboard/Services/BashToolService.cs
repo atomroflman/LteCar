@@ -39,16 +39,11 @@ public class BashToolService
 
         try
         {
-            var uriBuilder = new UriBuilder
-            {
-                Host = serverUrl.Replace("https://", "").Replace("http://", "").Split(':')[0],
-                Scheme = serverUrl.StartsWith("https") ? "https" : "http",
-                Port = 5000,
-                Path = "hubs/carbash"
-            };
+            var baseUri = new Uri(serverUrl.TrimEnd('/'));
+            var hubUri = new Uri(baseUri, "hubs/carbash");
 
             _hubConnection = new HubConnectionBuilder()
-                .WithUrl(uriBuilder.Uri)
+                .WithUrl(hubUri)
                 .WithAutomaticReconnect(Enumerable.Range(0, 10).Select(e => TimeSpan.FromSeconds(e + 1)).ToArray())
                 .Build();
 

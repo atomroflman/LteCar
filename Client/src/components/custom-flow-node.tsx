@@ -14,6 +14,15 @@ export type CustomFlowNodeProps = NodeProps & {
   handleParamChange: (key: string, value: any) => void;
 };
 
+// Specialized node renderers keyed by function name. Add new ones here
+// instead of growing the if-chain in CustomFlowNode below.
+const SPECIALIZED_NODES: Record<string, React.ComponentType<CustomFlowNodeProps>> = {
+  FloatValue: FloatValueFlowNode,
+  Gearbox: GearboxFlowNode,
+  Iif: IifFlowNode,
+  Smooth: SmoothFlowNode,
+};
+
 export default function CustomFlowNode(props: NodeProps) {
   const { messages } = useI18n();
   if (!props || !props.data) {
@@ -56,19 +65,9 @@ export default function CustomFlowNode(props: NodeProps) {
 
   // Resolve known function names with their respective components
   if (data?.metadata?.functionName) {
-    const functionName = data.metadata.functionName;
-    
-    if (functionName === 'FloatValue') {
-      return <FloatValueFlowNode {...props} handleParamChange={handleParamChange} data={data} />;
-    }
-    if (functionName === 'Gearbox') {
-      return <GearboxFlowNode {...props} handleParamChange={handleParamChange} data={data} />;
-    }
-    if (functionName === 'Iif') {
-      return <IifFlowNode {...props} handleParamChange={handleParamChange} data={data} />;
-    }
-    if (functionName === 'Smooth') {
-      return <SmoothFlowNode {...props} handleParamChange={handleParamChange} data={data} />;
+    const Specialized = SPECIALIZED_NODES[data.metadata.functionName];
+    if (Specialized) {
+      return <Specialized {...props} handleParamChange={handleParamChange} data={data} />;
     }
   }
 
