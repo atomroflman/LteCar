@@ -37,6 +37,17 @@ public class CarConnectionStore : ConcurrentDictionary<string, CarConnectionInfo
 
         return TryRemove(mappedCarId, out connectionInfo);
     }
+
+    public bool TrySetOnboardVersion(string carId, string branch, string? commit)
+    {
+        if (!TryGetValue(carId, out var info))
+        {
+            return false;
+        }
+        info.OnboardBranch = branch;
+        info.OnboardCommit = commit;
+        return true;
+    }
 }
 
 public class CarConnectionInfo
@@ -45,4 +56,6 @@ public class CarConnectionInfo
     public CarConfiguration CarConfiguration { get; set; } = new CarConfiguration();
     public string? DriverId { get; set; }
     public string? DriverName { get; set; }
+    public string? OnboardBranch { get; set; }
+    public string? OnboardCommit { get; set; }
 }

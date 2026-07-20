@@ -9,6 +9,7 @@ import Ping from "@/components/ping";
 import SessionTransfer from "@/components/session-transfer";
 import InstallDialog from "@/components/install-dialog";
 import LanguageSwitcher from "@/components/language-switcher";
+import VersionBanner from "@/components/version-banner";
 import { useI18n } from "@/i18n/provider";
 
 const geistSans = Geist({
@@ -72,6 +73,11 @@ export default function Home() {
 
           <div className="flex flex-1 flex-col lg:flex-row">
             <div className="flex-1 p-4 md:p-5">
+              {selectedCarId && (
+                <div className="mb-3">
+                  <VersionBanner carId={selectedCarId} />
+                </div>
+              )}
               <div className="flex h-full min-h-[20rem] items-center justify-center overflow-hidden rounded-[28px] border border-white/8 bg-[linear-gradient(180deg,rgba(9,11,16,0.94),rgba(18,20,28,0.92))] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
                 <CarVideoPanel carId={selectedCarId} />
               </div>

@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
+import Link from "next/link";
 import { useRouter } from "next/router";
 import GamepadViewer from "../../../components/gamepad-viewer";
 import CarFunctionsView from "../../../components/car-functions-view";
@@ -11,6 +12,7 @@ import CustomFlowNode from "@/components/custom-flow-node";
 import ConfigGuard from "@/components/config-guard";
 import UpdateControl from "@/components/update-control";
 import LanguageSwitcher from "@/components/language-switcher";
+import SetupTemplatePanel from "@/components/setup-template-panel";
 import { useI18n } from "@/i18n/provider";
 
 const nodeTypes = { custom: CustomFlowNode };
@@ -108,6 +110,14 @@ export default function CarControlFlowPage() {
           <GamepadViewer hideFlowButtons={false} />
           <FunctionNodesView />
           {carIdNum && <CarFunctionsView carId={carIdNum} hideFlowButtons={false} />}
+          {carIdNum && (
+            <div className="bg-zinc-900 rounded-lg p-2 border border-zinc-800 text-xs">
+              <Link href={`/car/${carIdNum}/channels`} className="text-blue-400 hover:underline">
+                Channels (control / telemetry / video)
+              </Link>
+            </div>
+          )}
+          {carIdNum && <SetupTemplatePanel carId={carIdNum} />}
         </div>
         <div className="flex-1 bg-zinc-900 rounded-lg p-2 min-h-[600px]">
           <ReactFlowProvider>
