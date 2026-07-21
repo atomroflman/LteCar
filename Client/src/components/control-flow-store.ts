@@ -549,9 +549,15 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
         .withAutomaticReconnect()
         .build();
         await connection.start();
+        // ponytail: only wipe carSession when the connection is brand-new.
+        // On a remount (page nav, / → /car/[id] → /) the zustand store
+        // survives but this useEffect re-runs and would clobber the
+        // already-authenticated session, flipping UpdateControl to
+        // "Disconnected" while the Onboard still has _sessionId.
+        set({ connection, carId, carSession: undefined });
+    } else {
+        set({ carId });
     }
-    // Just establish connection, authentication happens via authenticateWithSshKey
-    set({ connection, carId, carSession: undefined });
   },
   async downloadSshKey(carId: number, vehicleIp: string, saveToStorage: boolean = true): Promise<{ success: boolean; key?: string; error?: string }> {
     try {
@@ -562,8 +568,11 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
       }
       const { hash } = await hashResponse.json();
 
-      // Download SSH key directly from vehicle (local network only)
-      const response = await fetch(`http://${vehicleIp}:8080/ssh-key?hash=${hash}`);
+      // Download SSH key directly from vehicle (local network only).
+      // HTTPS so fetch() works from an HTTPS UI without mixed-content blocking;
+      // the vehicle serves a self-signed cert and only Firefox can persist the
+      // user-accepted exception, so the caller gates this path to Firefox.
+      const response = await fetch(`https://${vehicleIp}:8443/ssh-key?hash=${hash}`);
       if (response.status === 400) {
         return { success: false, error: "Invalid request to vehicle" };
       }
@@ -785,7 +794,10 @@ export const useControlFlowStore = create<ControlFlowState>((set, get) => ({
       const hashResponse = await fetch(`/api/car/${carId}/identity-hash`);
       if (!hashResponse.ok) return null;
       const { hash } = await hashResponse.json();
-      return `http://${vehicleIp}:8080/ssh-key?hash=${hash}`;
+      // HTTPS to match scheme of the UI page; vehicle uses a self-signed cert
+      // (Firefox only). Used by the "Open link" button (browser-native nav,
+      // lets the user accept the cert once via the address-bar warning).
+      return `https://${vehicleIp}:8443/ssh-key?hash=${hash}`;
     } catch (e) {
       console.error("Failed to build SSH key download URL:", e);
       return null;
