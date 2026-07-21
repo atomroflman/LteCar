@@ -20,6 +20,11 @@ export default function SshKeyManager({ carId }: SshKeyManagerProps) {
   const [vehicleIp, setVehicleIp] = useState("");
   const [hasStoredKey, setHasStoredKey] = useState(getSshPrivateKey(carId) !== null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // ponytail: only Firefox can permanently accept a self-signed TLS
+  // exception. Chrome/Edge forget the exception when the process exits, so
+  // fetch() from an HTTPS page to a self-signed HTTPS host would silently
+  // break on every browser restart. Other browsers get a curl hint instead.
+  const isFirefox = typeof navigator !== "undefined" && /Firefox/i.test(navigator.userAgent);
 
   const handleDownloadKeyFromVehicle = async () => {
     if (!vehicleIp.trim()) {
@@ -180,8 +185,9 @@ export default function SshKeyManager({ carId }: SshKeyManagerProps) {
                 <div className="flex items-center space-x-1">
                   <button
                     onClick={handleDownloadKeyFromVehicle}
-                    disabled={isLoading || !vehicleIp.trim()}
+                    disabled={isLoading || !vehicleIp.trim() || !isFirefox}
                     className="flex-1 px-2 py-1 bg-zinc-700 hover:bg-zinc-600 disabled:bg-zinc-800 disabled:text-zinc-600 rounded text-zinc-200 transition-colors"
+                    title={isFirefox ? undefined : messages.sshKeyManager.fetchViaUiFirefoxOnly}
                   >
                     {messages.sshKeyManager.fetchViaUi}
                   </button>
@@ -191,13 +197,18 @@ export default function SshKeyManager({ carId }: SshKeyManagerProps) {
                       if (url) window.open(url, '_blank');
                       else setMessage({ type: 'error', text: messages.sshKeyManager.buildUrlFailed });
                     }}
-                    disabled={!vehicleIp.trim()}
+                    disabled={!vehicleIp.trim() || !isFirefox}
                     className="px-2 py-1 bg-zinc-700 hover:bg-zinc-600 disabled:bg-zinc-800 disabled:text-zinc-600 rounded text-zinc-200 transition-colors"
-                    title={messages.sshKeyManager.openLocalDownloadLink}
+                    title={isFirefox ? messages.sshKeyManager.openLocalDownloadLink : messages.sshKeyManager.openLinkFirefoxOnly}
                   >
                     {messages.common.openLink}
                   </button>
                 </div>
+                {!isFirefox && (
+                  <p className="text-xs text-zinc-400 mt-1">
+                    {messages.sshKeyManager.fetchViaUiCurlHint}
+                  </p>
+                )}
                   </div>
                 )}
               </div>

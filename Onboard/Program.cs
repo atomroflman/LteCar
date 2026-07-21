@@ -1,7 +1,9 @@
-using System.Text.Json;
+using System.Net;
+using System.Net.Security;
+using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Text;
-using System.Net;
+using System.Text.Json;
 using Spectre.Console;
 using LteCar.Onboard;
 using LteCar.Onboard.Control;
@@ -118,10 +120,12 @@ var serviceCollection = new ServiceCollection();
 serviceCollection.AddSingleton<ChannelMap>(channelMap);
 serviceCollection.AddSingleton<IConfiguration>(configuration);
 serviceCollection.AddSingleton(channelStore);
+serviceCollection.AddSingleton(configLoader);
 
 // Hub Connections
 serviceCollection.AddSingleton<IOnboardBuildInfoService, OnboardBuildInfoService>();
 serviceCollection.AddSingleton<ServerConnectionService>();
+serviceCollection.AddSingleton<AvailableChannelTypesService>();
 serviceCollection.AddSingleton<IMediaMtxConfigurator, MediaMtxConfigurator>();
 serviceCollection.AddSingleton<VideoStreamService>();
 serviceCollection.AddSingleton<ServerCarConfigurationService>();
@@ -130,6 +134,7 @@ serviceCollection.AddSingleton<TelemetryService>();
 serviceCollection.AddSingleton<BashToolService>();
 
 serviceCollection.AddSingleton<SshKeyService>();
+serviceCollection.AddSingleton<TlsCertificateService>();
 serviceCollection.AddSingleton<ControlExecutionService>();
 serviceCollection.AddSingleton<TelemetryStore>();
 serviceCollection.AddTransient<Bash>();
@@ -210,133 +215,239 @@ var videoStreamService = serviceProvider.GetRequiredService<VideoStreamService>(
 logger.LogInformation("Initializing video streaming...");
 await videoStreamService.Connect();
 
-// Start HTTP server for SSH key download only if private key still exists
+// SECURITY: this listener is the ONLY supported path for the private SSH
+// key to leave the Onboard. It is bound to the LAN-only "+:8080" prefix
+// and only reachable from the same network as the vehicle. The key MUST
+// NOT be exposed through SignalR, REST, WebSocket, or any Server-routed
+// channel — those traverse the public-internet Server and would leak it
+// to any browser session. See SshKeyService.cs for the matching doc.
+// One-shot: starts only while ssh_key still exists; deletes the file on
+// first successful fetch so a second fetch always returns 404. The HTTPS
+// listener (8443) exists so browsers can `fetch()` from an HTTPS page without
+// mixed-content blocking — Firefox gates "Fetch via UI" because it's the only
+// mainstream browser that lets the user permanently accept a self-signed
+// exception. HTTP (8080) stays for curl users and LAN scripts.
 var keyDownloaded = !File.Exists(sshKeyPath);
 if (!keyDownloaded)
 {
+    var keepPrivateKey = configuration.GetValue<bool>("KeepPrivateKey");
+    var tlsCertService = serviceProvider.GetRequiredService<TlsCertificateService>();
+    var tlsCert = tlsCertService.GetOrCreateCertificate();
+
+    // ponytail: shared decision logic for both listeners. Caller wraps
+    // the result in whatever wire format (HTTP/1.1 status line for raw
+    // sockets, HttpListenerResponse for HttpListener). HTTPS handshake
+    // uses the cert we just loaded; nothing in the body differs.
+    static (int Status, string ContentType, byte[] Body, bool Deleted) DecideSshKeyResponse(
+        string method, string pathAndQuery,
+        string sshKeyPath, string carIdentityKey, bool keepPrivateKey, ILogger logger)
+    {
+        if (string.Equals(method, "OPTIONS", StringComparison.OrdinalIgnoreCase))
+            return (200, "", Array.Empty<byte>(), false);
+
+        var qIdx = pathAndQuery.IndexOf('?');
+        var path = qIdx < 0 ? pathAndQuery : pathAndQuery[..qIdx];
+        if (path != "/ssh-key")
+            return (404, "", Array.Empty<byte>(), false);
+
+        var query = qIdx < 0 ? "" : pathAndQuery[(qIdx + 1)..];
+        string? hash = null;
+        foreach (var pair in query.Split('&', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var eq = pair.IndexOf('=');
+            if (eq <= 0) continue;
+            var key = Uri.UnescapeDataString(pair[..eq]);
+            if (string.Equals(key, "hash", StringComparison.Ordinal))
+            {
+                hash = Uri.UnescapeDataString(pair[(eq + 1)..]);
+                break;
+            }
+        }
+        if (string.IsNullOrEmpty(hash))
+            return (400, "text/plain", Encoding.UTF8.GetBytes("Missing identity hash parameter"), false);
+
+        var actualHash = LteCar.Shared.HashUtility.GenerateSha256Hash(carIdentityKey);
+        if (!string.Equals(actualHash, hash, StringComparison.OrdinalIgnoreCase))
+        {
+            logger.LogWarning($"SSH key download attempt with wrong identity hash. Expected: {actualHash}, Got: {hash}");
+            return (403, "text/plain", Encoding.UTF8.GetBytes("Identity verification failed - this is not the selected vehicle"), false);
+        }
+
+        if (!File.Exists(sshKeyPath))
+            return (404, "text/plain", Encoding.UTF8.GetBytes("SSH private key not available."), false);
+
+        var keyBytes = File.ReadAllBytes(sshKeyPath);
+        if (!keepPrivateKey)
+        {
+            File.Delete(sshKeyPath);
+            logger.LogInformation("SSH private key downloaded and deleted for security.");
+            return (200, "application/octet-stream", keyBytes, true);
+        }
+        logger.LogWarning("SSH private key downloaded but retained as per configuration.");
+        return (200, "application/octet-stream", keyBytes, false);
+    }
+
+    static string StatusText(int code) => code switch
+    {
+        200 => "OK",
+        400 => "Bad Request",
+        403 => "Forbidden",
+        404 => "Not Found",
+        _ => "OK",
+    };
+
+    // HTTP listener (curl, LAN scripts)
     var httpListener = new HttpListener();
     httpListener.Prefixes.Add("http://+:8080/");
     httpListener.Start();
 
-    var keepPrivateKey = configuration.GetValue<bool>("KeepPrivateKey");
-    // Handle SSH key download requests
+    // HTTPS listener (browser fetch). HttpListener on .NET / Linux doesn't
+    // expose ListenerCertificate, so we hand-roll a TCP+SslStream loop and
+    // serialize a minimal HTTP/1.1 response ourselves.
+    var tcpListener = new TcpListener(IPAddress.Any, 8443);
+    tcpListener.Start();
+
+    async Task WriteHttpResponseAsync(Stream stream, int status, string contentType, byte[] body)
+    {
+        var sb = new StringBuilder();
+        sb.Append("HTTP/1.1 ").Append(status).Append(' ').Append(StatusText(status)).Append("\r\n");
+        sb.Append("Access-Control-Allow-Origin: *\r\n");
+        sb.Append("Access-Control-Allow-Methods: GET, OPTIONS\r\n");
+        sb.Append("Access-Control-Allow-Headers: Content-Type\r\n");
+        if (status == 200 && body.Length > 0)
+            sb.Append("Content-Disposition: attachment; filename=\"vehicle-ssh-key.der\"\r\n");
+        if (contentType.Length > 0)
+            sb.Append("Content-Type: ").Append(contentType).Append("\r\n");
+        sb.Append("Content-Length: ").Append(body.Length).Append("\r\n");
+        sb.Append("Connection: close\r\n\r\n");
+        var headerBytes = Encoding.ASCII.GetBytes(sb.ToString());
+        await stream.WriteAsync(headerBytes);
+        if (body.Length > 0)
+            await stream.WriteAsync(body);
+        await stream.FlushAsync();
+    }
+
     _ = Task.Run(async () =>
     {
         while (httpListener.IsListening)
         {
             try
             {
-                var context = await httpListener.GetContextAsync();
-                
-                // Handle CORS preflight requests
-                if (context.Request.HttpMethod == "OPTIONS")
+                var ctx = await httpListener.GetContextAsync();
+                try
                 {
-                    context.Response.Headers.Add("Access-Control-Allow-Origin", "*");
-                    context.Response.Headers.Add("Access-Control-Allow-Methods", "GET, OPTIONS");
-                    context.Response.Headers.Add("Access-Control-Allow-Headers", "Content-Type");
-                    context.Response.StatusCode = 200;
-                    context.Response.Close();
-                    continue;
-                }
-                
-                if (context.Request.Url?.AbsolutePath == "/ssh-key")
-                {
-                    // Verify identity hash from query parameter
-                    var expectedHash = context.Request.QueryString.Get("hash");
-                    if (string.IsNullOrEmpty(expectedHash))
+                    var (status, contentType, body, deleted) = DecideSshKeyResponse(
+                        ctx.Request.HttpMethod ?? "GET",
+                        ctx.Request.Url?.PathAndQuery ?? "",
+                        sshKeyPath, carIdentityKey, keepPrivateKey, logger);
+
+                    var resp = ctx.Response;
+                    resp.Headers.Add("Access-Control-Allow-Origin", "*");
+                    resp.Headers.Add("Access-Control-Allow-Methods", "GET, OPTIONS");
+                    resp.Headers.Add("Access-Control-Allow-Headers", "Content-Type");
+                    resp.StatusCode = status;
+                    if (contentType.Length > 0) resp.ContentType = contentType;
+                    if (status == 200 && body.Length > 0)
+                        resp.Headers.Add("Content-Disposition", "attachment; filename=\"vehicle-ssh-key.der\"");
+                    if (body.Length > 0)
                     {
-                        context.Response.StatusCode = 400;
-                        context.Response.ContentType = "text/plain";
-                        context.Response.Headers.Add("Access-Control-Allow-Origin", "*");
-                        var message = "Missing identity hash parameter";
-                        var buffer = Encoding.UTF8.GetBytes(message);
-                        context.Response.ContentLength64 = buffer.Length;
-                        await context.Response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
-                        context.Response.OutputStream.Close();
-                        continue;
+                        resp.ContentLength64 = body.Length;
+                        await resp.OutputStream.WriteAsync(body);
                     }
+                    resp.Close();
 
-                    // Compute hash of our carIdentityKey
-                    var actualHash = LteCar.Shared.HashUtility.GenerateSha256Hash(carIdentityKey);
-
-                    // Verify the hash matches
-                    if (!string.Equals(actualHash, expectedHash, StringComparison.OrdinalIgnoreCase))
+                    if (deleted)
                     {
-                        context.Response.StatusCode = 403;
-                        context.Response.ContentType = "text/plain";
-                        context.Response.Headers.Add("Access-Control-Allow-Origin", "*");
-                        var message = "Identity verification failed - this is not the selected vehicle";
-                        var buffer = Encoding.UTF8.GetBytes(message);
-                        context.Response.ContentLength64 = buffer.Length;
-                        await context.Response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
-                        context.Response.OutputStream.Close();
-                        logger.LogWarning($"SSH key download attempt with wrong identity hash. Expected: {actualHash}, Got: {expectedHash}");
-                        continue;
-                    }
-
-                    if (File.Exists(sshKeyPath))
-                    {
-                        // Serve the private key (PKCS#8 DER binary) and mark as downloaded
-                        var privateKeyBytes = File.ReadAllBytes(sshKeyPath);
-                        var response = context.Response;
-
-                        // Add CORS headers to allow browser access
-                        response.Headers.Add("Access-Control-Allow-Origin", "*");
-                        response.Headers.Add("Access-Control-Allow-Methods", "GET, OPTIONS");
-                        response.Headers.Add("Access-Control-Allow-Headers", "Content-Type");
-
-                        response.ContentType = "application/octet-stream";
-                        response.Headers.Add("Content-Disposition", "attachment; filename=\"vehicle-ssh-key.der\"");
-                        response.ContentLength64 = privateKeyBytes.Length;
-                        await response.OutputStream.WriteAsync(privateKeyBytes, 0, privateKeyBytes.Length);
-                        response.OutputStream.Close();
-
-                        // Delete the private key for security (this marks it as downloaded)
-                        if (!keepPrivateKey)
-                        {
-                            File.Delete(sshKeyPath);
-                            logger.LogInformation("SSH private key downloaded and deleted for security.");
-
-                            // Stop the HTTP server since key is no longer available
-                            httpListener.Stop();
-                            logger.LogInformation("SSH key download server stopped - key no longer available.");
-                        }
-                        else
-                        {
-                            logger.LogWarning("SSH private key downloaded but retained as per configuration.");
-                        }
-                    }
-                    else
-                    {
-                        // No private key available
-                        context.Response.StatusCode = 404;
-                        context.Response.ContentType = "text/plain";
-                        context.Response.Headers.Add("Access-Control-Allow-Origin", "*");
-                        var message = "SSH private key not available.";
-                        var buffer = Encoding.UTF8.GetBytes(message);
-                        context.Response.ContentLength64 = buffer.Length;
-                        await context.Response.OutputStream.WriteAsync(buffer, 0, buffer.Length);
-                        context.Response.OutputStream.Close();
+                        logger.LogInformation("SSH key download server stopped - key no longer available.");
+                        httpListener.Stop();
                     }
                 }
-                else
+                catch (Exception ex)
                 {
-                    context.Response.StatusCode = 404;
-                    context.Response.Close();
+                    logger.LogError(ex, "Error in HTTP listener");
                 }
             }
             catch (Exception ex)
             {
-                logger.LogError(ex, "Error in HTTP listener");
+                logger.LogError(ex, "Error accepting HTTP connection");
             }
         }
     });
 
-    logger.LogInformation("SSH key download server started on port 8080");
+    _ = Task.Run(async () =>
+    {
+        while (true)
+        {
+            TcpClient? client = null;
+            SslStream? ssl = null;
+            try
+            {
+                client = await tcpListener.AcceptTcpClientAsync();
+                ssl = new SslStream(client.GetStream(), leaveInnerStreamOpen: false);
+                await ssl.AuthenticateAsServerAsync(tlsCert, clientCertificateRequired: false, checkCertificateRevocation: false);
+
+                // Minimal HTTP/1.1 request parser: read headers until CRLFCRLF.
+                // Don't parse body — we don't accept one. Cap at 8 KiB to avoid
+                // a malicious client streaming forever.
+                var buf = new byte[8192];
+                var headerBuf = new System.IO.MemoryStream();
+                int headerEnd = -1;
+                while (headerEnd < 0)
+                {
+                    var read = await ssl.ReadAsync(buf, 0, buf.Length);
+                    if (read <= 0) break;
+                    headerBuf.Write(buf, 0, read);
+                    var span = headerBuf.GetBuffer().AsSpan(0, (int)headerBuf.Length);
+                    for (int i = 3; i < span.Length; i++)
+                    {
+                        if (span[i - 3] == (byte)'\r' && span[i - 2] == (byte)'\n' &&
+                            span[i - 1] == (byte)'\r' && span[i] == (byte)'\n')
+                        {
+                            headerEnd = i + 1;
+                            break;
+                        }
+                    }
+                    if (headerBuf.Length >= buf.Length && headerEnd < 0)
+                        break; // oversize; bail
+                }
+
+                if (headerEnd < 0) { ssl.Close(); client.Close(); continue; }
+
+                var headers = Encoding.ASCII.GetString(headerBuf.GetBuffer(), 0, headerEnd);
+                var firstLineEnd = headers.IndexOf("\r\n", StringComparison.Ordinal);
+                var firstLine = firstLineEnd < 0 ? headers : headers[..firstLineEnd];
+                var parts = firstLine.Split(' ');
+                var method = parts.Length > 0 ? parts[0] : "GET";
+                var target = parts.Length > 1 ? parts[1] : "/";
+
+                var (status, contentType, body, deleted) = DecideSshKeyResponse(
+                    method, target, sshKeyPath, carIdentityKey, keepPrivateKey, logger);
+                await WriteHttpResponseAsync(ssl, status, contentType, body);
+
+                ssl.Close();
+                client.Close();
+
+                if (deleted)
+                {
+                    logger.LogInformation("HTTPS SSH key server stopped - key no longer available.");
+                    tcpListener.Stop();
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error in HTTPS listener");
+                ssl?.Close();
+                client?.Close();
+            }
+        }
+    });
+
+    logger.LogInformation("SSH key download server started on http://+:8080/ and https://+:8443/");
 }
 else
 {
-    logger.LogInformation("SSH key already downloaded - HTTP server not started");
+    logger.LogInformation("SSH key already downloaded - listeners not started");
 }
 
 // Initialize telemetry
