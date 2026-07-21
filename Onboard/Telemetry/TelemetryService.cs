@@ -45,9 +45,8 @@ public class TelemetryService : IHubConnectionObserver, ITelemetryClient
     public IServiceProvider ServiceProvider { get; }
     public ChannelMap ChannelMap { get; }
     public ServerCarConfigurationService CarConfigurationService { get; }
-    public TelemetryStore TelemetryStore { get; }
 
-public TelemetryService(ChannelMap channelMap, ServerConnectionService serverConnectionService, IConfiguration configuration, ILogger<TelemetryService> logger, IServiceProvider serviceProvider, ServerCarConfigurationService carConfigurationService, TelemetryStore telemetryStore)
+public TelemetryService(ChannelMap channelMap, ServerConnectionService serverConnectionService, IConfiguration configuration, ILogger<TelemetryService> logger, IServiceProvider serviceProvider, ServerCarConfigurationService carConfigurationService)
     {
         ServiceProvider = serviceProvider;
         ChannelMap = channelMap;
@@ -55,7 +54,6 @@ public TelemetryService(ChannelMap channelMap, ServerConnectionService serverCon
         Configuration = configuration;
         Logger = logger;
         CarConfigurationService = carConfigurationService;
-        TelemetryStore = telemetryStore;
         CarConfigurationService.OnConfigurationChanged += HandleCarConfigurationChanged;
 
         foreach (var kv in ChannelMap.TelemetryChannels)
@@ -167,11 +165,24 @@ public TelemetryService(ChannelMap channelMap, ServerConnectionService serverCon
         return Task.FromResult<IEnumerable<string>>(_channelIndex.Keys.ToList());
     }
 
-    public Task UpdateTelemetry(string valueName, string value)
+    public async Task UpdateTelemetry(string valueName, string value)
     {
-        TelemetryStore.Set(valueName, value);
-        Logger.LogInformation("Telemetry stored: {Channel}={Value}", valueName, value);
-        return Task.CompletedTask;
+        if (!ServerConnectionService.IsConnected)
+        {
+            Logger.LogError("Cannot send telemetry: Connection is not established.");
+            return;
+        }
+        if (_server == null)
+        {
+            Logger.LogError("Cannot send telemetry: Server proxy is not set.");
+            return;
+        }
+        if (_carId == null)
+        {
+            Logger.LogError("Cannot send telemetry: CarId is not set.");
+            return;
+        }
+        await _server.UpdateTelemetry(_carId, valueName, value);
     }
 
     public async Task Tick()

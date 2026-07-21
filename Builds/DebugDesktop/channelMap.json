@@ -4,6 +4,10 @@
     "log": {
       "controlType": "LoggingOnly",
       "testDisabled": true
+    },
+    "debug": {
+      "controlType": "LoopbackToTelemetry",
+      "testDisabled": true
     }
   },
   "telemetryChannels": {
@@ -11,7 +15,7 @@
       "telemetryType": "LteCar.Onboard.Telemetry.CpuTemperatureReader",
       "readIntervalTicks": 1000
     },
-    "store": {
+    "debug": {
       "telemetryType": "LteCar.Onboard.Telemetry.StoreBackedTelemetryReader",
       "readIntervalTicks": 10
     }
