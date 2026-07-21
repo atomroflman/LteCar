@@ -21,13 +21,13 @@ public class ConfigLoader
     {
         _defaultConfigDir = defaultConfigDir;
         _configDirFile = Path.Combine(defaultConfigDir, ".configdir");
-        
+
         var savedConfigDir = LoadSavedConfigDir();
-        _configDir = customConfigDir ?? savedConfigDir ?? FindConfigDir();
-        
+        _configDir = Path.GetFullPath(customConfigDir ?? savedConfigDir ?? FindConfigDir());
+
         if (customConfigDir != null && customConfigDir != savedConfigDir)
         {
-            SaveConfigDir(customConfigDir);
+            SaveConfigDir(_configDir);
         }
     }
 
