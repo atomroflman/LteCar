@@ -8,6 +8,7 @@ public interface IConnectionHubServer
     // Connection lifecycle (onboard → server, browser → server)
     Task<CarConfiguration> OpenCarConnection(string carIdentityKey, string channelMapHash);
     Task ReportOnboardVersion(string branch, string? commit);
+    Task RegisterAvailableChannelTypes(int carId, AvailableChannelTypes types);
     Task UpdateChannelMap(int carId, ChannelMap channelMap);
     Task<ChannelMapSyncResponse> SyncChannelMap(ChannelMapSyncRequest request);
     Task ReportFileTransferStatus(FileTransferStatusUpdate update);

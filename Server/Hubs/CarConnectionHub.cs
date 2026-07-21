@@ -37,6 +37,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
     private readonly CarConnectionStore _connectionStore;
     private readonly SqidsEncoder<long> _sqidsEncoder;
     private readonly ActiveVideoStreamViewerRegistry _viewerRegistry;
+    private readonly AvailableTypesRegistry _availableTypes;
 
     public CarConnectionHub(
         IConfigurationService configService,
@@ -44,7 +45,8 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
         VideoStreamReceiverService streamService,
         CarConnectionStore connectionStore,
         SqidsEncoder<long> sqidsEncoder,
-        ActiveVideoStreamViewerRegistry viewerRegistry)
+        ActiveVideoStreamViewerRegistry viewerRegistry,
+        AvailableTypesRegistry availableTypes)
     {
         Logger = logger;
         _streamService = streamService;
@@ -52,6 +54,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
         _connectionStore = connectionStore;
         _sqidsEncoder = sqidsEncoder;
         _viewerRegistry = viewerRegistry;
+        _availableTypes = availableTypes;
     }
 
     public VideoStreamReceiverService VideoStreamReceiverService => _streamService;
@@ -145,6 +148,14 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
         }
         _connectionStore.TrySetOnboardVersion(carId, branch, commit);
         Logger.LogInformation("Car {CarId} reports onboard version {Branch}@{Commit}", carId, branch, commit);
+        return Task.CompletedTask;
+    }
+
+    public Task RegisterAvailableChannelTypes(int carId, AvailableChannelTypes types)
+    {
+        _availableTypes.Set(carId, types);
+        Logger.LogInformation("Car {CarId} registered {Control} control types and {Telemetry} telemetry types",
+            carId, types.ControlTypes.Length, types.TelemetryTypes.Length);
         return Task.CompletedTask;
     }
 

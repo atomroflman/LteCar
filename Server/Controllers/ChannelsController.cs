@@ -1,6 +1,7 @@
 using System.Text.Json;
 using LteCar.Server.Data;
 using LteCar.Server.Hubs;
+using LteCar.Server.Services;
 using LteCar.Shared;
 using LteCar.Shared.Channels;
 using LteCar.Shared.HubClients;
@@ -19,11 +20,13 @@ namespace LteCar.Server.Controllers;
 public class ChannelsController : ControllerBase
 {
     private readonly IHubContext<CarConnectionHub, IConnectionHubClient> _controlHub;
+    private readonly AvailableTypesRegistry _availableTypes;
     private readonly ILogger<ChannelsController> _logger;
 
-    public ChannelsController(LteCarContext context, IHubContext<CarConnectionHub, IConnectionHubClient> controlHub, ILogger<ChannelsController> logger) : base(context)
+    public ChannelsController(LteCarContext context, IHubContext<CarConnectionHub, IConnectionHubClient> controlHub, AvailableTypesRegistry availableTypes, ILogger<ChannelsController> logger) : base(context)
     {
         _controlHub = controlHub;
+        _availableTypes = availableTypes;
         _logger = logger;
     }
 
@@ -253,6 +256,27 @@ public class ChannelsController : ControllerBase
         await _controlHub.Clients.Group($"Car-{carId}").DeleteVideoStream(streamId);
         _logger.LogInformation("Delete video stream {Stream} for car {CarId} by {User}", streamId, carId, user.LoginName);
         return NoContent();
+    }
+
+    // ponytail: empty array when the Onboard hasn't reported yet (offline or
+    // pre-handshake). The browser treats "no entries" as "no autocomplete"
+    // and falls back to free-text input — same UX as before the endpoint
+    // existed. We don't 404 because a transient offline Onboard shouldn't
+    // be a hard error on every page load.
+    [HttpGet("available-control-types")]
+    public async Task<IActionResult> GetAvailableControlTypes(int carId)
+    {
+        var user = await GetCurrentUserAsync();
+        if (user == null) return Unauthorized();
+        return Ok(_availableTypes.Get(carId)?.ControlTypes ?? Array.Empty<string>());
+    }
+
+    [HttpGet("available-telemetry-types")]
+    public async Task<IActionResult> GetAvailableTelemetryTypes(int carId)
+    {
+        var user = await GetCurrentUserAsync();
+        if (user == null) return Unauthorized();
+        return Ok(_availableTypes.Get(carId)?.TelemetryTypes ?? Array.Empty<string>());
     }
 
     private static ControlChannelMapItem ToMapItem(CarChannel ch) => new()

@@ -29,6 +29,7 @@ public class ServerConnectionService
     private readonly ChannelMap _channelMap;
     private readonly IConfiguration _configuration;
     private readonly IOnboardBuildInfoService _buildInfo;
+    private readonly AvailableChannelTypesService _availableTypes;
     private readonly HttpClient _http;
     private HubConnection _connection;
     private ChannelMapSyncResponse? _lastSync;
@@ -51,13 +52,15 @@ public class ServerConnectionService
         IConfiguration configuration,
         IServiceProvider serviceProvider,
         ILogger<ServerConnectionService> logger,
-        IOnboardBuildInfoService buildInfo)
+        IOnboardBuildInfoService buildInfo,
+        AvailableChannelTypesService availableTypes)
     {
         ServiceProvider = serviceProvider;
         Logger = logger;
         _channelMap = channelMap;
         _configuration = configuration;
         _buildInfo = buildInfo;
+        _availableTypes = availableTypes;
         _http = new HttpClient { Timeout = TimeSpan.FromSeconds(5) };
     }
 
@@ -101,6 +104,7 @@ public class ServerConnectionService
             return Task.CompletedTask;
         };
         await _connection.StartAsync();
+        _connection.Reconnected += _ => RegisterAvailableTypesAsync();
 
         // Register each Onboard service under its own narrow SignalR-client
         // interface so the merged hub can push the matching subset of calls
@@ -156,6 +160,22 @@ public class ServerConnectionService
         catch (Exception ex)
         {
             Logger.LogWarning(ex, "Failed to report onboard version to server");
+        }
+
+        await RegisterAvailableTypesAsync();
+    }
+
+    private async Task RegisterAvailableTypesAsync()
+    {
+        if (_connection == null || !_serverAssignedCarId.HasValue) return;
+        try
+        {
+            var proxy = _connection.CreateHubProxy<IConnectionHubServer>();
+            await proxy.RegisterAvailableChannelTypes(_serverAssignedCarId.Value, _availableTypes.GetAvailableTypes());
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to register available channel types with server");
         }
     }
 

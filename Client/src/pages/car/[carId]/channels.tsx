@@ -61,8 +61,8 @@ const btnDanger = "px-2 py-1 bg-red-900 hover:bg-red-800 text-red-100 rounded te
 const btnGhost = "px-2 py-1 bg-zinc-800 hover:bg-zinc-700 text-zinc-200 rounded text-xs border border-zinc-700";
 
 function ControlEditor({
-  initial, isNew, onSave, onCancel,
-}: { initial?: ControlChannel; isNew: boolean; onSave: (c: ControlChannel) => Promise<void>; onCancel: () => void }) {
+  initial, isNew, onSave, onCancel, controlTypes,
+}: { initial?: ControlChannel; isNew: boolean; onSave: (c: ControlChannel) => Promise<void>; onCancel: () => void; controlTypes: string[] }) {
   const [c, setC] = useState<ControlChannel>(initial ?? {
     channelName: "", displayName: "", isEnabled: true, requiresAxis: false, maxResendInterval: null,
     controlType: "", pinManager: "default", address: null, testDisabled: false, optionsJson: "",
@@ -72,7 +72,9 @@ function ControlEditor({
     <div className="grid grid-cols-2 gap-2 p-2 border border-zinc-700 rounded bg-zinc-950">
       <Field label="Channel name"><input className={inputClass} value={c.channelName} onChange={e => update({ channelName: e.target.value })} disabled={!isNew} /></Field>
       <Field label="Display name"><input className={inputClass} value={c.displayName ?? ""} onChange={e => update({ displayName: e.target.value })} /></Field>
-      <Field label="Control type"><input className={inputClass} value={c.controlType} onChange={e => update({ controlType: e.target.value })} placeholder="e.g. Steering, PwmLight" /></Field>
+      <Field label="Control type">
+        <input className={inputClass} value={c.controlType} onChange={e => update({ controlType: e.target.value })} list="control-type-options" placeholder="e.g. Steering, PwmLight" />
+      </Field>
       <Field label="Pin manager"><input className={inputClass} value={c.pinManager} onChange={e => update({ pinManager: e.target.value })} /></Field>
       <Field label="Address (int)"><input className={inputClass} type="number" value={c.address ?? ""} onChange={e => update({ address: e.target.value === "" ? null : Number(e.target.value) })} /></Field>
       <Field label="Max resend interval (ms)"><input className={inputClass} type="number" value={c.maxResendInterval ?? ""} onChange={e => update({ maxResendInterval: e.target.value === "" ? null : Number(e.target.value) })} /></Field>
@@ -91,8 +93,8 @@ function ControlEditor({
 }
 
 function TelemetryEditor({
-  initial, isNew, onSave, onCancel,
-}: { initial?: TelemetryChannel; isNew: boolean; onSave: (t: TelemetryChannel) => Promise<void>; onCancel: () => void }) {
+  initial, isNew, onSave, onCancel, telemetryTypes,
+}: { initial?: TelemetryChannel; isNew: boolean; onSave: (t: TelemetryChannel) => Promise<void>; onCancel: () => void; telemetryTypes: string[] }) {
   const [t, setT] = useState<TelemetryChannel>(initial ?? {
     channelName: "", readIntervalTicks: 1000, telemetryType: "", dataType: 0, unit: "", decimals: null,
   });
@@ -100,7 +102,9 @@ function TelemetryEditor({
   return (
     <div className="grid grid-cols-2 gap-2 p-2 border border-zinc-700 rounded bg-zinc-950">
       <Field label="Channel name"><input className={inputClass} value={t.channelName} onChange={e => update({ channelName: e.target.value })} disabled={!isNew} /></Field>
-      <Field label="Telemetry type"><input className={inputClass} value={t.telemetryType} onChange={e => update({ telemetryType: e.target.value })} placeholder="e.g. CpuTemperature" /></Field>
+      <Field label="Telemetry type">
+        <input className={inputClass + " font-mono"} value={t.telemetryType} onChange={e => update({ telemetryType: e.target.value })} list="telemetry-type-options" placeholder="e.g. LteCar.Onboard.Telemetry.CpuTemperatureReader" />
+      </Field>
       <Field label="Read interval (ms)"><input className={inputClass} type="number" value={t.readIntervalTicks} onChange={e => update({ readIntervalTicks: Number(e.target.value) })} /></Field>
       <Field label="Data type">
         <select className={inputClass} value={t.dataType} onChange={e => update({ dataType: Number(e.target.value) })}>
@@ -152,6 +156,8 @@ export default function ChannelsPage() {
   const [controls, setControls] = useState<ControlChannel[]>([]);
   const [telemetries, setTelemetries] = useState<TelemetryChannel[]>([]);
   const [videos, setVideos] = useState<VideoStream[]>([]);
+  const [availableControlTypes, setAvailableControlTypes] = useState<string[]>([]);
+  const [availableTelemetryTypes, setAvailableTelemetryTypes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingControl, setEditingControl] = useState<{ key: string; channel: ControlChannel; isNew: boolean } | null>(null);
   const [editingTelemetry, setEditingTelemetry] = useState<{ key: string; channel: TelemetryChannel; isNew: boolean } | null>(null);
@@ -206,6 +212,22 @@ export default function ChannelsPage() {
   }, [carIdNum]);
 
   useEffect(() => { reload(); }, [reload]);
+
+  // ponytail: fetch autocomplete data in parallel with channel reload. The
+  // Onboard reports these via SignalR after OpenCarConnection; the Server
+  // caches them per carId. Empty array when the Onboard is offline — the
+  // <datalist> just renders no <option>s, falling back to free-text.
+  useEffect(() => {
+    if (!carIdNum) return;
+    (async () => {
+      const [c, t] = await Promise.all([
+        fetch(`/api/cars/${carIdNum}/channels/available-control-types`).then(r => r.ok ? r.json() : []),
+        fetch(`/api/cars/${carIdNum}/channels/available-telemetry-types`).then(r => r.ok ? r.json() : []),
+      ]);
+      if (Array.isArray(c)) setAvailableControlTypes(c);
+      if (Array.isArray(t)) setAvailableTelemetryTypes(t);
+    })();
+  }, [carIdNum]);
 
   const saveControl = async (origKey: string, ch: ControlChannel, isNew: boolean) => {
     if (!carIdNum) return;
@@ -310,7 +332,7 @@ export default function ChannelsPage() {
             {controls.map(c => (
               <div key={c.channelName} className="border border-zinc-800 rounded p-2 bg-zinc-900">
                 {editingControl?.key === c.channelName && !editingControl.isNew ? (
-                  <ControlEditor initial={c} isNew={false} onSave={(nc) => saveControl(c.channelName, nc, false)} onCancel={() => setEditingControl(null)} />
+                  <ControlEditor initial={c} isNew={false} onSave={(nc) => saveControl(c.channelName, nc, false)} onCancel={() => setEditingControl(null)} controlTypes={availableControlTypes} />
                 ) : (
                   <div className="flex items-center justify-between">
                     <div className="font-mono text-xs">
@@ -327,7 +349,7 @@ export default function ChannelsPage() {
               </div>
             ))}
             {editingControl?.isNew && (
-              <ControlEditor isNew={true} onSave={(nc) => saveControl("__new__", nc, true)} onCancel={() => setEditingControl(null)} />
+              <ControlEditor isNew={true} onSave={(nc) => saveControl("__new__", nc, true)} onCancel={() => setEditingControl(null)} controlTypes={availableControlTypes} />
             )}
           </div>
         </CollapsibleSection>
@@ -338,7 +360,7 @@ export default function ChannelsPage() {
             {telemetries.map(t => (
               <div key={t.channelName} className="border border-zinc-800 rounded p-2 bg-zinc-900">
                 {editingTelemetry?.key === t.channelName && !editingTelemetry.isNew ? (
-                  <TelemetryEditor initial={t} isNew={false} onSave={(nt) => saveTelemetry(t.channelName, nt, false)} onCancel={() => setEditingTelemetry(null)} />
+                  <TelemetryEditor initial={t} isNew={false} onSave={(nt) => saveTelemetry(t.channelName, nt, false)} onCancel={() => setEditingTelemetry(null)} telemetryTypes={availableTelemetryTypes} />
                 ) : (
                   <div className="flex items-center justify-between">
                     <div className="font-mono text-xs">
@@ -354,7 +376,7 @@ export default function ChannelsPage() {
               </div>
             ))}
             {editingTelemetry?.isNew && (
-              <TelemetryEditor isNew={true} onSave={(nt) => saveTelemetry("__new__", nt, true)} onCancel={() => setEditingTelemetry(null)} />
+              <TelemetryEditor isNew={true} onSave={(nt) => saveTelemetry("__new__", nt, true)} onCancel={() => setEditingTelemetry(null)} telemetryTypes={availableTelemetryTypes} />
             )}
           </div>
         </CollapsibleSection>
@@ -385,6 +407,13 @@ export default function ChannelsPage() {
             )}
           </div>
         </CollapsibleSection>
+
+        <datalist id="control-type-options">
+          {availableControlTypes.map(t => <option key={t} value={t} />)}
+        </datalist>
+        <datalist id="telemetry-type-options">
+          {availableTelemetryTypes.map(t => <option key={t} value={t} />)}
+        </datalist>
       </div>
     </ConfigGuard>
   );
