@@ -10,6 +10,10 @@
     "cpuTemperature": {
       "telemetryType": "LteCar.Onboard.Telemetry.CpuTemperatureReader",
       "readIntervalTicks": 1000
+    },
+    "store": {
+      "telemetryType": "LteCar.Onboard.Telemetry.StoreBackedTelemetryReader",
+      "readIntervalTicks": 10
     }
   },
   "videoStreams": {

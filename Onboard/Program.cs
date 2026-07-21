@@ -131,6 +131,7 @@ serviceCollection.AddSingleton<BashToolService>();
 
 serviceCollection.AddSingleton<SshKeyService>();
 serviceCollection.AddSingleton<ControlExecutionService>();
+serviceCollection.AddSingleton<TelemetryStore>();
 serviceCollection.AddTransient<Bash>();
 serviceCollection.AddSingleton<IModuleManagerFactory, ModuleManagerFactory>();
 serviceCollection.AddAllTransient(typeof(TelemetryReaderBase));

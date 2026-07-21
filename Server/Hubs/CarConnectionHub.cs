@@ -775,7 +775,12 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
 
     public Task UpdateTelemetry(string carId, string valueName, string value)
     {
-        return Clients.Group($"car:{carId}").UpdateTelemetry(valueName, value);
+        // ponytail: also push to the onboard so StoreBackedTelemetryReader
+        // (or any reader that listens) can react to inbound telemetry values.
+        // Browser subscribers see it via the "car:" group as before.
+        return Task.WhenAll(
+            Clients.Group($"car:{carId}").UpdateTelemetry(valueName, value),
+            Clients.Group($"onboard-{carId}").UpdateTelemetry(valueName, value));
     }
 
     public Task SubscribeToCarTelemetry(string carId)
