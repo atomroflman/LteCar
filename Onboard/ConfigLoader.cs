@@ -152,7 +152,8 @@ public class ConfigLoader
             var json = await File.ReadAllTextAsync(ChannelMapPath);
             channelMap = JsonSerializer.Deserialize<ChannelMap>(json, new JsonSerializerOptions
             {
-                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                Converters = { new System.Text.Json.Serialization.JsonStringEnumConverter() }
             });
             // ponytail: stamp first-load JSON so LWW has a baseline; Phase 2 moves this to SQLite.
             var now = DateTime.UtcNow;
