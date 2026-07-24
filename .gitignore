@@ -20,6 +20,7 @@ LteCar.Server/configuration.db*
 Builds/*/carIdentityKey.txt
 Builds/*/ssh_key
 Builds/*/ssh_key.pub
+Builds/**/*.sqlite
 Server/Generated/**/*
 
 # opencode config (project-local agent/skill config, not part of the app)

@@ -99,10 +99,10 @@ ChannelMap channelMap;
 var channelsDbPath = Path.Combine(configLoader.ConfigDir, "channels.sqlite");
 var channelStoreLogger = LoggerFactory.Create(b => b.AddConsole()).CreateLogger<OnboardChannelStore>();
 var channelStore = new OnboardChannelStore(channelsDbPath, channelStoreLogger);
-await channelStore.InitializeAsync();
 
 if (File.Exists(channelsDbPath))
 {
+    await channelStore.InitializeAsync();
     channelMap = await channelStore.LoadAsync();
     AnsiConsole.MarkupLine($"[green]Loaded channel map from SQLite ({channelMap.ControlChannels.Count} control, {channelMap.TelemetryChannels.Count} telemetry, {channelMap.VideoStreams.Count} video)[/]");
 }
@@ -111,6 +111,7 @@ else
     channelMap = await configLoader.LoadConfigsAsync();
     if (channelMap == null)
         throw new Exception("channelMap.json could not be loaded");
+    await channelStore.InitializeAsync();
     await channelStore.ReplaceAllAsync(channelMap);
     AnsiConsole.MarkupLine($"[green]Migrated channelMap.json to SQLite at {channelsDbPath}[/]");
 }
