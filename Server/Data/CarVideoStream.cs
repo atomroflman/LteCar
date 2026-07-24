@@ -20,7 +20,7 @@ public class CarVideoStream : EntityBase, IVideoSettings
     // Transport details (existing)
     [Required]
     [MaxLength(10)]
-    public StreamProtocol Protocol { get; set; } // TCP, UDP
+    public StreamProtocol Protocol { get; set; } = StreamProtocol.UDP; // TCP, UDP
 
     [Required]
     public int Port { get; set; }
