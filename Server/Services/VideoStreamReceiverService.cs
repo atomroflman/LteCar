@@ -58,20 +58,7 @@ public class VideoStreamReceiverService
         }
         if (stream.IsActive)
         {
-            Logger.LogInformation("Stream '{StreamId}' is already active", stream.StreamId);
-            return new VideoSettings()
-            {
-                Protocol = stream.Protocol,
-                TargetPort = stream.Protocol == StreamProtocol.UDP
-                    ? stream.JanusPort ?? stream.Port
-                    : stream.Port,
-                BitrateKbps = stream.BitrateKbps,
-                Brightness = stream.Brightness,
-                Framerate = stream.Framerate,
-                Width = stream.Width,
-                Height = stream.Height,
-                JanusServer = JanusConfig.Value.HostName,
-            };
+            Logger.LogInformation("Stream '{StreamId}' is already active, recreating Janus mountpoint", stream.StreamId);
         }
         var protocol = stream.Protocol;
         var port = (stream.Port > 0 && IsPortAvailable(stream.Port, stream.Protocol)) ? stream.Port : FindFreePort(stream.Protocol);
