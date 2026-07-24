@@ -111,6 +111,10 @@ const deMessages = {
     noStreamSelected: 'Kein Stream ausgewahlt.',
     streamDisabledHint: 'Dieser Stream ist deaktiviert und wird erst wieder geoffnet, wenn ihn ein angemeldeter Fahrer aktiviert.',
     tabInactiveHint: 'Der Stream ist pausiert, weil dieser Browser-Tab nicht aktiv ist.',
+    sectionSelection: 'Auswahl',
+    sectionStatus: 'Status',
+    sectionVideo: 'Video',
+    dragHandle: 'Abschnitt verschieben',
   },
   videoSettings: {
     title: 'Video-Einstellungen',
@@ -319,6 +323,7 @@ const deMessages = {
       `Server (${serverBranch} @ ${serverCommit.slice(0, 7)}) und Onboard (${onboardBranch} @ ${onboardCommit.slice(0, 7)}) laufen auf unterschiedlichen Versionen.`,
     hint: 'Auf dem Onboard-Client `dotnet run -- update` ausfuhren, um die Version zu aktualisieren.',
     unknownOnboard: 'Onboard hat seine Version noch nicht gemeldet.',
+    dismiss: 'Hinweis schliessen',
   },
   setupTemplate: {
     title: 'Setup-Vorlage',
@@ -465,6 +470,10 @@ const enMessages: Messages = {
     noStreamSelected: 'No stream selected.',
     streamDisabledHint: 'This stream is disabled and will only reopen when an authenticated driver enables it again.',
     tabInactiveHint: 'The stream is paused because this browser tab is not active.',
+    sectionSelection: 'Selection',
+    sectionStatus: 'Status',
+    sectionVideo: 'Video',
+    dragHandle: 'Move section',
   },
   videoSettings: {
     title: 'Video Settings',
@@ -673,6 +682,7 @@ const enMessages: Messages = {
       `Server (${serverBranch} @ ${serverCommit.slice(0, 7)}) and onboard (${onboardBranch} @ ${onboardCommit.slice(0, 7)}) are running different versions.`,
     hint: 'Run `dotnet run -- update` on the onboard client to bring it up to date.',
     unknownOnboard: 'Onboard has not reported its version yet.',
+    dismiss: 'Dismiss notice',
   },
   setupTemplate: {
     title: 'Setup template',

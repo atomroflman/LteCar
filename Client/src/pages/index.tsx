@@ -71,14 +71,10 @@ export default function Home() {
             </div>
           </div>
 
-          <div className="flex flex-1 flex-col lg:flex-row">
-            <div className="flex-1 p-4 md:p-5">
-              {selectedCarId && (
-                <div className="mb-3">
-                  <VersionBanner carId={selectedCarId} />
-                </div>
-              )}
-              <div className="flex h-full min-h-[20rem] items-center justify-center overflow-hidden rounded-[28px] border border-white/8 bg-[linear-gradient(180deg,rgba(9,11,16,0.94),rgba(18,20,28,0.92))] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
+          <div className="flex flex-1 min-h-0 flex-col lg:flex-row">
+            <div className="flex min-h-0 flex-1 flex-col p-4 md:p-5">
+              {selectedCarId && <VersionBanner carId={selectedCarId} />}
+              <div className="flex min-h-0 flex-1 items-center justify-center overflow-hidden rounded-[28px] border border-white/8 bg-[linear-gradient(180deg,rgba(9,11,16,0.94),rgba(18,20,28,0.92))] shadow-[inset_0_1px_0_rgba(255,255,255,0.05)]">
                 <CarVideoPanel carId={selectedCarId} />
               </div>
             </div>
