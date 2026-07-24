@@ -112,6 +112,21 @@ public sealed class OnboardChannelStore
             }
         }
 
+        await using (var cmd = c.CreateCommand())
+        {
+            cmd.CommandText = "SELECT dict_key, type, options_json FROM pin_managers";
+            await using var rd = await cmd.ExecuteReaderAsync();
+            while (await rd.ReadAsync())
+            {
+                var item = new PinManagerMapItem
+                {
+                    Type = rd.IsDBNull(1) ? null : rd.GetString(1),
+                    Options = JsonSerializer.Deserialize<Dictionary<string, object>>(rd.GetString(2)) ?? new(),
+                };
+                map.PinManagers[rd.GetString(0)] = item;
+            }
+        }
+
         return map;
     }
 
@@ -251,9 +266,11 @@ public sealed class OnboardChannelStore
         await ExecAsync(c, tx, "DELETE FROM control_channels");
         await ExecAsync(c, tx, "DELETE FROM telemetry_channels");
         await ExecAsync(c, tx, "DELETE FROM video_streams");
+        await ExecAsync(c, tx, "DELETE FROM pin_managers");
         foreach (var (k, v) in map.ControlChannels) await UpsertAsync(c, tx, k, v);
         foreach (var (k, v) in map.TelemetryChannels) await UpsertAsync(c, tx, k, v);
         foreach (var (k, v) in map.VideoStreams) await UpsertAsync(c, tx, k, v);
+        foreach (var (k, v) in map.PinManagers) await UpsertAsync(c, tx, k, v);
         tx.Commit();
     }
 
@@ -338,6 +355,21 @@ public sealed class OnboardChannelStore
         await cmd.ExecuteNonQueryAsync();
     }
 
+    private static async Task UpsertAsync(SqliteConnection c, SqliteTransaction tx, string dictKey, PinManagerMapItem item)
+    {
+        await using var cmd = c.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = @"
+            INSERT INTO pin_managers (dict_key, type, options_json)
+            VALUES ($k, $t, $opts)
+            ON CONFLICT(dict_key) DO UPDATE SET
+                type=excluded.type, options_json=excluded.options_json;";
+        cmd.Parameters.AddWithValue("$k", dictKey);
+        cmd.Parameters.AddWithValue("$t", (object?)item.Type ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$opts", JsonSerializer.Serialize(item.Options));
+        await cmd.ExecuteNonQueryAsync();
+    }
+
     private static async Task ExecAsync(SqliteConnection c, SqliteTransaction tx, string sql)
     {
         await using var cmd = c.CreateCommand();
@@ -397,5 +429,10 @@ public sealed class OnboardChannelStore
             height INTEGER,
             framerate INTEGER,
             bitrate INTEGER
+        );
+        CREATE TABLE IF NOT EXISTS pin_managers (
+            dict_key TEXT PRIMARY KEY,
+            type TEXT,
+            options_json TEXT NOT NULL
         );";
 }
