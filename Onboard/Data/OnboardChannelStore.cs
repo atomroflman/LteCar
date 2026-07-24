@@ -324,8 +324,8 @@ public sealed class OnboardChannelStore
         cmd.Parameters.AddWithValue("$k", dictKey);
         cmd.Parameters.AddWithValue("$sid", item.StreamId);
         cmd.Parameters.AddWithValue("$name", (object?)item.Name ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("$loc", item.Location);
-        cmd.Parameters.AddWithValue("$type", item.Type);
+        cmd.Parameters.AddWithValue("$loc", (object?)item.Location ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$type", (object?)item.Type ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$en", item.Enabled);
         cmd.Parameters.AddWithValue("$svr", (object?)item.ServerId ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$mod", FormatDate(item.ModifiedAt));
