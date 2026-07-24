@@ -137,10 +137,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
 
     public Task ReportOnboardVersion(string branch, string? commit)
     {
-        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
-        var car = dbContext.Cars.FirstOrDefault(c => Context.ConnectionId != null && _connectionStore.Values.Any(v => v.ConnectionId == Context.ConnectionId));
-        var carId = car?.Id.ToString()
-            ?? _connectionStore.FirstOrDefault(kv => kv.Value.ConnectionId == Context.ConnectionId).Key;
+        var carId = _connectionStore.FirstOrDefault(kv => kv.Value.ConnectionId == Context.ConnectionId).Key;
         if (carId == null)
         {
             Logger.LogWarning("ReportOnboardVersion received without an active car connection");
