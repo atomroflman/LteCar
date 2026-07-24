@@ -10,6 +10,11 @@ import SessionTransfer from "@/components/session-transfer";
 import InstallDialog from "@/components/install-dialog";
 import LanguageSwitcher from "@/components/language-switcher";
 import VersionBanner from "@/components/version-banner";
+import GamepadViewer from "@/components/gamepad-viewer";
+import CarFunctionsView from "@/components/car-functions-view";
+import AudioChat from "@/components/audio-chat";
+import SshKeyManager from "@/components/ssh-key-manager";
+import SortableSectionList from "@/components/sortable-section-list";
 import { useI18n } from "@/i18n/provider";
 
 const geistSans = Geist({
@@ -47,6 +52,62 @@ export default function Home() {
     );
   }
 
+  const rightSections = [
+    {
+      id: "vehicle",
+      title: messages.carControl.vehicle,
+      content: <CarControl />,
+      visible: Boolean(selectedCarId),
+    },
+    {
+      id: "sshKey",
+      title: messages.sshKeyManager.sectionTitle,
+      content: <SshKeyManager carId={selectedCarId!} />,
+      visible: Boolean(selectedCarId && !carSession),
+    },
+    {
+      id: "gamepadViewer",
+      title: messages.gamepadViewer.title,
+      content: <GamepadViewer hideFlowButtons={true} />,
+      visible: Boolean(selectedCarId),
+    },
+    {
+      id: "carFunctions",
+      title: messages.carFunctions.title,
+      content: <CarFunctionsView carId={selectedCarId!} hideFlowButtons={true} />,
+      visible: Boolean(selectedCarId),
+    },
+    {
+      id: "audioChat",
+      title: messages.audioChat.title,
+      content: <AudioChat carId={selectedCarId!} />,
+      visible: Boolean(selectedCarId),
+    },
+    {
+      id: "sessionTransfer",
+      title: messages.sessionTransfer.title,
+      content: <SessionTransfer />,
+      visible: Boolean(selectedCarId),
+    },
+    {
+      id: "videoSettings",
+      title: messages.videoSettings.title,
+      content: (
+        <VideoSettingsControl
+          carId={selectedCarId!}
+          canManageEnabled={Boolean(user?.loginName && selectedCarId && carSession)}
+        />
+      ),
+      visible: Boolean(selectedCarId),
+    },
+    {
+      id: "ping",
+      title: messages.ping.title,
+      content: <Ping />,
+      visible: Boolean(selectedCarId),
+    },
+  ];
+
   return (
     <div
       className={`${geistSans.className} ${geistMono.className} h-screen overflow-hidden bg-[linear-gradient(180deg,#101217_0%,#17191f_46%,#111319_100%)] text-slate-100`}
@@ -79,26 +140,9 @@ export default function Home() {
               </div>
             </div>
 
-            <div className="w-full border-t border-white/8 bg-[linear-gradient(180deg,rgba(23,27,37,0.92),rgba(17,20,28,0.94))] lg:w-[24rem] lg:border-l lg:border-t-0 lg:border-white/8">
-              <div className="flex h-full flex-col">
-                <div className="border-b border-white/8 px-3 py-3">
-                  <div className="border border-white/8 bg-slate-900/45 shadow-[0_14px_32px_rgba(0,0,0,0.18)]">
-                    <CarControl />
-                  </div>
-                </div>
-                {selectedCarId && (
-                  <div className="space-y-3 overflow-y-auto px-3 py-3">
-                    <div className="border border-white/8 bg-slate-900/45 shadow-[0_14px_32px_rgba(0,0,0,0.18)]">
-                      <SessionTransfer />
-                    </div>
-                    <div className="border border-white/8 bg-slate-900/45 shadow-[0_14px_32px_rgba(0,0,0,0.18)]">
-                      <VideoSettingsControl carId={selectedCarId} canManageEnabled={Boolean(user?.loginName && selectedCarId && carSession)} />
-                    </div>
-                    <div className="border border-white/8 bg-slate-900/45 shadow-[0_14px_32px_rgba(0,0,0,0.18)]">
-                      <Ping />
-                    </div>
-                  </div>
-                )}
+            <div className="w-full min-h-0 border-t border-white/8 bg-[linear-gradient(180deg,rgba(23,27,37,0.92),rgba(17,20,28,0.94))] lg:w-[24rem] lg:border-l lg:border-t-0 lg:border-white/8">
+              <div className="h-full min-h-0 px-3 py-3">
+                <SortableSectionList storageKey="rightPanel" items={rightSections} />
               </div>
             </div>
           </div>

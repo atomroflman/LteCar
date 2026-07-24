@@ -38,6 +38,7 @@ const deMessages = {
     note: 'Hinweis',
     expandSection: (title: string) => `${title} ausklappen`,
     collapseSection: (title: string) => `${title} einklappen`,
+    dragHandle: 'Abschnitt verschieben',
   },
   home: {
     unauthenticated: 'Kein Benutzer angemeldet.',
@@ -111,10 +112,6 @@ const deMessages = {
     noStreamSelected: 'Kein Stream ausgewahlt.',
     streamDisabledHint: 'Dieser Stream ist deaktiviert und wird erst wieder geoffnet, wenn ihn ein angemeldeter Fahrer aktiviert.',
     tabInactiveHint: 'Der Stream ist pausiert, weil dieser Browser-Tab nicht aktiv ist.',
-    sectionSelection: 'Auswahl',
-    sectionStatus: 'Status',
-    sectionVideo: 'Video',
-    dragHandle: 'Abschnitt verschieben',
   },
   videoSettings: {
     title: 'Video-Einstellungen',
@@ -160,6 +157,7 @@ const deMessages = {
   sshKeyManager: {
     titleStored: 'SSH-Schlussel (gespeichert)',
     titleMissing: 'SSH-Schlussel (kein Schlussel)',
+    sectionTitle: 'SSH-Schlussel',
     enterVehicleIp: 'Bitte die IP-Adresse des Fahrzeugs eingeben',
     downloadSaved: 'SSH-Schlussel vom Fahrzeug geladen und im Browser gespeichert.',
     saveToBrowserFailed: 'SSH-Schlussel konnte nicht im Browser gespeichert werden.',
@@ -397,6 +395,7 @@ const enMessages: Messages = {
     note: 'Note',
     expandSection: (title: string) => `Expand ${title}`,
     collapseSection: (title: string) => `Collapse ${title}`,
+    dragHandle: 'Move section',
   },
   home: {
     unauthenticated: 'No user signed in.',
@@ -470,10 +469,6 @@ const enMessages: Messages = {
     noStreamSelected: 'No stream selected.',
     streamDisabledHint: 'This stream is disabled and will only reopen when an authenticated driver enables it again.',
     tabInactiveHint: 'The stream is paused because this browser tab is not active.',
-    sectionSelection: 'Selection',
-    sectionStatus: 'Status',
-    sectionVideo: 'Video',
-    dragHandle: 'Move section',
   },
   videoSettings: {
     title: 'Video Settings',
@@ -519,6 +514,7 @@ const enMessages: Messages = {
   sshKeyManager: {
     titleStored: 'SSH Key (stored)',
     titleMissing: 'SSH Key (no key)',
+    sectionTitle: 'SSH key',
     enterVehicleIp: 'Please enter the vehicle IP address',
     downloadSaved: 'SSH key downloaded from vehicle and saved to browser.',
     saveToBrowserFailed: 'Failed to save SSH key to browser storage.',

@@ -1,12 +1,8 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
-import GamepadViewer from "./gamepad-viewer";
-import CarFunctionsView from "./car-functions-view";
-import AudioChat from "./audio-chat";
 import { useControlFlowStore } from "./control-flow-store";
 import { useRouter } from "next/navigation";
-import SshKeyManager from "./ssh-key-manager";
 import { useCarUiStore } from "./car-ui-store";
 import { useI18n } from "@/i18n/provider";
 
@@ -319,18 +315,6 @@ export default function CarControl() {
               )}
             </> : <p className="text-xs text-red-500">{messages.carControl.noCarsAvailable}</p>}
             
-        </>
-      )}
-      {flowControl.carId && !flowControl.carSession && (
-        <>
-          <SshKeyManager carId={flowControl.carId} />
-        </>
-      )}
-      {flowControl.carId && (
-        <>
-          <GamepadViewer hideFlowButtons={true} />
-          <CarFunctionsView carId={flowControl.carId} hideFlowButtons={true} />
-          <AudioChat carId={flowControl.carId} />
         </>
       )}
     </div>
