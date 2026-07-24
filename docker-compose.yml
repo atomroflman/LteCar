@@ -70,8 +70,8 @@ services:
       context: .
       dockerfile: Server/Dockerfile
       args:
-        GIT_BRANCH: ${GIT_BRANCH:-master}
-        GIT_COMMIT: ${GIT_COMMIT:-unknown}
+        GIT_BRANCH: ${GIT_BRANCH:-}
+        GIT_COMMIT: ${GIT_COMMIT:-}
     restart: unless-stopped
     depends_on:
       postgres:

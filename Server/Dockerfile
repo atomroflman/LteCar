@@ -1,6 +1,6 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
-ARG GIT_BRANCH=master
-ARG GIT_COMMIT=unknown
+ARG GIT_BRANCH=
+ARG GIT_COMMIT=
 WORKDIR /src
 
 COPY Server/LteCar.Server.csproj Server/
