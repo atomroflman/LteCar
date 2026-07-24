@@ -360,6 +360,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
         {
             if (!map.ControlChannels.ContainsKey(stale.ChannelName))
             {
+                DeleteSetupNodes(dbContext, dbContext.Set<UserSetupCarChannelNode>().Where(n => n.CarChannelId == stale.Id).ToList());
                 dbContext.CarChannels.Remove(stale);
             }
         }
@@ -406,6 +407,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
         {
             if (!map.TelemetryChannels.ContainsKey(stale.ChannelName))
             {
+                DeleteSetupNodes(dbContext, dbContext.Set<UserSetupTelemetryNode>().Where(n => n.TelemetryId == stale.Id).ToList());
                 dbContext.CarTelemetry.Remove(stale);
             }
         }
@@ -1090,5 +1092,17 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
         {
             throw new HubException("You must actively control this vehicle to change stream enable state.");
         }
+    }
+
+    // ponytail: setup-node deletion needs explicit link cleanup; FK is ClientCascade so EF doesn't auto-include links
+    private static void DeleteSetupNodes<TNode>(LteCarContext dbContext, List<TNode> nodes) where TNode : UserSetupFlowNodeBase
+    {
+        if (nodes.Count == 0) return;
+        var nodeIds = nodes.Select(n => n.Id).ToList();
+        var links = dbContext.Set<UserSetupLink>()
+            .Where(l => nodeIds.Contains(l.UserSetupFromNodeId) || nodeIds.Contains(l.UserSetupToNodeId))
+            .ToList();
+        foreach (var link in links) dbContext.Set<UserSetupLink>().Remove(link);
+        foreach (var node in nodes) dbContext.Set<TNode>().Remove(node);
     }
 }
