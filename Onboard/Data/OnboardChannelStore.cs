@@ -251,10 +251,91 @@ public sealed class OnboardChannelStore
         await ExecAsync(c, tx, "DELETE FROM control_channels");
         await ExecAsync(c, tx, "DELETE FROM telemetry_channels");
         await ExecAsync(c, tx, "DELETE FROM video_streams");
-        foreach (var kv in map.ControlChannels) await UpsertControlChannelAsync(kv.Key, kv.Value);
-        foreach (var kv in map.TelemetryChannels) await UpsertTelemetryChannelAsync(kv.Key, kv.Value);
-        foreach (var kv in map.VideoStreams) await UpsertVideoStreamAsync(kv.Key, kv.Value);
+        foreach (var (k, v) in map.ControlChannels) await UpsertAsync(c, tx, k, v);
+        foreach (var (k, v) in map.TelemetryChannels) await UpsertAsync(c, tx, k, v);
+        foreach (var (k, v) in map.VideoStreams) await UpsertAsync(c, tx, k, v);
         tx.Commit();
+    }
+
+    private static async Task UpsertAsync(SqliteConnection c, SqliteTransaction tx, string dictKey, ControlChannelMapItem item)
+    {
+        await using var cmd = c.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = @"
+            INSERT INTO control_channels (dict_key, name, pin_manager, address, options_json, server_id, modified_at, control_type, test_disabled, max_resend_interval)
+            VALUES ($k, $n, $pm, $addr, $opts, $sid, $mod, $ct, $td, $mri)
+            ON CONFLICT(dict_key) DO UPDATE SET
+                name=excluded.name, pin_manager=excluded.pin_manager, address=excluded.address,
+                options_json=excluded.options_json, server_id=excluded.server_id, modified_at=excluded.modified_at,
+                control_type=excluded.control_type, test_disabled=excluded.test_disabled, max_resend_interval=excluded.max_resend_interval;";
+        cmd.Parameters.AddWithValue("$k", dictKey);
+        cmd.Parameters.AddWithValue("$n", dictKey);
+        cmd.Parameters.AddWithValue("$pm", item.PinManager);
+        cmd.Parameters.AddWithValue("$addr", (object?)item.Address ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$opts", JsonSerializer.Serialize(item.Options));
+        cmd.Parameters.AddWithValue("$sid", (object?)item.ServerId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$mod", FormatDate(item.ModifiedAt));
+        cmd.Parameters.AddWithValue("$ct", item.ControlType);
+        cmd.Parameters.AddWithValue("$td", item.TestDisabled);
+        cmd.Parameters.AddWithValue("$mri", (object?)item.MaxResendInterval ?? DBNull.Value);
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    private static async Task UpsertAsync(SqliteConnection c, SqliteTransaction tx, string dictKey, TelemetryChannelMapItem item)
+    {
+        await using var cmd = c.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = @"
+            INSERT INTO telemetry_channels (dict_key, name, pin_manager, address, options_json, server_id, modified_at, read_interval_ticks, telemetry_type, data_type, unit, decimals)
+            VALUES ($k, $n, $pm, $addr, $opts, $sid, $mod, $rit, $tt, $dt, $unit, $dec)
+            ON CONFLICT(dict_key) DO UPDATE SET
+                name=excluded.name, pin_manager=excluded.pin_manager, address=excluded.address,
+                options_json=excluded.options_json, server_id=excluded.server_id, modified_at=excluded.modified_at,
+                read_interval_ticks=excluded.read_interval_ticks, telemetry_type=excluded.telemetry_type,
+                data_type=excluded.data_type, unit=excluded.unit, decimals=excluded.decimals;";
+        cmd.Parameters.AddWithValue("$k", dictKey);
+        cmd.Parameters.AddWithValue("$n", dictKey);
+        cmd.Parameters.AddWithValue("$pm", item.PinManager);
+        cmd.Parameters.AddWithValue("$addr", (object?)item.Address ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$opts", JsonSerializer.Serialize(item.Options));
+        cmd.Parameters.AddWithValue("$sid", (object?)item.ServerId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$mod", FormatDate(item.ModifiedAt));
+        cmd.Parameters.AddWithValue("$rit", item.ReadIntervalTicks);
+        cmd.Parameters.AddWithValue("$tt", item.TelemetryType);
+        cmd.Parameters.AddWithValue("$dt", (int)item.DataType);
+        cmd.Parameters.AddWithValue("$unit", (object?)item.Unit ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$dec", (object?)item.Decimals ?? DBNull.Value);
+        await cmd.ExecuteNonQueryAsync();
+    }
+
+    private static async Task UpsertAsync(SqliteConnection c, SqliteTransaction tx, string dictKey, VideoStreamMapItem item)
+    {
+        await using var cmd = c.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = @"
+            INSERT INTO video_streams (dict_key, stream_id, name, location, type, enabled, server_id, modified_at, camera_device, rpi_cam_id, width, height, framerate, bitrate)
+            VALUES ($k, $sid, $name, $loc, $type, $en, $svr, $mod, $cam, $rpi, $w, $h, $fps, $br)
+            ON CONFLICT(dict_key) DO UPDATE SET
+                stream_id=excluded.stream_id, name=excluded.name, location=excluded.location,
+                type=excluded.type, enabled=excluded.enabled, server_id=excluded.server_id,
+                modified_at=excluded.modified_at, camera_device=excluded.camera_device,
+                rpi_cam_id=excluded.rpi_cam_id, width=excluded.width, height=excluded.height,
+                framerate=excluded.framerate, bitrate=excluded.bitrate;";
+        cmd.Parameters.AddWithValue("$k", dictKey);
+        cmd.Parameters.AddWithValue("$sid", item.StreamId);
+        cmd.Parameters.AddWithValue("$name", (object?)item.Name ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$loc", item.Location);
+        cmd.Parameters.AddWithValue("$type", item.Type);
+        cmd.Parameters.AddWithValue("$en", item.Enabled);
+        cmd.Parameters.AddWithValue("$svr", (object?)item.ServerId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$mod", FormatDate(item.ModifiedAt));
+        cmd.Parameters.AddWithValue("$cam", (object?)item.CameraDevice ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$rpi", (object?)item.RpiCamId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$w", (object?)item.Width ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$h", (object?)item.Height ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$fps", (object?)item.Framerate ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$br", (object?)item.Bitrate ?? DBNull.Value);
+        await cmd.ExecuteNonQueryAsync();
     }
 
     private static async Task ExecAsync(SqliteConnection c, SqliteTransaction tx, string sql)
