@@ -57,53 +57,53 @@ export default function Home() {
       id: "vehicle",
       title: messages.carControl.vehicle,
       content: <CarControl />,
-      visible: Boolean(selectedCarId),
+      visible: true,
     },
     {
       id: "sshKey",
       title: messages.sshKeyManager.sectionTitle,
-      content: <SshKeyManager carId={selectedCarId!} />,
+      content: selectedCarId ? <SshKeyManager carId={selectedCarId} /> : null,
       visible: Boolean(selectedCarId && !carSession),
     },
     {
       id: "gamepadViewer",
       title: messages.gamepadViewer.title,
-      content: <GamepadViewer hideFlowButtons={true} />,
+      content: selectedCarId ? <GamepadViewer hideFlowButtons={true} /> : null,
       visible: Boolean(selectedCarId),
     },
     {
       id: "carFunctions",
       title: messages.carFunctions.title,
-      content: <CarFunctionsView carId={selectedCarId!} hideFlowButtons={true} />,
+      content: selectedCarId ? <CarFunctionsView carId={selectedCarId} hideFlowButtons={true} /> : null,
       visible: Boolean(selectedCarId),
     },
     {
       id: "audioChat",
       title: messages.audioChat.title,
-      content: <AudioChat carId={selectedCarId!} />,
+      content: selectedCarId ? <AudioChat carId={selectedCarId} /> : null,
       visible: Boolean(selectedCarId),
     },
     {
       id: "sessionTransfer",
       title: messages.sessionTransfer.title,
-      content: <SessionTransfer />,
+      content: selectedCarId ? <SessionTransfer /> : null,
       visible: Boolean(selectedCarId),
     },
     {
       id: "videoSettings",
       title: messages.videoSettings.title,
-      content: (
+      content: selectedCarId ? (
         <VideoSettingsControl
-          carId={selectedCarId!}
+          carId={selectedCarId}
           canManageEnabled={Boolean(user?.loginName && selectedCarId && carSession)}
         />
-      ),
+      ) : null,
       visible: Boolean(selectedCarId),
     },
     {
       id: "ping",
       title: messages.ping.title,
-      content: <Ping />,
+      content: selectedCarId ? <Ping /> : null,
       visible: Boolean(selectedCarId),
     },
   ];
