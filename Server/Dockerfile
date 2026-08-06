@@ -17,6 +17,8 @@ WORKDIR /app
 ENV ASPNETCORE_URLS=http://0.0.0.0:5000
 EXPOSE 5000
 COPY --from=build /app/publish .
+# The onboard install script template is read at runtime by OnboardInstallScriptService.
+COPY install.sh /app/install.sh
 # ffmpeg is used by VideoStreamReceiverService to relay
 # the TCP stream from the Onboard to Janus via RTP.
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*

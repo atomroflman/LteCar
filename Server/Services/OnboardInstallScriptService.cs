@@ -118,8 +118,23 @@ export LTECAR_BRANCH='{{EscapeForSingleQuotes(resolvedBranch)}}'
 
     private string GetInstallScriptPath()
     {
-        var repoRoot = Path.GetFullPath(Path.Combine(HostEnvironment.ContentRootPath, ".."));
-        return Path.Combine(repoRoot, "install.sh");
+        // The template must be resolvable both inside the published container
+        // (/app/install.sh) and during local development (repo-root/install.sh).
+        var candidates = new[]
+        {
+            Path.Combine(HostEnvironment.ContentRootPath, "install.sh"),
+            Path.Combine(Path.GetFullPath(Path.Combine(HostEnvironment.ContentRootPath, "..")), "install.sh"),
+            "/install.sh"
+        };
+
+        foreach (var candidate in candidates)
+        {
+            if (File.Exists(candidate))
+                return candidate;
+        }
+
+        // Fall back to the container path so the FileNotFoundException message is useful.
+        return candidates[0];
     }
 
     private string ResolveBranch()
