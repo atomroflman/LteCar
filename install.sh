@@ -369,8 +369,8 @@ if [ "$DEPLOY_MODE" = "server" ]; then
                 echo "User '$RUN_USER' added to the docker group."
             fi
         fi
-            COMPOSE_CMD="docker compose"
-            COMPOSE_PULL_ARGS=(--ignore-buildable)
+        COMPOSE_CMD="docker compose"
+        COMPOSE_PULL_ARGS=(--ignore-buildable)
     else
         if ! command -v podman &>/dev/null; then
             echo "Installing Podman ..."
@@ -400,7 +400,9 @@ if [ "$DEPLOY_MODE" = "server" ]; then
     echo "Compose file: $COMPOSE_FILE"
     echo "Pulling/building images ..."
     run_as_user $COMPOSE_CMD -f "$COMPOSE_FILE" pull "${COMPOSE_PULL_ARGS[@]}"
-    run_as_user $COMPOSE_CMD -f "$COMPOSE_FILE" build
+    run_as_user GIT_BRANCH=$(git -C "$REPO_DIR" rev-parse --abbrev-ref HEAD) \
+        GIT_COMMIT=$(git -C "$REPO_DIR" rev-parse HEAD) \
+        $COMPOSE_CMD -f "$COMPOSE_FILE" build
 
     # ── Phase 3: systemd service (optional) ─────────────────────────
     echo ""

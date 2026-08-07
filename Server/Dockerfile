@@ -1,19 +1,19 @@
 FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build
-ARG GIT_BRANCH=
-ARG GIT_COMMIT=
+ARG GIT_BRANCH
+ARG GIT_COMMIT
 WORKDIR /src
+
+# Install git so the MSBuild fallback can resolve branch/commit from copied .git metadata.
+RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
 
 # Copy git metadata so MSBuild can resolve the current branch/commit during publish.
 # The build stage is discarded, so this does not bloat the runtime image.
 COPY .git .git
-RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
-
-COPY Server/LteCar.Server.csproj Server/
-COPY Shared/LteCar.Shared.csproj Shared/
-RUN dotnet restore Server/LteCar.Server.csproj
 
 COPY Server/ Server/
 COPY Shared/ Shared/
+
+RUN dotnet restore Server/LteCar.Server.csproj
 RUN dotnet publish Server/LteCar.Server.csproj -c Release -o /app/publish /p:UseAppHost=false \
     /p:BuildInfoBranch="$GIT_BRANCH" /p:BuildInfoCommit="$GIT_COMMIT"
 
