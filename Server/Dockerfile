@@ -3,6 +3,10 @@ ARG GIT_BRANCH=
 ARG GIT_COMMIT=
 WORKDIR /src
 
+# Copy git metadata so MSBuild can resolve the current branch/commit during publish.
+# The build stage is discarded, so this does not bloat the runtime image.
+COPY .git .git
+
 COPY Server/LteCar.Server.csproj Server/
 COPY Shared/LteCar.Shared.csproj Shared/
 RUN dotnet restore Server/LteCar.Server.csproj
