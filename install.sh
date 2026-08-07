@@ -602,13 +602,7 @@ if [ "$DEPLOY_MODE" = "onboard" ]; then
         exit 1
     fi
 
-    # ── Phase 5: Setup ───────────────────────────────────────────────
-    echo ""
-    echo "── Phase 5: Vehicle setup ────────────────────────────"
-    echo "Starting setup tool ..."
-    run_as_user bash -lc "cd \"$REPO_DIR/Onboard\" && DOTNET_ROOT=\"$DOTNET_ROOT\" PATH=\"$DOTNET_ROOT:$DOTNET_ROOT/tools:\$PATH\" \"$DOTNET_ROOT/dotnet\" \"$ONBOARD_DLL\" setup"
-
-    # ── Phase 6: systemd service (optional) ─────────────────────────
+    # ── Phase 5: systemd service (optional) ─────────────────────────
     echo ""
     read -rp "Install as systemd autostart service? [y/N]: " INSTALL_SERVICES
     if [[ ! "${INSTALL_SERVICES,,}" =~ ^(y|j)$ ]]; then
@@ -623,7 +617,7 @@ if [ "$DEPLOY_MODE" = "onboard" ]; then
     fi
 
     echo ""
-    echo "── Phase 6: systemd service ──────────────────────────"
+    echo "── Phase 5: systemd service ──────────────────────────"
 
     LOG_DIR="/var/log/ltecar"
     mkdir -p "$LOG_DIR"

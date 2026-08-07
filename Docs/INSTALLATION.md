@@ -137,7 +137,7 @@ If the server is already running, you can generate a preconfigured onboard insta
 curl -fsSL https://YOUR-SERVER/api/install/onboard.sh | sudo bash
 ```
 
-The generated script pre-fills the normal `install.sh` with defaults for `onboard`, the server URL, the preferred branch, and optionally the current git ref. The normal installer still asks for these values interactively, runs the setup tool after the install, and does **not** start the onboard service immediately.
+The generated script pre-fills the normal `install.sh` with defaults for `onboard`, the server URL, the preferred branch, and optionally the current git ref. The normal installer still asks for these values interactively and does **not** start the onboard service immediately. Vehicle configuration is done via the web setup interface after the install.
 
 ### 1. Clone Repository
 
@@ -173,22 +173,9 @@ sudo systemctl start pigpio
 
 ### 5. Initial Setup
 
-Run the interactive setup tool:
+The installer no longer runs the interactive console setup tool. After the install, configure the vehicle through the **web setup interface** (see [FEATURES.md](FEATURES.md#web-setup-interface)).
 
-```bash
-cd Onboard
-dotnet run -- setup
-```
-
-This launches the raspi-config style setup menu. See [SETUP.md](SETUP.md) for details.
-
-### 6. Configure Connection
-
-In the Setup menu:
-1. Go to **Network / Server** → **N1. Server URL**
-2. Enter your server URL (e.g., `https://lte-rc.northeurope.cloudapp.azure.com:5000`)
-
-### 7. Start Onboard Software
+### 6. Start Onboard Software
 
 ```bash
 cd Onboard
