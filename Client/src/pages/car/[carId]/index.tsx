@@ -111,9 +111,12 @@ export default function CarControlFlowPage() {
           <FunctionNodesView />
           {carIdNum && <CarFunctionsView carId={carIdNum} hideFlowButtons={false} />}
           {carIdNum && (
-            <div className="bg-zinc-900 rounded-lg p-2 border border-zinc-800 text-xs">
-              <Link href={`/car/${carIdNum}/channels`} className="text-blue-400 hover:underline">
+            <div className="bg-zinc-900 rounded-lg p-2 border border-zinc-800 text-xs space-y-1">
+              <Link href={`/car/${carIdNum}/channels`} className="text-blue-400 hover:underline block">
                 Channels (control / telemetry / video)
+              </Link>
+              <Link href={`/car/${carIdNum}/test`} className="text-blue-400 hover:underline block">
+                Test inputs / telemetry / video / audio
               </Link>
             </div>
           )}

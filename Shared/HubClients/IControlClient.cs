@@ -38,4 +38,9 @@ public interface IControlClient
     Task DeleteTelemetryChannel(string dictKey);
     Task UpsertVideoStream(string dictKey, VideoStreamMapItem item);
     Task DeleteVideoStream(string dictKey);
+
+    /// <summary>
+    /// Server pushes the entire channel map to the client (SPOT). The client must replace its local config.
+    /// </summary>
+    Task ApplyChannelMap(ChannelMap channelMap, string channelMapHash);
 }

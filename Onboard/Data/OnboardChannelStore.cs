@@ -88,7 +88,7 @@ public sealed class OnboardChannelStore
 
         await using (var cmd = c.CreateCommand())
         {
-            cmd.CommandText = "SELECT dict_key, stream_id, name, location, type, enabled, server_id, modified_at, camera_device, rpi_cam_id, width, height, framerate, bitrate FROM video_streams";
+            cmd.CommandText = "SELECT dict_key, stream_id, name, location, type, enabled, server_id, modified_at, camera_device, rpi_cam_id, width, height, framerate, bitrate, options_json FROM video_streams";
             await using var rd = await cmd.ExecuteReaderAsync();
             while (await rd.ReadAsync())
             {
@@ -107,6 +107,7 @@ public sealed class OnboardChannelStore
                     Height = rd.IsDBNull(11) ? null : rd.GetInt32(11),
                     Framerate = rd.IsDBNull(12) ? null : rd.GetInt32(12),
                     Bitrate = rd.IsDBNull(13) ? null : rd.GetInt32(13),
+                    Options = rd.IsDBNull(14) ? new() : JsonSerializer.Deserialize<Dictionary<string, object>>(rd.GetString(14)) ?? new(),
                 };
                 map.VideoStreams[rd.GetString(0)] = item;
             }
@@ -199,8 +200,8 @@ public sealed class OnboardChannelStore
         await using var c = Open();
         await using var cmd = c.CreateCommand();
         cmd.CommandText = @"
-            INSERT INTO video_streams (dict_key, stream_id, name, location, type, enabled, server_id, modified_at, camera_device, rpi_cam_id, width, height, framerate, bitrate)
-            VALUES ($k, $sid, $n, $loc, $t, $en, $svid, $mod, $cam, $rcid, $w, $h, $fps, $br)
+            INSERT INTO video_streams (dict_key, stream_id, name, location, type, enabled, server_id, modified_at, camera_device, rpi_cam_id, width, height, framerate, bitrate, options_json)
+            VALUES ($k, $sid, $n, $loc, $t, $en, $svid, $mod, $cam, $rcid, $w, $h, $fps, $br, $opts)
             ON CONFLICT(dict_key) DO UPDATE SET
                 stream_id=excluded.stream_id,
                 name=excluded.name,
@@ -214,7 +215,8 @@ public sealed class OnboardChannelStore
                 width=excluded.width,
                 height=excluded.height,
                 framerate=excluded.framerate,
-                bitrate=excluded.bitrate;";
+                bitrate=excluded.bitrate,
+                options_json=excluded.options_json;";
         cmd.Parameters.AddWithValue("$k", dictKey);
         cmd.Parameters.AddWithValue("$sid", item.StreamId);
         cmd.Parameters.AddWithValue("$n", (object?)item.Name ?? DBNull.Value);
@@ -229,6 +231,7 @@ public sealed class OnboardChannelStore
         cmd.Parameters.AddWithValue("$h", (object?)item.Height ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$fps", (object?)item.Framerate ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$br", (object?)item.Bitrate ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$opts", JsonSerializer.Serialize(item.Options));
         await cmd.ExecuteNonQueryAsync();
     }
 
@@ -330,14 +333,14 @@ public sealed class OnboardChannelStore
         await using var cmd = c.CreateCommand();
         cmd.Transaction = tx;
         cmd.CommandText = @"
-            INSERT INTO video_streams (dict_key, stream_id, name, location, type, enabled, server_id, modified_at, camera_device, rpi_cam_id, width, height, framerate, bitrate)
-            VALUES ($k, $sid, $name, $loc, $type, $en, $svr, $mod, $cam, $rpi, $w, $h, $fps, $br)
+            INSERT INTO video_streams (dict_key, stream_id, name, location, type, enabled, server_id, modified_at, camera_device, rpi_cam_id, width, height, framerate, bitrate, options_json)
+            VALUES ($k, $sid, $name, $loc, $type, $en, $svr, $mod, $cam, $rpi, $w, $h, $fps, $br, $opts)
             ON CONFLICT(dict_key) DO UPDATE SET
                 stream_id=excluded.stream_id, name=excluded.name, location=excluded.location,
                 type=excluded.type, enabled=excluded.enabled, server_id=excluded.server_id,
                 modified_at=excluded.modified_at, camera_device=excluded.camera_device,
                 rpi_cam_id=excluded.rpi_cam_id, width=excluded.width, height=excluded.height,
-                framerate=excluded.framerate, bitrate=excluded.bitrate;";
+                framerate=excluded.framerate, bitrate=excluded.bitrate, options_json=excluded.options_json;";
         cmd.Parameters.AddWithValue("$k", dictKey);
         cmd.Parameters.AddWithValue("$sid", item.StreamId);
         cmd.Parameters.AddWithValue("$name", (object?)item.Name ?? DBNull.Value);
@@ -352,6 +355,7 @@ public sealed class OnboardChannelStore
         cmd.Parameters.AddWithValue("$h", (object?)item.Height ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$fps", (object?)item.Framerate ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$br", (object?)item.Bitrate ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$opts", JsonSerializer.Serialize(item.Options));
         await cmd.ExecuteNonQueryAsync();
     }
 
@@ -428,7 +432,8 @@ public sealed class OnboardChannelStore
             width INTEGER,
             height INTEGER,
             framerate INTEGER,
-            bitrate INTEGER
+            bitrate INTEGER,
+            options_json TEXT NOT NULL DEFAULT '{}'
         );
         CREATE TABLE IF NOT EXISTS pin_managers (
             dict_key TEXT PRIMARY KEY,

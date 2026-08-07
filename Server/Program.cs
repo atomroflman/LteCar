@@ -57,6 +57,7 @@ builder.Services.AddSingleton<CarConnectionStore>();
 builder.Services.AddSingleton<AvailableTypesRegistry>();
 builder.Services.AddSingleton<IServerBuildInfoService, ServerBuildInfoService>();
 builder.Services.AddSingleton<IOnboardInstallScriptService, OnboardInstallScriptService>();
+builder.Services.AddSingleton<ChannelTemplateService>();
 builder.Services.AddDbContext<LteCarContext>((serviceProvider, options) =>
 {
     var configService = serviceProvider.GetRequiredService<IConfigurationService>();
@@ -103,6 +104,7 @@ var app = builder.Build();
 var configuration = app.Configuration;
 var logger = app.Services.GetRequiredService<ILogger<Program>>();
 ApplyDatabaseMigrations(app.Services, logger);
+await SeedChannelTemplatesAsync(app.Services, logger);
 
 app.Use(async(ctx, next) => {
     try
@@ -139,6 +141,21 @@ app.MapHub<CarBashHub>(HubPaths.CarBashHub);
 app.Services.ValidateConfiguration();
 
 app.Run();
+
+static async Task SeedChannelTemplatesAsync(IServiceProvider services, ILogger logger)
+{
+    try
+    {
+        using var scope = services.CreateScope();
+        var templateService = scope.ServiceProvider.GetRequiredService<ChannelTemplateService>();
+        await templateService.SeedAsync();
+        logger.LogInformation("Channel templates seeded successfully.");
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Failed to seed channel templates.");
+    }
+}
 
 static void ApplyDatabaseMigrations(IServiceProvider services, ILogger logger)
 {

@@ -351,4 +351,37 @@ public class ControlService : IControlClient, IHubConnectionObserver
             Logger.LogInformation("DeleteVideoStream {Key}", dictKey);
         }
     }
+
+    /// <summary>
+    /// Server-pushed channel map (SPOT). Replace the local in-memory and persisted config entirely.
+    /// </summary>
+    public async Task ApplyChannelMap(ChannelMap channelMap, string channelMapHash)
+    {
+        if (channelMap == null) return;
+
+        ChannelMap.PinManagers.Clear();
+        foreach (var kv in channelMap.PinManagers)
+            ChannelMap.PinManagers[kv.Key] = kv.Value;
+
+        ChannelMap.ControlChannels.Clear();
+        foreach (var kv in channelMap.ControlChannels)
+            ChannelMap.ControlChannels[kv.Key] = kv.Value;
+
+        ChannelMap.TelemetryChannels.Clear();
+        foreach (var kv in channelMap.TelemetryChannels)
+            ChannelMap.TelemetryChannels[kv.Key] = kv.Value;
+
+        ChannelMap.VideoStreams.Clear();
+        foreach (var kv in channelMap.VideoStreams)
+            ChannelMap.VideoStreams[kv.Key] = kv.Value;
+
+        await ChannelStore.ReplaceAllAsync(ChannelMap);
+
+        Logger.LogInformation("Applied server-pushed channel map (hash {Hash}) with {Control} control, {Telemetry} telemetry, {Video} video streams, {Pin} pin managers",
+            channelMapHash,
+            ChannelMap.ControlChannels.Count,
+            ChannelMap.TelemetryChannels.Count,
+            ChannelMap.VideoStreams.Count,
+            ChannelMap.PinManagers.Count);
+    }
 }

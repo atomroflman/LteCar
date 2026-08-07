@@ -3,6 +3,7 @@ using System;
 using LteCar.Server.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace LteCar.Server.Migrations
 {
     [DbContext(typeof(LteCarContext))]
-    partial class LteCarContextModelSnapshot : ModelSnapshot
+    [Migration("20260806211809_ExtendChannelMapAndAddPinManagers")]
+    partial class ExtendChannelMapAndAddPinManagers
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -325,59 +328,6 @@ namespace LteCar.Server.Migrations
                         .IsUnique();
 
                     b.ToTable("CarVideoStreams", (string)null);
-                });
-
-            modelBuilder.Entity("LteCar.Server.Data.ChannelTemplate", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("integer");
-
-                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
-
-                    b.Property<string>("Author")
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<string>("ChannelMapHash")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<string>("ChannelMapJson")
-                        .IsRequired()
-                        .HasColumnType("text");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Description")
-                        .HasMaxLength(500)
-                        .HasColumnType("character varying(500)");
-
-                    b.Property<string>("Key")
-                        .IsRequired()
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("character varying(100)");
-
-                    b.Property<DateTime?>("UpdatedAt")
-                        .HasColumnType("timestamp with time zone");
-
-                    b.Property<string>("Version")
-                        .HasMaxLength(32)
-                        .HasColumnType("character varying(32)");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("Key")
-                        .IsUnique();
-
-                    b.ToTable("ChannelTemplates", (string)null);
                 });
 
             modelBuilder.Entity("LteCar.Server.Data.FileTransfer", b =>
@@ -824,7 +774,7 @@ namespace LteCar.Server.Migrations
             modelBuilder.Entity("LteCar.Server.Data.CarTelemetry", b =>
                 {
                     b.HasOne("LteCar.Server.Data.Car", "Car")
-                        .WithMany()
+                        .WithMany("Telemetries")
                         .HasForeignKey("CarId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
@@ -1033,6 +983,8 @@ namespace LteCar.Server.Migrations
                     b.Navigation("Functions");
 
                     b.Navigation("PinManagers");
+
+                    b.Navigation("Telemetries");
 
                     b.Navigation("UserCarSetups");
 

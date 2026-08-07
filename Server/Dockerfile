@@ -19,6 +19,8 @@ EXPOSE 5000
 COPY --from=build /app/publish .
 # The onboard install script template is read at runtime by OnboardInstallScriptService.
 COPY install.sh /app/install.sh
+# Vehicle hardware templates are seeded into the database on startup.
+COPY VehicleTemplates /app/VehicleTemplates
 # ffmpeg is used by VideoStreamReceiverService to relay
 # the TCP stream from the Onboard to Janus via RTP.
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*

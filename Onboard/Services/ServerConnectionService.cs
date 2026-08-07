@@ -141,12 +141,20 @@ public class ServerConnectionService
         _serverAssignedCarId = config.ServerAssignedCarId;
         Logger.LogInformation($"Server assigned CarId: {_serverAssignedCarId}");
         
-        // If server still requests channel map update (e.g., initial legacy path or mismatch), perform sync now
-        if (config.RequiresChannelMapUpdate)
+        // SPOT handshake:
+        // - RequiresChannelMapUpload: server has no config for this car; upload the local config once.
+        // - RequiresChannelMapUpdate (legacy/reset): server asks the client to re-sync (still supported as fallback).
+        if (config.RequiresChannelMapUpload)
         {
-            Logger.LogInformation("Server indicates channel map mismatch. Triggering SyncChannelMap now.");
+            Logger.LogInformation("Server has no channel map for this car. Uploading local config via SyncChannelMap.");
             await SyncChannelMapAsync();
         }
+        else if (config.RequiresChannelMapUpdate && config.ChannelMap == null)
+        {
+            Logger.LogInformation("Server indicates channel map mismatch without a push. Triggering SyncChannelMap now.");
+            await SyncChannelMapAsync();
+        }
+        // If ChannelMap is present, ApplyChannelMap has already been pushed by the server and handled by ControlService.
         
         Logger.LogDebug($"OpenCarConnection called: {JsonSerializer.Serialize(config)}");
         var configService = ServiceProvider.GetRequiredService<ServerCarConfigurationService>();

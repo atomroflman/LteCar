@@ -55,4 +55,8 @@ public class VideoStreamMapItem
     [Key(12)]
     [JsonPropertyName("modifiedAt")]
     public DateTime? ModifiedAt { get; set; }
+
+    [Key(13)]
+    [JsonPropertyName("options")]
+    public Dictionary<string, object> Options { get; set; } = new();
 }

@@ -19,6 +19,7 @@ namespace LteCar.Server.Data
         public int? Address { get; set; }
         public string? OptionsJson { get; set; }
         public bool TestDisabled { get; set; }
+        public int? ServerId { get; set; }
         public DateTime? ModifiedAt { get; set; }
         public int CarId { get; set; }
         public Car Car { get; set; }

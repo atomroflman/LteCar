@@ -40,9 +40,17 @@ public class ChannelsController : ControllerBase
         var controls = await _context.CarChannels.AsNoTracking().Where(c => c.CarId == carId).ToListAsync();
         var telemetries = await _context.CarTelemetry.AsNoTracking().Where(c => c.CarId == carId).ToListAsync();
         var streams = await _context.CarVideoStreams.AsNoTracking().Where(c => c.CarId == carId).ToListAsync();
+        var pinManagers = await _context.CarPinManagers.AsNoTracking().Where(c => c.CarId == carId).ToListAsync();
 
         var map = new ChannelMap
         {
+            PinManagers = pinManagers.ToDictionary(
+                p => p.Name,
+                p => new PinManagerMapItem
+                {
+                    Type = p.Type,
+                    Options = DeserializeOptions(p.OptionsJson),
+                }),
             ControlChannels = controls.ToDictionary(
                 c => c.ChannelName,
                 c => new ControlChannelMapItem
@@ -59,11 +67,14 @@ public class ChannelsController : ControllerBase
                 t => t.ChannelName,
                 t => new TelemetryChannelMapItem
                 {
+                    PinManager = t.PinManager,
+                    Address = t.Address,
                     ReadIntervalTicks = t.ReadIntervalTicks,
                     TelemetryType = t.TelemetryType,
                     DataType = t.DataType,
                     Unit = t.Unit,
                     Decimals = t.Decimals,
+                    Options = DeserializeOptions(t.OptionsJson),
                     ModifiedAt = t.ModifiedAt,
                 }),
             VideoStreams = streams.ToDictionary(
@@ -79,6 +90,9 @@ public class ChannelsController : ControllerBase
                     Height = s.Height,
                     Framerate = s.Framerate,
                     Bitrate = s.BitrateKbps,
+                    CameraDevice = s.CameraDevice,
+                    RpiCamId = s.RpiCamId,
+                    Options = DeserializeOptions(s.OptionsJson),
                     ModifiedAt = s.ModifiedAt,
                 }),
         };
@@ -139,6 +153,70 @@ public class ChannelsController : ControllerBase
         return NoContent();
     }
 
+    [HttpGet("pinmanager")]
+    public async Task<IActionResult> GetPinManagers(int carId)
+    {
+        var user = await GetCurrentUserAsync();
+        if (user == null) return Unauthorized();
+        if (!await _context.Cars.AnyAsync(c => c.Id == carId)) return NotFound("Car not found");
+
+        var items = await _context.CarPinManagers
+            .AsNoTracking()
+            .Where(p => p.CarId == carId)
+            .ToListAsync();
+
+        return Ok(items.ToDictionary(
+            p => p.Name,
+            p => new PinManagerMapItem
+            {
+                Type = p.Type,
+                Options = DeserializeOptions(p.OptionsJson),
+            }));
+    }
+
+    [HttpPut("pinmanager/{name}")]
+    public async Task<IActionResult> UpsertPinManager(int carId, string name, [FromBody] PinManagerDto body)
+    {
+        var user = await GetCurrentUserAsync();
+        if (user == null) return Unauthorized();
+        if (!await _context.Cars.AnyAsync(c => c.Id == carId)) return NotFound("Car not found");
+
+        var managerName = string.IsNullOrEmpty(body.Name) ? name : body.Name;
+        var pm = await _context.CarPinManagers.FirstOrDefaultAsync(p => p.CarId == carId && p.Name == managerName);
+        if (pm == null)
+        {
+            pm = new CarPinManager { CarId = carId, Name = managerName };
+            _context.CarPinManagers.Add(pm);
+            if (managerName != name)
+            {
+                var old = await _context.CarPinManagers.FirstOrDefaultAsync(p => p.CarId == carId && p.Name == name);
+                if (old != null) _context.CarPinManagers.Remove(old);
+            }
+        }
+        pm.Type = body.Type ?? string.Empty;
+        pm.OptionsJson = SerializeOptions(body.Options);
+        pm.ModifiedAt = DateTime.UtcNow;
+        await _context.SaveChangesAsync();
+
+        var mapItem = new PinManagerMapItem { Type = pm.Type, Options = DeserializeOptions(pm.OptionsJson) };
+        _logger.LogInformation("Upsert pin manager {Name} for car {CarId} by {User}", pm.Name, carId, user.LoginName);
+        return Ok(mapItem);
+    }
+
+    [HttpDelete("pinmanager/{name}")]
+    public async Task<IActionResult> DeletePinManager(int carId, string name)
+    {
+        var user = await GetCurrentUserAsync();
+        if (user == null) return Unauthorized();
+        var pm = await _context.CarPinManagers.FirstOrDefaultAsync(p => p.CarId == carId && p.Name == name);
+        if (pm == null) return NotFound();
+        _context.CarPinManagers.Remove(pm);
+        await _context.SaveChangesAsync();
+
+        _logger.LogInformation("Delete pin manager {Name} for car {CarId} by {User}", name, carId, user.LoginName);
+        return NoContent();
+    }
+
     [HttpPut("telemetry/{name}")]
     public async Task<IActionResult> UpsertTelemetry(int carId, string name, [FromBody] TelemetryChannelDto body)
     {
@@ -163,6 +241,9 @@ public class ChannelsController : ControllerBase
         t.DataType = body.DataType;
         t.Unit = body.Unit;
         t.Decimals = body.Decimals;
+        if (body.PinManager != null) t.PinManager = body.PinManager;
+        t.Address = body.Address;
+        t.OptionsJson = SerializeOptions(body.Options);
         t.ModifiedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
 
@@ -230,6 +311,9 @@ public class ChannelsController : ControllerBase
         if (body.Port.HasValue) s.Port = body.Port.Value;
         if (body.JanusPort.HasValue) s.JanusPort = body.JanusPort;
         if (body.Protocol.HasValue) s.Protocol = body.Protocol.Value;
+        s.CameraDevice = body.CameraDevice;
+        s.RpiCamId = body.RpiCamId;
+        s.OptionsJson = SerializeOptions(body.Options);
         s.ProcessArguments = body.ProcessArguments;
         s.StreamPurpose = body.StreamPurpose;
         s.Description = body.Description;
@@ -263,6 +347,27 @@ public class ChannelsController : ControllerBase
     // and falls back to free-text input — same UX as before the endpoint
     // existed. We don't 404 because a transient offline Onboard shouldn't
     // be a hard error on every page load.
+    // ponytail: returns numeric server ids keyed by channel name so test/debug UIs can
+    // invoke the bandwidth-efficient UpdateChannel(int channelId, ...) hub method.
+    [HttpGet("ids")]
+    public async Task<IActionResult> GetChannelIds(int carId)
+    {
+        var user = await GetCurrentUserAsync();
+        if (user == null) return Unauthorized();
+        if (!await _context.Cars.AnyAsync(c => c.Id == carId)) return NotFound("Car not found");
+
+        var controls = await _context.CarChannels.AsNoTracking().Where(c => c.CarId == carId).ToListAsync();
+        var telemetries = await _context.CarTelemetry.AsNoTracking().Where(c => c.CarId == carId).ToListAsync();
+        var videos = await _context.CarVideoStreams.AsNoTracking().Where(c => c.CarId == carId).ToListAsync();
+
+        return Ok(new
+        {
+            control = controls.ToDictionary(c => c.ChannelName, c => c.Id),
+            telemetry = telemetries.ToDictionary(t => t.ChannelName, t => t.Id),
+            video = videos.ToDictionary(v => v.StreamId, v => v.Id),
+        });
+    }
+
     [HttpGet("available-control-types")]
     public async Task<IActionResult> GetAvailableControlTypes(int carId)
     {
@@ -292,11 +397,14 @@ public class ChannelsController : ControllerBase
 
     private static TelemetryChannelMapItem ToMapItem(CarTelemetry t) => new()
     {
+        PinManager = t.PinManager,
+        Address = t.Address,
         ReadIntervalTicks = t.ReadIntervalTicks,
         TelemetryType = t.TelemetryType,
         DataType = t.DataType,
         Unit = t.Unit,
         Decimals = t.Decimals,
+        Options = DeserializeOptions(t.OptionsJson),
         ModifiedAt = t.ModifiedAt,
     };
 
@@ -311,6 +419,9 @@ public class ChannelsController : ControllerBase
         Height = s.Height,
         Framerate = s.Framerate,
         Bitrate = s.BitrateKbps,
+        CameraDevice = s.CameraDevice,
+        RpiCamId = s.RpiCamId,
+        Options = DeserializeOptions(s.OptionsJson),
         ModifiedAt = s.ModifiedAt,
     };
 
@@ -342,6 +453,13 @@ public class ControlChannelDto
     public bool? TestDisabled { get; set; }
 }
 
+public class PinManagerDto
+{
+    public string? Name { get; set; }
+    public string? Type { get; set; }
+    public Dictionary<string, object>? Options { get; set; }
+}
+
 public class TelemetryChannelDto
 {
     public string? ChannelName { get; set; }
@@ -350,6 +468,9 @@ public class TelemetryChannelDto
     public LteCar.Shared.Channels.TelemetryDataType DataType { get; set; }
     public string? Unit { get; set; }
     public byte? Decimals { get; set; }
+    public string? PinManager { get; set; }
+    public int? Address { get; set; }
+    public Dictionary<string, object>? Options { get; set; }
 }
 
 public class VideoStreamDto
@@ -371,4 +492,7 @@ public class VideoStreamDto
     public string? ProcessArguments { get; set; }
     public string? StreamPurpose { get; set; }
     public string? Description { get; set; }
+    public string? CameraDevice { get; set; }
+    public int? RpiCamId { get; set; }
+    public Dictionary<string, object>? Options { get; set; }
 }
