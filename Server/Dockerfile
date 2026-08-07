@@ -6,6 +6,7 @@ WORKDIR /src
 # Copy git metadata so MSBuild can resolve the current branch/commit during publish.
 # The build stage is discarded, so this does not bloat the runtime image.
 COPY .git .git
+RUN apt-get update && apt-get install -y --no-install-recommends git && rm -rf /var/lib/apt/lists/*
 
 COPY Server/LteCar.Server.csproj Server/
 COPY Shared/LteCar.Shared.csproj Shared/
