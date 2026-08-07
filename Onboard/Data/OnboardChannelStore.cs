@@ -31,10 +31,80 @@ public sealed class OnboardChannelStore
     public async Task InitializeAsync()
     {
         await using var c = Open();
-        await using var cmd = c.CreateCommand();
-        cmd.CommandText = Schema;
-        await cmd.ExecuteNonQueryAsync();
+        await using (var cmd = c.CreateCommand())
+        {
+            cmd.CommandText = Schema;
+            await cmd.ExecuteNonQueryAsync();
+        }
+        await MigrateAsync(c);
         _logger.LogInformation("OnboardChannelStore schema ensured at {Path}", _dbPath);
+    }
+
+    private static async Task MigrateAsync(SqliteConnection c)
+    {
+        // Add missing columns that were introduced after the initial schema.
+        // SQLite has no ALTER TABLE ADD COLUMN IF NOT EXISTS, so we check pragma first.
+        var columns = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["control_channels"] = ["options_json", "server_id", "modified_at", "control_type", "test_disabled", "max_resend_interval"],
+            ["telemetry_channels"] = ["options_json", "server_id", "modified_at", "read_interval_ticks", "telemetry_type", "data_type", "unit", "decimals"],
+            ["video_streams"] = ["server_id", "modified_at", "camera_device", "rpi_cam_id", "width", "height", "framerate", "bitrate", "options_json"],
+            ["pin_managers"] = ["type", "options_json"],
+        };
+
+        foreach (var (table, expectedColumns) in columns)
+        {
+            var existing = await GetColumnNamesAsync(c, table);
+            foreach (var col in expectedColumns)
+            {
+                if (existing.Contains(col, StringComparer.OrdinalIgnoreCase))
+                    continue;
+
+                var defaultValue = col switch
+                {
+                    "options_json" => "DEFAULT '{}'",
+                    "test_disabled" => "DEFAULT 0",
+                    "enabled" => "DEFAULT 1",
+                    "data_type" => "DEFAULT 0",
+                    "read_interval_ticks" => "DEFAULT 0",
+                    "decimals" => "DEFAULT 0",
+                    "width" or "height" or "framerate" or "bitrate" or "rpi_cam_id" or "server_id" or "address" => "DEFAULT NULL",
+                    _ => "DEFAULT NULL",
+                };
+
+                var nullable = col is "options_json" ? "NOT NULL" : ""; // options_json is NOT NULL in current schema
+                if (col == "options_json")
+                    nullable = "NOT NULL";
+
+                var sql = $"ALTER TABLE {table} ADD COLUMN {col} TEXT {nullable} {defaultValue};";
+                if (col is "address" or "server_id" or "rpi_cam_id" or "width" or "height" or "framerate" or "bitrate" or "read_interval_ticks" or "data_type" or "decimals" or "test_disabled" or "enabled")
+                    sql = $"ALTER TABLE {table} ADD COLUMN {col} INTEGER {nullable} {defaultValue};";
+
+                try
+                {
+                    await using var cmd = c.CreateCommand();
+                    cmd.CommandText = sql;
+                    await cmd.ExecuteNonQueryAsync();
+                }
+                catch (SqliteException ex) when (ex.SqliteErrorCode == 1)
+                {
+                    // SQL error 1 = generic error, often "duplicate column name" which is fine.
+                }
+            }
+        }
+    }
+
+    private static async Task<HashSet<string>> GetColumnNamesAsync(SqliteConnection c, string table)
+    {
+        var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        await using var cmd = c.CreateCommand();
+        cmd.CommandText = $"PRAGMA table_info({table});";
+        await using var rd = await cmd.ExecuteReaderAsync();
+        while (await rd.ReadAsync())
+        {
+            result.Add(rd.GetString(1));
+        }
+        return result;
     }
 
     public async Task<ChannelMap> LoadAsync()
