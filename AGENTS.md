@@ -3,10 +3,13 @@
 ## Deployment erfolgt auf Anweisung
 
 Code-Änderungen werden lokal committed, aber **nicht** automatisch auf
-`lte-rc-server` oder `lte-truck` ausgerollt. Erst wenn der User explizit
-"deploy", "update", "rollout" o. ä. sagt, wird der Update-Skill
-`ltecar-update` benutzt (oder `dotnet run` / `npm run dev` auf dem Server
-für die Dev-Iteration).
+`lte-rc-server` oder `lte-truck` ausgerollt. Vor Ort kann das Repo mit
+`update.sh` aktualisiert werden: es erkennt Server- oder Onboard-Installation,
+stoppt den Service, baut neu und startet wieder.
+
+Erst wenn der User explizit "deploy", "update", "rollout" o. ä. sagt, wird der
+Update-Skill `ltecar-update` benutzt (oder `dotnet run` / `npm run dev` auf dem
+Server für die Dev-Iteration).
 
 Bei destruktiven Aktionen (z. B. `docker compose down`, Factory-Reset,
 Reboot) gilt weiterhin: **vorher fragen**.
