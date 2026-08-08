@@ -11,7 +11,6 @@ using LteCar.Onboard.Control.ControlTypes;
 using LteCar.Onboard.Data;
 using LteCar.Onboard.Hardware;
 using LteCar.Onboard.Services;
-using LteCar.Onboard.Setup;
 using LteCar.Onboard.Telemetry;
 using LteCar.Onboard.Video;
 using LteCar.Shared.Channels;
@@ -19,7 +18,6 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Configuration;
-using Microsoft.Extensions.FileProviders;
 
 var configDirEnv = Environment.GetEnvironmentVariable("CONFIG_DIR");
 var configDirArg = args.FirstOrDefault(a => a.StartsWith("--config-dir="))?.Split('=', 2, StringSplitOptions.TrimEntries)[1];

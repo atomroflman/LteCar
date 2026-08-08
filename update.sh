@@ -68,7 +68,7 @@ if [ "$DEPLOY_TYPE" = "server" ]; then
     echo "[2/4] Server-Images bauen ..."
 
     # Engine und Compose-File aus dem systemd-Service auslesen
-    COMPOSE_FILE="$(grep -oP 'compose -f \K\S+' "$SERVER_SERVICE" || echo "docker-compose.yml")"
+    COMPOSE_FILE="$(grep -oP '^ExecStart=\S+\s+compose\s+-f\s+\K\S+' "$SERVER_SERVICE" | head -1 || echo "docker-compose.yml")"
     if grep -qE '^ExecStart=.*podman' "$SERVER_SERVICE"; then
         COMPOSE_CMD="podman compose"
     else
@@ -92,7 +92,7 @@ elif [ "$DEPLOY_TYPE" = "onboard" ]; then
     echo "[2/4] Onboard bauen ..."
 
     # .NET-Pfad aus dem Service auslesen (z. B. /home/pi/.dotnet/dotnet)
-    DOTNET_BIN="$(grep -oP '^ExecStart=\K\S+' "$ONBOARD_SERVICE" | awk '{print $1}')"
+    DOTNET_BIN="$(grep -oP '^ExecStart=\K\S+' "$ONBOARD_SERVICE" | head -1 | awk '{print $1}')"
     if [ -z "$DOTNET_BIN" ] || [ ! -f "$DOTNET_BIN" ]; then
         DOTNET_BIN="$RUN_USER_HOME/.dotnet/dotnet"
     fi
