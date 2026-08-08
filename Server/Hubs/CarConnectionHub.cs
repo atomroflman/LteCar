@@ -436,7 +436,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
             Logger.LogDebug("Car not connected");
             return null;
         }
-        var session = await Clients.Client(connectionInfo.ConnectionId).AquireCarControl(authRequest);
+        var session = await Clients.Client(connectionInfo.ConnectionId!).AquireCarControl(authRequest);
         Logger.LogDebug($"Session returned: {session}");
 
         if (!string.IsNullOrEmpty(session))
@@ -454,7 +454,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
         Logger.LogDebug($"Invoked: ReleaseCarControl({carId}, {sessionId})");
         if (!_connectionStore.TryGetValue(carId.ToString(), out var connectionInfo))
             return;
-        await Clients.Client(connectionInfo.ConnectionId).ReleaseCarControl(sessionId);
+        await Clients.Client(connectionInfo.ConnectionId!).ReleaseCarControl(sessionId);
         await ClearUserActiveVehicle(carId);
         await UpdateCarUiDriverStateAsync(carId);
     }
@@ -472,7 +472,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
             Logger.LogError($"Channel ID: {channelId} unknown");
             return;
         }
-        await Clients.Client(connectionInfo.ConnectionId).UpdateChannel(sessionId, channelName, value);
+        await Clients.Client(connectionInfo.ConnectionId!).UpdateChannel(sessionId, channelName, value);
     }
 
     public async Task<string?> GetChallenge(int carId)
@@ -480,7 +480,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
         Logger.LogDebug($"Invoked: GetChallenge({carId})");
         if (!_connectionStore.TryGetValue(carId.ToString(), out var connectionInfo))
             return null;
-        var challenge = await Clients.Client(connectionInfo.ConnectionId).GetChallenge();
+        var challenge = await Clients.Client(connectionInfo.ConnectionId!).GetChallenge();
         Logger.LogDebug($"Challenge returned: {challenge?[..Math.Min(20, challenge?.Length ?? 0)]}...");
         return challenge;
     }
@@ -490,7 +490,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
         if (!_connectionStore.TryGetValue(carId.ToString(), out var connectionInfo))
             return null;
 
-        var approved = await Clients.Client(connectionInfo.ConnectionId).ApproveFileUpload(sessionId, filePath);
+        var approved = await Clients.Client(connectionInfo.ConnectionId!).ApproveFileUpload(sessionId, filePath);
         if (!approved)
             return null;
 
@@ -514,14 +514,14 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
     {
         if (!_connectionStore.TryGetValue(carId.ToString(), out var connectionInfo))
             return null;
-        return await Clients.Client(connectionInfo.ConnectionId).ListFiles(sessionId, path);
+        return await Clients.Client(connectionInfo.ConnectionId!).ListFiles(sessionId, path);
     }
 
     public async Task<bool> DeleteFileOnDevice(int carId, string sessionId, string filePath)
     {
         if (!_connectionStore.TryGetValue(carId.ToString(), out var connectionInfo))
             return false;
-        return await Clients.Client(connectionInfo.ConnectionId).DeleteFile(sessionId, filePath);
+        return await Clients.Client(connectionInfo.ConnectionId!).DeleteFile(sessionId, filePath);
     }
 
     public async Task<PingCarResult?> PingCar(int carId)
@@ -532,7 +532,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
             return null;
         }
         var sw = Stopwatch.StartNew();
-        var carTimestamp = await Clients.Client(connectionInfo.ConnectionId).Ping();
+        var carTimestamp = await Clients.Client(connectionInfo.ConnectionId!).Ping();
         sw.Stop();
         return new PingCarResult(carTimestamp, sw.Elapsed.TotalMilliseconds);
     }

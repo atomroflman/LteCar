@@ -17,7 +17,7 @@ public interface IControlClient
     Task SendBashOutput(int carId, string output, bool isError);
 
     // Control session (onboard)
-    Task<string> AquireCarControl(SshAuthenticationRequest authRequest);
+    Task<string?> AquireCarControl(SshAuthenticationRequest authRequest);
     Task ReleaseCarControl(string sessionId);
     Task UpdateChannel(string sessionId, string channelId, decimal value);
     Task<string?> GetChallenge();

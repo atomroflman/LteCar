@@ -31,7 +31,7 @@ public class ControlService : IControlClient, IHubConnectionObserver
 
     private string? _sessionId;
     private DateTime _lastControlUpdate = DateTime.Now;
-    private IConnectionHubServer _server;
+    private IConnectionHubServer _server = null!;
 
     public ControlService(ILogger<ControlService> logger, TelemetryService telemetryService, ControlExecutionService control, IServiceProvider serviceProvider, IConfiguration configuration, ServerConnectionService serverConnectionService, SshKeyService sshKeyService, ServerCarConfigurationService carConfigurationService, OnboardChannelStore channelStore, ChannelMap channelMap)
     {

@@ -89,7 +89,7 @@ public static class VehicleTemplateManager
             
             if (AnsiConsole.Confirm($"Möchten Sie die Vorlage '{selectedTemplate.Name}' anwenden?"))
             {
-                return selectedTemplate.Name;
+                return selectedTemplate.Name ?? string.Empty;
             }
         }
 

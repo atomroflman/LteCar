@@ -31,7 +31,7 @@ public class ServerConnectionService
     private readonly IOnboardBuildInfoService _buildInfo;
     private readonly AvailableChannelTypesService _availableTypes;
     private readonly HttpClient _http;
-    private HubConnection _connection;
+    private HubConnection _connection = null!;
     private ChannelMapSyncResponse? _lastSync;
     private int? _serverAssignedCarId;
 

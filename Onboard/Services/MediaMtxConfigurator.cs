@@ -39,8 +39,8 @@ public class MediaMtxConfigurator : IMediaMtxConfigurator, IDisposable
     private readonly string _configPath;
     private readonly string _backupPath;
     private readonly string _mediamtxBinary;
-    private MediaMtxConfiguration _currentConfig;
-    private string _originalConfig;
+    private MediaMtxConfiguration _currentConfig = new MediaMtxConfiguration();
+    private string _originalConfig = string.Empty;
     private Process? _mediamtxProcess;
 
     public MediaMtxConfiguration CurrentConfiguration => _currentConfig;
@@ -54,7 +54,7 @@ public class MediaMtxConfigurator : IMediaMtxConfigurator, IDisposable
         _configPath = Path.GetFullPath("./Extern/mediamtx.yml");
         _backupPath = Path.GetFullPath("./Extern/mediamtx.yml.backup");
 
-        _mediamtxBinary = ResolveMediaMtxBinary(_logger);
+        _mediamtxBinary = ResolveMediaMtxBinary(_logger) ?? string.Empty;
         if (string.IsNullOrEmpty(_mediamtxBinary))
         {
             _logger.LogError("mediamtx binary not found. Install it via your package manager (apt/pacman) or place it at {Path}.",
@@ -253,7 +253,6 @@ public class MediaMtxConfigurator : IMediaMtxConfigurator, IDisposable
             if (Regex.IsMatch(lines[i], pathPattern))
             {
                 startIndex = i;
-                int braceCount = 0;
                 for (int j = i + 1; j < lines.Count; j++)
                 {
                     if (lines[j].Trim().StartsWith("all_others:"))

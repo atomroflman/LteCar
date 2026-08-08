@@ -13,7 +13,6 @@ public class ConfigLoader
     public string ConfigDir => _configDir;
     public string ChannelMapPath => Path.Combine(_configDir, "channelMap.json");
     public string AppSettingsPath => Path.Combine(_configDir, "appSettings.json");
-    public string CarIdentityKeyPath => Path.Combine(_configDir, "carIdentityKey.txt");
     public string SshKeyPath => Path.Combine(_configDir, "ssh_key");
     public string SshPublicKeyPath => Path.Combine(_configDir, "ssh_key.pub");
 

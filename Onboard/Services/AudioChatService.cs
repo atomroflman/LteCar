@@ -21,8 +21,10 @@ public class AudioChatService : VehicleServiceBase
     private string? _selectedAudioInputDeviceId;
     private string? _selectedAudioOutputDeviceId;
 
+    #pragma warning disable CS0067
     public event EventHandler<AudioStreamStatusEventArgs>? AudioStreamStatusChanged;
     public event EventHandler<string>? AudioError;
+    #pragma warning restore CS0067
 
     public AudioChatService(
         IConfiguration configuration,

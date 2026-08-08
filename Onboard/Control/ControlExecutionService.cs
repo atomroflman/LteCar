@@ -36,6 +36,8 @@ public class ControlExecutionService
         foreach (var channel in _channelMap.ControlChannels)
         {
             var controlType = GetControlType(channel.Value.ControlType);
+            if (controlType == null)
+                continue;
             Logger.LogDebug($"Got type {controlType.Name} for channel {channel.Key}.");
             var baseControl = ServiceProvider.GetService(controlType) as ControlTypeBase;
             if (baseControl == null)
@@ -111,7 +113,7 @@ public class ControlExecutionService
         }
     }
 
-    private Type GetControlType(string valueControlType)
+    private Type? GetControlType(string valueControlType)
     {
         var t = typeof(ControlTypeBase).Assembly.GetTypes()
             .FirstOrDefault(type => (type.GetCustomAttributes(typeof(ControlTypeAttribute), false).FirstOrDefault() as ControlTypeAttribute)?.TypeName == valueControlType);

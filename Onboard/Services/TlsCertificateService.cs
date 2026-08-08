@@ -39,7 +39,7 @@ public class TlsCertificateService
         {
             try
             {
-                var existing = new X509Certificate2(PfxPath, "", X509KeyStorageFlags.Exportable);
+                var existing = X509CertificateLoader.LoadPkcs12FromFile(PfxPath, "", X509KeyStorageFlags.Exportable);
                 if (existing.NotAfter > DateTime.UtcNow.AddDays(30))
                 {
                     _logger.LogInformation($"Loaded existing TLS cert from {PfxPath} (expires {existing.NotAfter:yyyy-MM-dd})");

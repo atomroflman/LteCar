@@ -9,8 +9,8 @@ public class SetupMenu
 {
     private readonly ConfigLoader _configLoader;
     private readonly string _appSettingsPath;
-    private AppSettings _appSettings;
-    private ChannelMap _channelMap;
+    private AppSettings _appSettings = null!;
+    private ChannelMap _channelMap = null!;
     private bool _needsRestart;
 
     public SetupMenu(ConfigLoader configLoader)

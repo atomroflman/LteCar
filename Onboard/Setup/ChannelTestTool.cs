@@ -560,7 +560,7 @@ public class ChannelTestTool
             var status = TestVideoStream(vs.Key, vs.Value);
             table.AddRow(
                 vs.Key,
-                vs.Value.Name,
+                vs.Value.Name ?? "Unbekannt",
                 vs.Value.Location ?? "Unbekannt",
                 vs.Value.Enabled ? "[green]Aktiviert[/]" : "[yellow]Deaktiviert[/]",
                 status.Success ? "[green]✓ Verfügbar[/]" : "[red]✗ Fehler[/]"

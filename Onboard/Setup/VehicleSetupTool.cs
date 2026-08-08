@@ -10,8 +10,8 @@ public class VehicleSetupTool
 {
     private readonly string _channelMapPath;
     private readonly string _appSettingsPath;
-    private ChannelMap _channelMap;
-    private AppSettings _appSettings;
+    private ChannelMap _channelMap = null!;
+    private AppSettings _appSettings = null!;
 
     public VehicleSetupTool(string? channelMapPath = null, string? appSettingsPath = null)
     {
@@ -363,7 +363,7 @@ public class VehicleSetupTool
         {
             ControlType = controlType,
             Address = address,
-            PinManager = pinManager,
+            PinManager = pinManager ?? "default",
             TestDisabled = testDisabled
         };
 

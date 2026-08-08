@@ -324,7 +324,7 @@ public class UserController : ControllerBase
         });
     }
 
-    private async Task<User?> GetCurrentUserAsync()
+    private new async Task<User?> GetCurrentUserAsync()
     {
         if (User.Identity?.IsAuthenticated != true)
             return null;

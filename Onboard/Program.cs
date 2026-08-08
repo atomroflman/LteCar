@@ -56,18 +56,8 @@ if (configDirArg != null || configDirEnv != null)
     Console.WriteLine($"Using config directory: {configLoader.ConfigDir}");
 }
 
-var carIdentityKey = Guid.NewGuid().ToString();
+var carIdentityKey = CarIdentityService.ResolveCarIdentityKey();
 var startupTime = DateTime.Now;
-var carIdentityKeyPath = configLoader.CarIdentityKeyPath;
-if (File.Exists(carIdentityKeyPath))
-{
-    carIdentityKey = File.ReadAllText(carIdentityKeyPath);
-}
-else
-{
-    Console.WriteLine($"New Car Identity Key created: {carIdentityKey}");
-    File.WriteAllText(carIdentityKeyPath, carIdentityKey);
-}
 
 // Generate SSH key pair only if no public key exists
 var sshKeyPath = configLoader.SshKeyPath;
@@ -108,7 +98,7 @@ if (File.Exists(channelsDbPath))
 }
 else
 {
-    channelMap = await configLoader.LoadConfigsAsync();
+    channelMap = (await configLoader.LoadConfigsAsync())!;
     if (channelMap == null)
         throw new Exception("channelMap.json could not be loaded");
     await channelStore.InitializeAsync();

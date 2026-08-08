@@ -30,7 +30,7 @@ public class VideoStreamService : IDisposable, ICarVideoClient, IHubConnectionOb
     public ServerCarConfigurationService ConfigService { get; }
     public ServerConnectionService ServerConnectionService { get; }
     public IConfiguration Configuration { get; }
-    public IConnectionHubServer CarVideoServer { get; set; }
+    public IConnectionHubServer CarVideoServer { get; set; } = null!;
     private readonly ChannelMap _channelMap;
     private readonly IMediaMtxConfigurator _mediaMtxConfigurator;
     private readonly Dictionary<string, int> _activeStreamPorts = new();
@@ -118,7 +118,7 @@ public class VideoStreamService : IDisposable, ICarVideoClient, IHubConnectionOb
     public async Task OnReconnected(string? connectionId)
     {
         Logger.LogInformation("VideoStreamService reconnected. ConnectionId: {ConnectionId}", connectionId);
-        await CarVideoServer.ConnectCar(Configuration.GetValue<string>("CarIdentityKey"));
+        await CarVideoServer.ConnectCar(Configuration.GetValue<string>("CarIdentityKey")!);
     }
 
     public async Task OnReconnecting(Exception? exception)
@@ -129,6 +129,6 @@ public class VideoStreamService : IDisposable, ICarVideoClient, IHubConnectionOb
     public async Task Connect()
     {
         CarVideoServer = ServerConnectionService.GetProxy();
-        await CarVideoServer.ConnectCar(Configuration.GetValue<string>("CarIdentityKey"));
+        await CarVideoServer.ConnectCar(Configuration.GetValue<string>("CarIdentityKey")!);
     }
 }

@@ -19,7 +19,7 @@ public partial class FlowController : ControllerBase
     public async Task<IActionResult> GetFlow(int userSetupId)
     {
         var flowNodes = await _context.Set<UserSetupFlowNodeBase>()
-            .Include(n => (n as UserSetupFunctionNode).Parameters)
+            .Include(n => (n as UserSetupFunctionNode)!.Parameters)
             .Where(n => n.UserSetupId == userSetupId)
             .ToListAsync();
         if (flowNodes == null || !flowNodes.Any())

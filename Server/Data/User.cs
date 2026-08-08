@@ -16,8 +16,8 @@ namespace LteCar.Server.Data
         public long? TransferCode { get; set; }
         public long SessionId { get; set; }
         public DateTime? TransferCodeExpiresAt { get; set; }
-        public ICollection<UserChannelDevice> UserChannelDevices { get; set; }
-        public ICollection<UserCarSetup> CarSetups { get; set; }
+        public ICollection<UserChannelDevice> UserChannelDevices { get; set; } = new List<UserChannelDevice>();
+        public ICollection<UserCarSetup> CarSetups { get; set; } = new List<UserCarSetup>();
 
         public bool HasControlledCar { get; set; }
         public string? PasswordHash { get; set; }
