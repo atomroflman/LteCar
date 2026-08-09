@@ -317,11 +317,31 @@ public class MediaMtxConfigurator : IMediaMtxConfigurator, IDisposable
 
     public async Task StopAsync()
     {
-        if (_mediamtxProcess != null && !_mediamtxProcess.HasExited)
+        if (_mediamtxProcess == null || _mediamtxProcess.HasExited)
         {
-            _logger.LogInformation("Stopping MediaMTX process...");
-            _mediamtxProcess.Kill();
-            await _mediamtxProcess.WaitForExitAsync();
+            _mediamtxProcess = null;
+            return;
+        }
+
+        _logger.LogInformation("Stopping MediaMTX process (PID {PID}) and its child processes...", _mediamtxProcess.Id);
+        try
+        {
+            // Kill the entire process tree so that helper processes such as
+            // mtxrpicam are terminated as well. On Linux mtxrpicam is a direct
+            // child of mediamtx and would otherwise keep the camera pipeline
+            // locked, causing "Pipeline handler in use by another process" on
+            // the next start.
+            _mediamtxProcess.Kill(entireProcessTree: true);
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+            await _mediamtxProcess.WaitForExitAsync(cts.Token);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to stop MediaMTX process tree gracefully.");
+        }
+        finally
+        {
+            _mediamtxProcess = null;
         }
     }
 
