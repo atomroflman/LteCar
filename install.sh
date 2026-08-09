@@ -599,7 +599,10 @@ if [ "$DEPLOY_MODE" = "onboard" ]; then
     echo ""
     echo "── Phase 3: .NET SDK ─────────────────────────────────"
 
-    if ! command -v dotnet >/dev/null 2>&1; then
+    # Resolve DOTNET_ROOT for the user
+    DOTNET_ROOT="$RUN_USER_HOME/.dotnet"
+
+    if ! command -v "$DOTNET_ROOT" >/dev/null 2>&1; then
         echo "Installing dotnet SDK..."
         DOTNET_INSTALL_SCRIPT="/tmp/dotnet-install.sh"
         curl -fsSL https://dot.net/v1/dotnet-install.sh -o "$DOTNET_INSTALL_SCRIPT"
@@ -611,8 +614,6 @@ if [ "$DEPLOY_MODE" = "onboard" ]; then
         echo "Dotnet is already installed. Skipping install."
     fi
 
-    # Resolve DOTNET_ROOT for the user
-    DOTNET_ROOT="$RUN_USER_HOME/.dotnet"
     APPSETTINGS_PATH="$REPO_DIR/Onboard/appSettings.json"
     prompt_onboard_server_settings "$APPSETTINGS_PATH"
     update_onboard_appsettings "$APPSETTINGS_PATH"
@@ -620,12 +621,11 @@ if [ "$DEPLOY_MODE" = "onboard" ]; then
     # ── Phase 4: Build ───────────────────────────────────────────────
     echo ""
     echo "── Phase 4: Build ────────────────────────────────────"
+    export PATH="$DOTNET_ROOT:$DOTNET_ROOT/tools:$PATH"
 
     echo "Building .NET Onboard Client ..."
     echo "\"$DOTNET_ROOT/dotnet\" publish \"$REPO_DIR/Onboard/LteCar.Onboard.csproj\" -c Release"
-    run_as_user env DOTNET_ROOT="$DOTNET_ROOT" \ 
-        PATH="$DOTNET_ROOT:$DOTNET_ROOT/tools:$PATH" \
-        "$DOTNET_ROOT/dotnet" publish "$REPO_DIR/Onboard/LteCar.Onboard.csproj" -c Release || true
+    run_as_user "$DOTNET_ROOT/dotnet" publish "$REPO_DIR/Onboard/LteCar.Onboard.csproj" -c Release || true
 
     ONBOARD_DLL="$REPO_DIR/Onboard/bin/Release/net10.0/publish/LteCar.Onboard.dll"
     if [ ! -f "$ONBOARD_DLL" ]; then
@@ -696,3 +696,5 @@ EOF
     echo "============================================"
     exit 0
 fi
+
+# end

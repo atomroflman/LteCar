@@ -80,6 +80,7 @@ public class OnboardInstallScriptService : IOnboardInstallScriptService
 
         return $$"""
 #!/bin/bash
+# Sourced from: {{templatePath}}
 DEPLOY_MODE='onboard'
 LTECAR_SERVER_URL='{{EscapeForSingleQuotes(serverUrl)}}'
 LTECAR_SERVER_NAME='{{EscapeForSingleQuotes(settings.ServerName)}}'
