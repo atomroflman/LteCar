@@ -217,59 +217,78 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 if [ -d "$SCRIPT_DIR/.git" ]; then
     REPO_DIR="$SCRIPT_DIR"
+    if [[ -n "$CURRENT_BRANCH" ]]; then
+        git checkout "$CURRENT_BRANCH"
+    fi
     CURRENT_BRANCH=$(git -C "$REPO_DIR" branch --show-current)
     echo "Repository found at $REPO_DIR (branch: $CURRENT_BRANCH)"
 else
-    echo "No repository found. Cloning LteCar ..."
+    echo "No repository found. Cloning SignalRC ..."
     pkg_install git
 
-    REPO_DIR="$RUN_USER_HOME/LteCar"
+    REPO_DIR="$RUN_USER_HOME/SignalRC"
 
-    echo ""
-    echo "Available branches:"
-    mapfile -t BRANCHES < <(git ls-remote --heads "$REPO_URL" | sed 's|.*refs/heads/||' | sort)
+    if [[ -n $LTECAR_BRANCH ]]; then
+        echo "Branch preselected: $LTECAR_BRANCH"
+        BRANCH_CHOICE="$LTECAR_BRANCH"
+        CURRENT_BRANCH=$BRANCH_CHOICE
+        if [ -d "$REPO_DIR" ] && [ "$(ls -A "$REPO_DIR")" ]; then
+            echo "Target directory $REPO_DIR already exists and is not empty. Skipping clone."
+            cd "$REPO_DIR"
+            run_as_user git checkout "$BRANCH_CHOICE"
+            run_as_user git pull
+        else 
+            echo "git clone -b \"$BRANCH_CHOICE\" \"$REPO_URL\" \"$REPO_DIR\""
+            run_as_user git clone -b "$BRANCH_CHOICE" "$REPO_URL" "$REPO_DIR"
+        fi    
+    else
+        echo ""
+        echo "Available branches:"
+        mapfile -t BRANCHES < <(git ls-remote --heads "$REPO_URL" | sed 's|.*refs/heads/||' | sort)
 
-    DEFAULT_IDX=1
-    DEFAULT_BRANCH="${LTECAR_BRANCH:-}"
-    for i in "${!BRANCHES[@]}"; do
-        idx=$((i + 1))
-        marker=""
-        if [ -n "$DEFAULT_BRANCH" ] && [ "${BRANCHES[$i]}" = "$DEFAULT_BRANCH" ]; then
-            DEFAULT_IDX=$idx
-            marker=" (preselected)"
-        elif [ -z "$DEFAULT_BRANCH" ] && [ "${BRANCHES[$i]}" = "master" ]; then
-            DEFAULT_IDX=$idx
-            marker=" (default)"
+        DEFAULT_IDX=1
+        DEFAULT_BRANCH="${LTECAR_BRANCH:-}"
+        for i in "${!BRANCHES[@]}"; do
+            idx=$((i + 1))
+            marker=""
+            if [ -n "$DEFAULT_BRANCH" ] && [ "${BRANCHES[$i]}" = "$DEFAULT_BRANCH" ]; then
+                DEFAULT_IDX=$idx
+                marker=" (preselected)"
+            elif [ -z "$DEFAULT_BRANCH" ] && [ "${BRANCHES[$i]}" = "master" ]; then
+                DEFAULT_IDX=$idx
+                marker=" (default)"
+            fi
+            echo "  $idx) ${BRANCHES[$i]}$marker"
+        done
+
+        echo ""
+        BRANCH_PROMPT_DEFAULT="${DEFAULT_BRANCH:-$DEFAULT_IDX}"
+        read -rp "Choose branch [${BRANCH_PROMPT_DEFAULT}]: " BRANCH_INPUT
+        BRANCH_INPUT="${BRANCH_INPUT:-$BRANCH_PROMPT_DEFAULT}"
+
+        if [[ "$BRANCH_INPUT" =~ ^[0-9]+$ ]] && [ "$BRANCH_INPUT" -ge 1 ] && [ "$BRANCH_INPUT" -le "${#BRANCHES[@]}" ]; then
+            BRANCH_CHOICE="${BRANCHES[$((BRANCH_INPUT - 1))]}"
+        else
+            BRANCH_CHOICE="$BRANCH_INPUT"
         fi
-        echo "  $idx) ${BRANCHES[$i]}$marker"
-    done
 
-    echo ""
-    BRANCH_PROMPT_DEFAULT="${DEFAULT_BRANCH:-$DEFAULT_IDX}"
-    read -rp "Choose branch [${BRANCH_PROMPT_DEFAULT}]: " BRANCH_INPUT
-    BRANCH_INPUT="${BRANCH_INPUT:-$BRANCH_PROMPT_DEFAULT}"
-
-    if [[ "$BRANCH_INPUT" =~ ^[0-9]+$ ]] && [ "$BRANCH_INPUT" -ge 1 ] && [ "$BRANCH_INPUT" -le "${#BRANCHES[@]}" ]; then
-        BRANCH_CHOICE="${BRANCHES[$((BRANCH_INPUT - 1))]}"
-    else
-        BRANCH_CHOICE="$BRANCH_INPUT"
+        if [ -d "$REPO_DIR" ] && [ "$(ls -A "$REPO_DIR")" ]; then
+            echo "Target directory $REPO_DIR already exists and is not empty. Skipping clone."
+            CURRENT_BRANCH="$BRANCH_CHOICE"
+            git checkout "$BRANCH_CHOICE"
+        else
+            run_as_user git clone -b "$BRANCH_CHOICE" "$REPO_URL" "$REPO_DIR"
+            CURRENT_BRANCH="$BRANCH_CHOICE"
+            echo "Cloned branch '$CURRENT_BRANCH' to $REPO_DIR"
+        fi
     fi
 
-    if [ -d "$REPO_DIR" ] && [ "$(ls -A "$REPO_DIR")" ]; then
-        echo "Target directory $REPO_DIR already exists and is not empty. Skipping clone."
-        CURRENT_BRANCH="$BRANCH_CHOICE"
-    else
-        run_as_user git clone -b "$BRANCH_CHOICE" "$REPO_URL" "$REPO_DIR"
-        CURRENT_BRANCH="$BRANCH_CHOICE"
-        echo "Cloned branch '$CURRENT_BRANCH' to $REPO_DIR"
-    fi
-
-    if [ -n "${LTECAR_GIT_REF:-}" ]; then
-        echo "Checking out preselected git ref: $LTECAR_GIT_REF"
-        run_as_user git -C "$REPO_DIR" fetch --all --tags --prune || true
-        run_as_user git -C "$REPO_DIR" checkout "$LTECAR_GIT_REF"
-        CURRENT_BRANCH=$(git -C "$REPO_DIR" rev-parse --abbrev-ref HEAD 2>/dev/null || echo "$LTECAR_GIT_REF")
-    fi
+    #if [ -n "${LTECAR_GIT_REF:-}" ]; then
+    #    echo "Checking out preselected git ref: $LTECAR_GIT_REF"
+    #    run_as_user git -C "$REPO_DIR" fetch --all --tags --prune
+    #    run_as_user git -C "$REPO_DIR" checkout "$LTECAR_GIT_REF"
+    #    CURRENT_BRANCH=$(git -C "$REPO_DIR" branch --show-current || echo "$LTECAR_GIT_REF")
+    #fi
 fi
 
 echo ""
@@ -290,12 +309,14 @@ case "$DEFAULT_DEPLOY_MODE" in
     onboard|Onboard) DEFAULT_DEPLOY_MODE="2" ;;
 esac
 
-echo "What do you want to install?"
-echo "  1) Server   (Compose stack: client + server + nginx + janus + postgres)"
-echo "  2) Onboard  (Bare metal: vehicle / car client for Raspberry Pi)"
-echo ""
-read -rp "Choose [1/2${DEFAULT_DEPLOY_MODE:+, default $DEFAULT_DEPLOY_MODE}]: " DEPLOY_MODE_INPUT
-DEPLOY_MODE="${DEPLOY_MODE_INPUT:-$DEFAULT_DEPLOY_MODE}"
+if [[ -n "$DEPLOY_MODE" ]]; then
+    echo "What do you want to install?"
+    echo "  1) Server   (Compose stack: client + server + nginx + janus + postgres)"
+    echo "  2) Onboard  (Bare metal: vehicle / car client for Raspberry Pi)"
+    echo ""
+    read -rp "Choose [1/2${DEFAULT_DEPLOY_MODE:+, default $DEFAULT_DEPLOY_MODE}]: " DEPLOY_MODE_INPUT
+    DEPLOY_MODE="${DEPLOY_MODE_INPUT:-$DEFAULT_DEPLOY_MODE}"
+fi
 
 case "$DEPLOY_MODE" in
     1|server|Server) DEPLOY_MODE="server" ;;
@@ -578,11 +599,17 @@ if [ "$DEPLOY_MODE" = "onboard" ]; then
     echo ""
     echo "── Phase 3: .NET SDK ─────────────────────────────────"
 
-    DOTNET_INSTALL_SCRIPT="/tmp/dotnet-install.sh"
-    curl -fsSL https://dot.net/v1/dotnet-install.sh -o "$DOTNET_INSTALL_SCRIPT"
-    chmod +x "$DOTNET_INSTALL_SCRIPT"
-    run_as_user "$DOTNET_INSTALL_SCRIPT" --channel 10.0
-    rm -f "$DOTNET_INSTALL_SCRIPT"
+    if ! command -v dotnet >/dev/null 2>&1; then
+        echo "Installing dotnet SDK..."
+        DOTNET_INSTALL_SCRIPT="/tmp/dotnet-install.sh"
+        curl -fsSL https://dot.net/v1/dotnet-install.sh -o "$DOTNET_INSTALL_SCRIPT"
+        chmod +x "$DOTNET_INSTALL_SCRIPT"
+        run_as_user "$DOTNET_INSTALL_SCRIPT" --channel 10.0
+        rm -f "$DOTNET_INSTALL_SCRIPT"
+        echo "Installing dotnet SDK done."
+    else
+        echo "Dotnet is already installed. Skipping install."
+    fi
 
     # Resolve DOTNET_ROOT for the user
     DOTNET_ROOT="$RUN_USER_HOME/.dotnet"
@@ -595,12 +622,14 @@ if [ "$DEPLOY_MODE" = "onboard" ]; then
     echo "── Phase 4: Build ────────────────────────────────────"
 
     echo "Building .NET Onboard Client ..."
-    run_as_user env DOTNET_ROOT="$DOTNET_ROOT" PATH="$DOTNET_ROOT:$DOTNET_ROOT/tools:$PATH" \
-        "$DOTNET_ROOT/dotnet" publish "$REPO_DIR/Onboard/LteCar.Onboard.csproj" -c Release
+    echo "\"$DOTNET_ROOT/dotnet\" publish \"$REPO_DIR/Onboard/LteCar.Onboard.csproj\" -c Release"
+    run_as_user env DOTNET_ROOT="$DOTNET_ROOT" \ 
+        PATH="$DOTNET_ROOT:$DOTNET_ROOT/tools:$PATH" \
+        "$DOTNET_ROOT/dotnet" publish "$REPO_DIR/Onboard/LteCar.Onboard.csproj" -c Release || true
 
     ONBOARD_DLL="$REPO_DIR/Onboard/bin/Release/net10.0/publish/LteCar.Onboard.dll"
     if [ ! -f "$ONBOARD_DLL" ]; then
-        echo "Error: Onboard DLL not found at $ONBOARD_DLL"
+        echo "Error: Onboard DLL not found at $ONBOARD_DLL. Build failed?"
         exit 1
     fi
 
