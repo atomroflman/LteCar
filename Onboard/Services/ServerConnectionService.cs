@@ -141,20 +141,14 @@ public class ServerConnectionService
         _serverAssignedCarId = config.ServerAssignedCarId;
         Logger.LogInformation($"Server assigned CarId: {_serverAssignedCarId}");
         
-        // SPOT handshake:
-        // - RequiresChannelMapUpload: server has no config for this car; upload the local config once.
-        // - RequiresChannelMapUpdate (legacy/reset): server asks the client to re-sync (still supported as fallback).
-        if (config.RequiresChannelMapUpload)
+        // SPOT handshake: the server is the sole source of truth. OpenCarConnection
+        // returns the current server map when the client is out of date or when the
+        // server has no config (empty map). Apply it to the local store.
+        if (config.ChannelMap != null)
         {
-            Logger.LogInformation("Server has no channel map for this car. Uploading local config via SyncChannelMap.");
-            await SyncChannelMapAsync();
+            await controlService.ApplyChannelMap(config.ChannelMap, config.ChannelMapHash);
+            Logger.LogInformation("Applied server channel map from OpenCarConnection (hash {Hash}).", config.ChannelMapHash);
         }
-        else if (config.RequiresChannelMapUpdate && config.ChannelMap == null)
-        {
-            Logger.LogInformation("Server indicates channel map mismatch without a push. Triggering SyncChannelMap now.");
-            await SyncChannelMapAsync();
-        }
-        // If ChannelMap is present, ApplyChannelMap has already been pushed by the server and handled by ControlService.
         
         Logger.LogDebug($"OpenCarConnection called: {JsonSerializer.Serialize(config)}");
         var configService = ServiceProvider.GetRequiredService<ServerCarConfigurationService>();
@@ -201,10 +195,23 @@ public class ServerConnectionService
         }
         var proxy = _connection.CreateHubProxy<IConnectionHubServer>();
         var request = new ChannelMapSyncRequest { CarId = _serverAssignedCarId.Value, ChannelMap = _channelMap };
-        Logger.LogInformation("Sending ChannelMapSyncRequest for CarId {CarId} with {Control} control, {Telemetry} telemetry, {Video} video streams", 
-            _serverAssignedCarId.Value, _channelMap.ControlChannels.Count, _channelMap.TelemetryChannels.Count, _channelMap.VideoStreams.Count);
+        Logger.LogInformation("Sending ChannelMapSyncRequest for CarId {CarId} with local hash {LocalHash}",
+            _serverAssignedCarId.Value, ChannelMapHashProvider.GenerateHash(_channelMap));
         var response = await _connection.InvokeAsync<ChannelMapSyncResponse>("SyncChannelMap", request);
         _lastSync = response;
+
+        // SPOT: apply the server-pushed configuration to the local in-memory and persisted store.
+        try
+        {
+            var controlService = ServiceProvider.GetRequiredService<ControlService>();
+            await controlService.ApplyChannelMap(response.ChannelMap, response.Hash);
+            Logger.LogInformation("Applied server channel map after sync. Hash {Hash}", response.Hash);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to apply server channel map after sync");
+        }
+
         try
         {
             await File.WriteAllTextAsync("channelMap.server.json", JsonSerializer.Serialize(response, new JsonSerializerOptions { WriteIndented = true }));

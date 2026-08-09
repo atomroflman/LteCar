@@ -19,9 +19,12 @@
 | `UserChannelHub` | `/hubs/userchannel` | Gamepad-Sync zwischen Browsern |
 
 ## Neues Verbindungsmodell (`LTE_USE_NEW_CONNECTION_MODEL`, default true)
-- Erst `SyncChannelMap` (Map → Server vergibt IDs + SHA256-Hash).
-- Dann `OpenCarConnection(carIdentityKey, hash)`.
-- Server fordert nur bei Hash-Mismatch `RequiresChannelMapUpdate` → spart Bandbreite/Roundtrips.
+- Der Server ist SPOT für die Channel-Map.
+- `OpenCarConnection(carIdentityKey, hash)` vergleicht den Client-Hash mit dem Server-Hash.
+  - Bei Mismatch pusht der Server die aktuelle Map sofort per `ApplyChannelMap`.
+  - Hat der Server keine Konfiguration, bleibt er leer; die Erstkonfiguration erfolgt über UI/Template.
+- `SyncChannelMap` holt die aktuelle Server-Map inklusive Hash und IDs; der Client überschreibt damit seine lokale Konfiguration.
+- UI-Änderungen an Kanälen pushen den geänderten Einzelwert sofort an das verbundene Auto.
 
 ## VehicleConnectionManager (Onboard)
 - Zentrale HubConnection mit Auto-Reconnect (exponentielles Backoff) zu `CarConnectionHub`.

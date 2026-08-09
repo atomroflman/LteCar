@@ -10,17 +10,8 @@ public class CarConfiguration : IConfigurationModel
     public VideoSettings? VideoSettings { get; set; }
 
     /// <summary>
-    /// Legacy flag: server wants the client to upload its channel map via SyncChannelMap.
-    /// </summary>
-    public bool RequiresChannelMapUpdate { get; set; }
-
-    /// <summary>
-    /// Server has no channel map for this car and requests a one-time upload from the client.
-    /// </summary>
-    public bool RequiresChannelMapUpload { get; set; }
-
-    /// <summary>
-    /// Server-pushed channel map (SPOT). Only set when the server is the source of truth.
+    /// Server-pushed channel map (SPOT). Only set when the server pushes the current config
+    /// during connection handshake, e.g. because the client's hash was out of date.
     /// </summary>
     public ChannelMap? ChannelMap { get; set; }
 

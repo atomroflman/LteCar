@@ -112,37 +112,33 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
         carConfig.ServerAssignedCarId = car.Id;
 
         // SPOT: Server is the source of truth for channel configuration.
-        // If the server has no config for this car, request a one-time upload from the client.
-        // Otherwise compare hashes and push the server's config if the client is out of date.
-        var hasServerConfig = await dbContext.CarChannels.AnyAsync(c => c.CarId == car.Id)
-            || await dbContext.CarTelemetry.AnyAsync(t => t.CarId == car.Id)
-            || await dbContext.CarVideoStreams.AnyAsync(v => v.CarId == car.Id)
-            || await dbContext.CarPinManagers.AnyAsync(p => p.CarId == car.Id);
+        // Compare hashes and push the server's config if the client is out of date.
+        // If the server has no config yet, the client receives an empty map and hash;
+        // configuration must be created through the UI or a template.
+        var serverMap = await ChannelMapMapper.FromDbAsync(car.Id, dbContext);
+        var serverHash = ChannelMapHashProvider.GenerateHash(serverMap);
+        car.ChannelMapHash = serverHash;
+        carConfig.ChannelMapHash = serverHash;
+
+        var hasServerConfig = serverMap.ControlChannels.Count > 0
+            || serverMap.TelemetryChannels.Count > 0
+            || serverMap.VideoStreams.Count > 0
+            || serverMap.PinManagers.Count > 0;
 
         if (!hasServerConfig)
         {
-            carConfig.RequiresChannelMapUpload = true;
-            car.ChannelMapHash = ChannelMapHashProvider.GenerateHash(new ChannelMap());
-            Logger.LogInformation("Car ID {CarId} has no server-side channel config. Requesting upload from client.", car.Id);
+            Logger.LogWarning("Car ID {CarId} has no server-side channel config. Configure via UI or template.", car.Id);
+            carConfig.ChannelMap = serverMap;
+        }
+        else if (serverHash != channelMapHash)
+        {
+            Logger.LogInformation("Car ID {CarId} channel map hash mismatch. Server: '{ServerHash}' Client: '{ClientHash}'. Pushing server config.", car.Id, serverHash, channelMapHash);
+            carConfig.ChannelMap = serverMap;
+            await Clients.Caller.ApplyChannelMap(serverMap, serverHash);
         }
         else
         {
-            var serverMap = await ChannelMapMapper.FromDbAsync(car.Id, dbContext);
-            var serverHash = ChannelMapHashProvider.GenerateHash(serverMap);
-            car.ChannelMapHash = serverHash;
-
-            if (serverHash != channelMapHash)
-            {
-                Logger.LogInformation("Car ID {CarId} channel map hash mismatch. Server: '{ServerHash}' Client: '{ClientHash}'. Pushing server config.", car.Id, serverHash, channelMapHash);
-                carConfig.RequiresChannelMapUpdate = true;
-                carConfig.ChannelMap = serverMap;
-                carConfig.ChannelMapHash = serverHash;
-                await Clients.Caller.ApplyChannelMap(serverMap, serverHash);
-            }
-            else
-            {
-                Logger.LogInformation("Car ID {CarId} channel map hash matches. No update required.", car.Id);
-            }
+            Logger.LogInformation("Car ID {CarId} channel map hash matches. No update required.", car.Id);
         }
 
         await dbContext.SaveChangesAsync();
@@ -219,102 +215,13 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
         await base.OnDisconnectedAsync(exception);
     }
 
+    [Obsolete("Server-side channel mutations must go through the UI API.")]
     public async Task UpdateChannelMap(int carId, ChannelMap channelMap)
     {
-        var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
-        var car = dbContext.Cars.FirstOrDefault(c => c.Id == carId);
-        if (car == null)
-        {
-            Logger.LogWarning($"Car with ID {carId} not found.");
-            return;        
-        }
-        car.ChannelMapHash = ChannelMapHashProvider.GenerateHash(channelMap);
-        // Add control channels
-        foreach (var channel in channelMap.ControlChannels)
-        {
-            var channelDb = dbContext.CarChannels.FirstOrDefault(c => c.ChannelName == channel.Key && c.CarId == car.Id);
-            if (channelDb == null)
-            {
-                Logger.LogWarning($"Channel with ID {channel.Key} not found. Creating a new one.");
-                channelDb = new CarChannel() { ChannelName = channel.Key, CarId = car.Id };
-                dbContext.CarChannels.Add(channelDb);
-            }
-            channelDb.MaxResendInterval = channel.Value.MaxResendInterval;
-        }
-        // Remove missing control channels
-        foreach (var channel in dbContext.CarChannels.Where(c => c.CarId == car.Id))
-        {
-            if (!channelMap.ControlChannels.ContainsKey(channel.ChannelName))
-            {
-                Logger.LogWarning($"Channel with ID {channel.ChannelName} not found in the new channel map. Removing it.");
-                dbContext.Set<UserSetupCarChannelNode>().Where(n => n.CarChannelId == channel.Id)
-                    .ToList()
-                    .ForEach(n => dbContext.Set<UserSetupCarChannelNode>().Remove(n));
-
-                dbContext.CarChannels.Remove(channel);
-            }
-        }
-
-        // Add telemetry channels
-        foreach (var channel in channelMap.TelemetryChannels)
-        {
-            var channelDb = dbContext.CarTelemetry.FirstOrDefault(c => c.ChannelName == channel.Key && c.CarId == car.Id);
-            if (channelDb == null)
-            {
-                Logger.LogWarning($"Telemetry channel with ID {channel.Key} not found. Creating a new one.");
-                channelDb = new CarTelemetry() { ChannelName = channel.Key, CarId = car.Id };
-                dbContext.CarTelemetry.Add(channelDb);
-            }
-            channelDb.TelemetryType = channel.Value.TelemetryType;
-            channelDb.ReadIntervalTicks = channel.Value.ReadIntervalTicks;
-            channelDb.DataType = channel.Value.DataType;
-            channelDb.Unit = channel.Value.Unit;
-            channelDb.Decimals = channel.Value.Decimals;
-        }
-        // Remove missing telemetry channels
-        foreach (var channel in dbContext.CarTelemetry.Where(c => c.CarId == car.Id))
-        {
-            if (!channelMap.TelemetryChannels.ContainsKey(channel.ChannelName))
-            {
-                Logger.LogWarning($"Telemetry channel with ID {channel.ChannelName} not found in the new channel map. Removing it.");
-                dbContext.CarTelemetry.Remove(channel);
-            }
-        }
-
-        // Add video streams
-        foreach (var stream in channelMap.VideoStreams)
-        {
-            var streamDb = dbContext.CarVideoStreams.FirstOrDefault(s => s.StreamId == stream.Value.StreamId && s.CarId == car.Id);
-            if (streamDb == null)
-            {
-                Logger.LogInformation($"Video stream with ID {stream.Value.StreamId} not found. Creating a new one.");
-                streamDb = new CarVideoStream()
-                {
-                    StreamId = stream.Value.StreamId,
-                    CarId = car.Id,
-                };
-                dbContext.CarVideoStreams.Add(streamDb);
-            }
-
-            streamDb.Name = stream.Value.Name ?? stream.Value.StreamId;
-            streamDb.Type = stream.Value.Type ?? "unknown";
-            streamDb.Location = stream.Value.Location;            
-            streamDb.IsActive = stream.Value.Enabled;
-        }
-
-        // Remove video streams that are no longer in the channel map
-        foreach (var stream in dbContext.CarVideoStreams.Where(s => s.CarId == car.Id))
-        {
-            if (!channelMap.VideoStreams.Values.Any(vs => vs.StreamId == stream.StreamId))
-            {
-                Logger.LogWarning($"Video stream with ID {stream.StreamId} not found in the new channel map. Removing it.");
-                dbContext.CarVideoStreams.Remove(stream);
-            }
-        }
-
-        await dbContext.SaveChangesAsync();
-        Logger.LogInformation($"Channel map updated for car {carId}. Channel map hash: {car.ChannelMapHash}");
+        Logger.LogWarning("UpdateChannelMap is obsolete and ignored. Car {CarId} attempted to push a channel map.", carId);
+        await Task.CompletedTask;
     }
+
 
     public async Task<ChannelMapSyncResponse> SyncChannelMap(ChannelMapSyncRequest request)
     {
@@ -329,44 +236,22 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
                 throw new InvalidOperationException($"Car with ID {request.CarId} not found. Please call OpenCarConnection first.");
             }
 
-            var map = request.ChannelMap ?? new ChannelMap();
-
-            // SPOT: SyncChannelMap is the one-time upload path used when the server has no config.
-            // The server replaces its entire channel configuration with the client's upload.
-            await ChannelMapMapper.SaveToDbAsync(car.Id, map, dbContext);
-
-            // Reload from DB to obtain server-assigned IDs for the response.
-            var reloadedMap = await ChannelMapMapper.FromDbAsync(car.Id, dbContext);
-            var hash = ChannelMapHashProvider.GenerateHash(reloadedMap);
+            // SPOT: The server is the sole source of truth. SyncChannelMap only returns the
+            // current server-side channel configuration; the client's upload is ignored.
+            var serverMap = await ChannelMapMapper.FromDbAsync(car.Id, dbContext);
+            var hash = ChannelMapHashProvider.GenerateHash(serverMap);
             car.ChannelMapHash = hash;
             car.LastSeen = DateTime.UtcNow;
             await dbContext.SaveChangesAsync();
 
-            var controlIds = reloadedMap.ControlChannels.ToDictionary(kv => kv.Key, kv => kv.Value.ServerId ?? 0);
-            var telemetryIds = reloadedMap.TelemetryChannels.ToDictionary(kv => kv.Key, kv => kv.Value.ServerId ?? 0);
-            var videoIds = reloadedMap.VideoStreams.ToDictionary(kv => kv.Key, kv => kv.Value.ServerId ?? 0);
-
-            // Annotate the original map items with server ids so the client can persist them.
-            foreach (var kv in map.ControlChannels)
-            {
-                if (controlIds.TryGetValue(kv.Key, out var id))
-                    kv.Value.ServerId = id;
-            }
-            foreach (var kv in map.TelemetryChannels)
-            {
-                if (telemetryIds.TryGetValue(kv.Key, out var id))
-                    kv.Value.ServerId = id;
-            }
-            foreach (var kv in map.VideoStreams)
-            {
-                if (videoIds.TryGetValue(kv.Key, out var id))
-                    kv.Value.ServerId = id;
-            }
+            var controlIds = serverMap.ControlChannels.ToDictionary(kv => kv.Key, kv => kv.Value.ServerId ?? 0);
+            var telemetryIds = serverMap.TelemetryChannels.ToDictionary(kv => kv.Key, kv => kv.Value.ServerId ?? 0);
+            var videoIds = serverMap.VideoStreams.ToDictionary(kv => kv.Key, kv => kv.Value.ServerId ?? 0);
 
             var response = new ChannelMapSyncResponse
             {
                 Hash = hash,
-                ChannelMap = map,
+                ChannelMap = serverMap,
                 ControlIds = controlIds,
                 TelemetryIds = telemetryIds,
                 VideoIds = videoIds,

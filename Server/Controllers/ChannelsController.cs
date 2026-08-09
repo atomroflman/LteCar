@@ -129,6 +129,7 @@ public class ChannelsController : ControllerBase
         if (body.TestDisabled.HasValue) ch.TestDisabled = body.TestDisabled.Value;
         ch.ModifiedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
+        await UpdateCarChannelMapHashAsync(carId);
 
         var mapItem = ToMapItem(ch);
         await _controlHub.Clients.Group($"Car-{carId}").UpsertControlChannel(ch.ChannelName, mapItem);
@@ -147,6 +148,7 @@ public class ChannelsController : ControllerBase
             .ForEach(n => _context.Set<UserSetupCarChannelNode>().Remove(n));
         _context.CarChannels.Remove(ch);
         await _context.SaveChangesAsync();
+        await UpdateCarChannelMapHashAsync(carId);
 
         await _controlHub.Clients.Group($"Car-{carId}").DeleteControlChannel(name);
         _logger.LogInformation("Delete control channel {Channel} for car {CarId} by {User}", name, carId, user.LoginName);
@@ -197,6 +199,8 @@ public class ChannelsController : ControllerBase
         pm.OptionsJson = SerializeOptions(body.Options);
         pm.ModifiedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
+        await UpdateCarChannelMapHashAsync(carId);
+        await PushFullChannelMapAsync(carId);
 
         var mapItem = new PinManagerMapItem { Type = pm.Type, Options = DeserializeOptions(pm.OptionsJson) };
         _logger.LogInformation("Upsert pin manager {Name} for car {CarId} by {User}", pm.Name, carId, user.LoginName);
@@ -212,6 +216,8 @@ public class ChannelsController : ControllerBase
         if (pm == null) return NotFound();
         _context.CarPinManagers.Remove(pm);
         await _context.SaveChangesAsync();
+        await UpdateCarChannelMapHashAsync(carId);
+        await PushFullChannelMapAsync(carId);
 
         _logger.LogInformation("Delete pin manager {Name} for car {CarId} by {User}", name, carId, user.LoginName);
         return NoContent();
@@ -246,6 +252,7 @@ public class ChannelsController : ControllerBase
         t.OptionsJson = SerializeOptions(body.Options);
         t.ModifiedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
+        await UpdateCarChannelMapHashAsync(carId);
 
         var mapItem = ToMapItem(t);
         await _controlHub.Clients.Group($"Car-{carId}").UpsertTelemetryChannel(t.ChannelName, mapItem);
@@ -262,6 +269,7 @@ public class ChannelsController : ControllerBase
         if (t == null) return NotFound();
         _context.CarTelemetry.Remove(t);
         await _context.SaveChangesAsync();
+        await UpdateCarChannelMapHashAsync(carId);
 
         await _controlHub.Clients.Group($"Car-{carId}").DeleteTelemetryChannel(name);
         _logger.LogInformation("Delete telemetry channel {Channel} for car {CarId} by {User}", name, carId, user.LoginName);
@@ -320,6 +328,7 @@ public class ChannelsController : ControllerBase
         s.LastStatusUpdate = DateTime.UtcNow;
         s.ModifiedAt = DateTime.UtcNow;
         await _context.SaveChangesAsync();
+        await UpdateCarChannelMapHashAsync(carId);
 
         var mapItem = ToMapItem(s);
         await _controlHub.Clients.Group($"Car-{carId}").UpsertVideoStream(s.StreamId, mapItem);
@@ -336,6 +345,7 @@ public class ChannelsController : ControllerBase
         if (s == null) return NotFound();
         _context.CarVideoStreams.Remove(s);
         await _context.SaveChangesAsync();
+        await UpdateCarChannelMapHashAsync(carId);
 
         await _controlHub.Clients.Group($"Car-{carId}").DeleteVideoStream(streamId);
         _logger.LogInformation("Delete video stream {Stream} for car {CarId} by {User}", streamId, carId, user.LoginName);
@@ -382,6 +392,23 @@ public class ChannelsController : ControllerBase
         var user = await GetCurrentUserAsync();
         if (user == null) return Unauthorized();
         return Ok(_availableTypes.Get(carId)?.TelemetryTypes ?? Array.Empty<string>());
+    }
+
+    private async Task UpdateCarChannelMapHashAsync(int carId)
+    {
+        var car = await _context.Cars.FirstOrDefaultAsync(c => c.Id == carId);
+        if (car == null) return;
+
+        var map = await ChannelMapMapper.FromDbAsync(carId, _context);
+        car.ChannelMapHash = ChannelMapHashProvider.GenerateHash(map);
+        await _context.SaveChangesAsync();
+    }
+
+    private async Task PushFullChannelMapAsync(int carId)
+    {
+        var map = await ChannelMapMapper.FromDbAsync(carId, _context);
+        var hash = ChannelMapHashProvider.GenerateHash(map);
+        await _controlHub.Clients.Group($"Car-{carId}").ApplyChannelMap(map, hash);
     }
 
     private static ControlChannelMapItem ToMapItem(CarChannel ch) => new()

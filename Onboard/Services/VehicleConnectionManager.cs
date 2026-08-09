@@ -187,10 +187,20 @@ public class VehicleConnectionManager : IVehicleConnectionManager, IDisposable
         CarIdAssigned?.Invoke(this, ServerAssignedCarId.Value.ToString());
         _logger.LogInformation("Server assigned CarId: {CarId}", ServerAssignedCarId);
         
-        if (config.RequiresChannelMapUpdate)
+        if (config.ChannelMap != null)
         {
-            _logger.LogInformation("Server indicates channel map mismatch, syncing...");
-            await SyncChannelMapAsync();
+            _logger.LogInformation("Server pushed a channel map (hash {Hash}). Applying locally.", config.ChannelMapHash);
+            foreach (var kv in config.ChannelMap.ControlChannels)
+                _channelMap.ControlChannels[kv.Key] = kv.Value;
+            foreach (var kv in config.ChannelMap.TelemetryChannels)
+                _channelMap.TelemetryChannels[kv.Key] = kv.Value;
+            foreach (var kv in config.ChannelMap.VideoStreams)
+            {
+                if (!string.IsNullOrEmpty(kv.Value.StreamId))
+                    _channelMap.VideoStreams[kv.Value.StreamId] = kv.Value;
+                else
+                    _channelMap.VideoStreams[kv.Key] = kv.Value;
+            }
         }
 
         var buildInfo = _buildInfo.GetBuildInfo();
