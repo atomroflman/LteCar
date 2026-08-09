@@ -197,7 +197,8 @@ public class ServerConnectionService
         var request = new ChannelMapSyncRequest { CarId = _serverAssignedCarId.Value, ChannelMap = _channelMap };
         Logger.LogInformation("Sending ChannelMapSyncRequest for CarId {CarId} with local hash {LocalHash}",
             _serverAssignedCarId.Value, ChannelMapHashProvider.GenerateHash(_channelMap));
-        var response = await _connection.InvokeAsync<ChannelMapSyncResponse>("SyncChannelMap", request);
+        
+        var response = await proxy.SyncChannelMap(request);
         _lastSync = response;
 
         // SPOT: apply the server-pushed configuration to the local in-memory and persisted store.

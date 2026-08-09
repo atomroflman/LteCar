@@ -68,7 +68,7 @@ public class OnboardInstallScriptService : IOnboardInstallScriptService
         var template = File.ReadAllText(templatePath);
         var gitRefLine = string.IsNullOrWhiteSpace(resolvedGitRef)
             ? string.Empty
-            : $"export LTECAR_GIT_REF='{EscapeForSingleQuotes(resolvedGitRef)}'{Environment.NewLine}";
+            : $"LTECAR_GIT_REF='{EscapeForSingleQuotes(resolvedGitRef)}'{Environment.NewLine}";
 
         Logger.LogInformation(
             "Generating onboard install script for {ServerName}:{ServerPort} (HTTPS: {UseHttps}, Branch: {Branch}, GitRef: {GitRef})",
@@ -79,13 +79,14 @@ public class OnboardInstallScriptService : IOnboardInstallScriptService
             resolvedGitRef ?? "n/a");
 
         return $$"""
-#!/usr/bin/env bash
-export DEPLOY_MODE='onboard'
-export LTECAR_SERVER_URL='{{EscapeForSingleQuotes(serverUrl)}}'
-export LTECAR_SERVER_NAME='{{EscapeForSingleQuotes(settings.ServerName)}}'
-export LTECAR_SERVER_PORT='{{settings.ServerPort}}'
-export LTECAR_USE_HTTPS='{{settings.UseHttps.ToString().ToLowerInvariant()}}'
-export LTECAR_BRANCH='{{EscapeForSingleQuotes(resolvedBranch)}}'
+#!/bin/bash
+# Sourced from: {{templatePath}}
+DEPLOY_MODE='onboard'
+LTECAR_SERVER_URL='{{EscapeForSingleQuotes(serverUrl)}}'
+LTECAR_SERVER_NAME='{{EscapeForSingleQuotes(settings.ServerName)}}'
+LTECAR_SERVER_PORT='{{settings.ServerPort}}'
+LTECAR_USE_HTTPS='{{settings.UseHttps.ToString().ToLowerInvariant()}}'
+LTECAR_BRANCH='{{EscapeForSingleQuotes(resolvedBranch)}}'
 {{gitRefLine}}
 {{template}}
 """;
