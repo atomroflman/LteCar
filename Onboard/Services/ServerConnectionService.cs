@@ -203,7 +203,8 @@ public class ServerConnectionService
         var request = new ChannelMapSyncRequest { CarId = _serverAssignedCarId.Value, ChannelMap = _channelMap };
         Logger.LogInformation("Sending ChannelMapSyncRequest for CarId {CarId} with {Control} control, {Telemetry} telemetry, {Video} video streams", 
             _serverAssignedCarId.Value, _channelMap.ControlChannels.Count, _channelMap.TelemetryChannels.Count, _channelMap.VideoStreams.Count);
-        var response = await _connection.InvokeAsync<ChannelMapSyncResponse>("SyncChannelMap", request);
+        
+        var response = await proxy.SyncChannelMap(request);
         _lastSync = response;
         try
         {

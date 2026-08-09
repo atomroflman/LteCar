@@ -119,10 +119,8 @@ public class ControlExecutionService
             .FirstOrDefault(type => (type.GetCustomAttributes(typeof(ControlTypeAttribute), false).FirstOrDefault() as ControlTypeAttribute)?.TypeName == valueControlType);
         if (t == null)
         {
-            Logger.LogError($"ControlType {valueControlType} not found!");
-            if (!RunInTestMode)
-                throw new Exception($"ControlType {valueControlType} not found!");
-            return null;
+            Logger.LogError($"ControlType {valueControlType} not found! Just logging inputs.");
+            return typeof(LoggingOnlyControl);
         }
         return t;
     }
