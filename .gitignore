@@ -9,6 +9,8 @@
 
 # Onboard excludes
 Onboard/Extern/mediamtx
+__pycache__/
+*.py[cod]
 
 # Server excludes
 LteCar.Server/CarConfigStore/**/*

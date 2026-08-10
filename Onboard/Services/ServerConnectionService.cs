@@ -118,6 +118,8 @@ public class ServerConnectionService
         _connection.Register<ITelemetryClient>(telemetryService);
         var videoStreamService = ServiceProvider.GetRequiredService<VideoStreamService>();
         _connection.Register<ICarVideoClient>(videoStreamService);
+        var diagnosticsService = ServiceProvider.GetRequiredService<OnboardDiagnosticsService>();
+        _connection.Register<IDiagnosticsClient>(diagnosticsService);
 
         Logger.LogInformation($"Connected to server: {_connection.State}");
         await _connection.InvokeAsync("Test");

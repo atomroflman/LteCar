@@ -15,6 +15,7 @@ Exit-Codes:
     1 - mindestens ein kritischer Check fehlgeschlagen
 """
 
+import argparse
 import json
 import os
 import re
@@ -38,29 +39,68 @@ class Colors:
     BOLD = "\033[1m"
 
 
+# Globaler Zustand für JSON-Output
+_checks: list[dict] = []
+_current_step: str = ""
+_json_mode: bool = False
+
+
+def set_json_mode(enabled: bool):
+    global _json_mode
+    _json_mode = enabled
+
+
 def color(text: str, color_code: str) -> str:
+    if _json_mode:
+        return text
     return f"{color_code}{text}{Colors.RESET}"
 
 
+def _status_name(status: str) -> str:
+    return {"ok": "Ok", "warn": "Warning", "fail": "Error", "info": "Info"}.get(status, "Info")
+
+
+def _add_check(status: str, message: str):
+    if _current_step:
+        _checks.append({
+            "step": _current_step,
+            "title": _current_step.split(": ", 1)[1] if ": " in _current_step else _current_step,
+            "status": _status_name(status),
+            "message": message,
+        })
+
+
 def print_step(number: int, title: str):
+    global _current_step
+    _current_step = f"Schritt {number}: {title}"
+    if _json_mode:
+        return
     print()
     print(color(f"=== Schritt {number}: {title} ===", Colors.BOLD + Colors.INFO))
 
 
 def ok(msg: str):
-    print(color(f"  ✅ {msg}", Colors.OK))
+    _add_check("ok", msg)
+    if not _json_mode:
+        print(color(f"  ✅ {msg}", Colors.OK))
 
 
 def warn(msg: str):
-    print(color(f"  ⚠️  {msg}", Colors.WARN))
+    _add_check("warn", msg)
+    if not _json_mode:
+        print(color(f"  ⚠️  {msg}", Colors.WARN))
 
 
 def fail(msg: str):
-    print(color(f"  ❌ {msg}", Colors.FAIL))
+    _add_check("fail", msg)
+    if not _json_mode:
+        print(color(f"  ❌ {msg}", Colors.FAIL))
 
 
 def info(msg: str):
-    print(color(f"  ℹ️  {msg}", Colors.INFO))
+    _add_check("info", msg)
+    if not _json_mode:
+        print(color(f"  ℹ️  {msg}", Colors.INFO))
 
 
 def run(cmd: list[str], timeout: int = 10) -> tuple[int, str, str]:
@@ -237,7 +277,10 @@ def check_process(name: str, pattern: str) -> tuple[bool, list[dict]]:
 
 
 def check_camera_locks() -> tuple[bool, list[str]]:
+    # Versuche zuerst mit sudo; falls nicht verfügbar, ohne sudo prüfen.
     rc, stdout, _ = run(["sudo", "lsof", "/dev/media0", "/dev/media3"])
+    if rc != 0 or not stdout.strip():
+        rc, stdout, _ = run(["lsof", "/dev/media0", "/dev/media3"])
     if rc != 0 or not stdout.strip():
         return False, []
     lines = [l for l in stdout.splitlines() if l.strip() and not l.startswith("COMMAND")]
@@ -245,17 +288,41 @@ def check_camera_locks() -> tuple[bool, list[str]]:
 
 
 def check_rtsp_stream(stream_name: str, timeout: int = 10) -> tuple[bool, str]:
+    """Prüft, ob der lokale RTSP-Stream existiert und Daten liefert."""
+    url = f"rtsp://localhost:8554/{stream_name}"
+
+    # Bevorzugt ffprobe verwenden (schneller, sauberer Exit).
+    ffprobe_exists = run(["which", "ffprobe"], timeout=2)[0] == 0
+    if ffprobe_exists:
+        cmd = [
+            "ffprobe",
+            "-v", "error",
+            "-rtsp_transport", "tcp",
+            "-show_entries", "stream=codec_name",
+            "-of", "default=noprint_wrappers=1",
+            "-timeout", str(timeout * 1000000),  # Mikrosekunden
+            url,
+        ]
+        rc, stdout, stderr = run(cmd, timeout=timeout + 2)
+        combined = (stdout + stderr).lower()
+        if "404 not found" in combined:
+            return False, f"RTSP-Path '{stream_name}' existiert nicht (404)"
+        if rc == 0 and stdout.strip():
+            return True, f"ffprobe empfängt Stream ({stdout.strip()})"
+
+    # Fallback: ffmpeg liest maximal 2 Sekunden / 60 Frames.
     cmd = [
         "ffmpeg",
         "-hide_banner",
         "-loglevel", "error",
         "-rtsp_transport", "tcp",
-        "-i", f"rtsp://localhost:8554/{stream_name}",
+        "-i", url,
         "-c", "copy",
+        "-frames:v", "60",
         "-f", "null",
         "-",
     ]
-    rc, stdout, stderr = run(cmd, timeout=timeout)
+    rc, stdout, stderr = run(cmd, timeout=min(timeout, 10))
     combined = (stdout + stderr).lower()
     if "404 not found" in combined:
         return False, f"RTSP-Path '{stream_name}' existiert nicht (404)"
@@ -274,6 +341,123 @@ def check_ffmpeg_sending(stream_name: str) -> tuple[bool, str]:
         if "ffmpeg" in line and f"rtsp://localhost:8554/{stream_name}" in line:
             return True, line.split(None, 10)[10]
     return False, f"Kein ffmpeg-Prozess für Stream '{stream_name}'"
+
+
+def check_camera_conflicts(streams: dict) -> tuple[bool, list[str]]:
+    """Prüft, ob mehrere aktivierte RPI-Kamera-Streams dieselbe CamID nutzen."""
+    by_cam_id: dict[int, list[str]] = {}
+    for name, cfg in streams.items():
+        if not cfg.get("enabled"):
+            continue
+        if cfg.get("type", "").lower() != "rpicamera":
+            continue
+        cam_id = cfg.get("rpiCamId", 0)
+        by_cam_id.setdefault(cam_id, []).append(name)
+
+    conflicts = []
+    for cam_id, names in by_cam_id.items():
+        if len(names) > 1:
+            conflicts.append(f"CamID {cam_id} wird von {', '.join(names)} gemeinsam genutzt")
+    return len(conflicts) == 0, conflicts
+
+
+def check_leftover_processes() -> tuple[bool, list[str]]:
+    """Sucht nach verwaisten mediamtx/mtxrpicam/ffmpeg/libcamera-Prozessen."""
+    rc, stdout, _ = run(["ps", "aux"])
+    if rc != 0:
+        return False, ["ps aux fehlgeschlagen"]
+
+    patterns = [
+        (r"Extern/mediamtx", "mediamtx"),
+        (r"mtxrpicam$", "mtxrpicam"),
+        (r"ffmpeg.*rtsp://localhost:8554", "ffmpeg (RTSP)"),
+        (r"rpicam-vid|libcamera-vid", "rpicam-vid/libcamera-vid"),
+    ]
+    leftover = []
+    for line in stdout.splitlines():
+        if "grep" in line.lower():
+            continue
+        if "LteCar.Onboard" in line:
+            continue
+        for pattern, label in patterns:
+            if re.search(pattern, line):
+                parts = line.split(None, 10)
+                cmd = parts[10] if len(parts) >= 11 else line
+                leftover.append(f"{label} (PID {parts[1]}): {cmd[:80]}")
+                break
+    return len(leftover) == 0, leftover
+
+
+def check_onboard_error_log() -> str:
+    """Prüft /var/log/ltecar/onboard.err auf bekannte Fehlermuster.
+
+    Berücksichtigt nur Einträge, die nach dem letzten Start des
+    ltecar-onboard.service geschrieben wurden, damit alte Crashes
+    nicht den aktuellen Zustand verschleiern.
+    """
+    log_path = Path("/var/log/ltecar/onboard.err")
+    if not log_path.exists():
+        return ""
+
+    try:
+        log_mtime = log_path.stat().st_mtime
+    except Exception:
+        log_mtime = 0
+
+    svc = check_systemd_service()
+    active_since = 0
+    if svc.get("active"):
+        # systemctl liefert z. B. "Active: active (running) since Mon 2026-08-10 16:09:19 CEST; ..."
+        line = svc.get("active_line", "")
+        m = re.search(r"since\s+(.+?);", line)
+        if m:
+            try:
+                active_since = time.mktime(time.strptime(m.group(1).strip(), "%a %Y-%m-%d %H:%M:%S %Z"))
+            except Exception:
+                pass
+
+    # Wenn der Service läuft und das Error-Log älter ist als der Start,
+    # stammen die Fehler von einem früheren Lauf.
+    if svc.get("active") and log_mtime and log_mtime < active_since:
+        return ""
+
+    try:
+        text = log_path.read_text(encoding="utf-8", errors="replace")
+    except Exception:
+        return ""
+
+    # Nur den seit dem letzten Service-Start geschriebenen Teil betrachten.
+    # Da wir keinen Zeitstempel pro Zeile haben, beschränken wir uns auf die
+    # letzten Zeilen und ignorieren sie, wenn das Log älter als der Start ist.
+    lines = text.splitlines()[-100:]
+    recent = "\n".join(lines).lower()
+
+    if "no pinmanager named" in recent:
+        return "No pinManager named '...' in ChannelMap (Deserialisierungs-/Sync-Fehler)"
+    if "cannot show selection prompt" in recent:
+        return "Interaktiver Config-Prompt in nicht-interaktiver Umgebung (systemd)"
+    if "pipeline handler in use by another process" in recent:
+        return "Kamera-Pipeline war belegt (anderer Prozess hält sie)"
+    return ""
+
+
+def check_systemd_service() -> dict:
+    """Liest den Status des ltecar-onboard.service aus."""
+    rc, stdout, _ = run(["systemctl", "status", "ltecar-onboard.service", "--no-pager", "-l"])
+    result = {
+        "exit_code": rc,
+        "active": False,
+        "failed": False,
+        "lines": stdout.splitlines()[:20],
+    }
+    for line in stdout.splitlines():
+        if "Active:" in line:
+            result["active"] = "active (running)" in line
+            result["failed"] = "failed" in line.lower()
+            result["active_line"] = line.strip()
+        if "ExecStart=" in line:
+            result["exec_start"] = line.strip()
+    return result
 
 
 def check_server_reachable(host: str, port: int = 443, timeout: int = 5) -> bool:
@@ -346,9 +530,120 @@ def check_janus_mountpoint(host: str, stream_id: int) -> tuple[bool, str]:
         return False, f"Janus-API-Fehler: {e}"
 
 
+def start_test_mediamtx(onboard_dir: Path, stream_name: str) -> int:
+    """Startet MediaMTX temporär und prüft, ob die Kamera erreichbar ist."""
+    print_step(99, f"MediaMTX Start-Test für '{stream_name}'")
+    info("Dieser Test startet MediaMTX manuell, beobachtet 20 Sekunden und stoppt wieder.")
+    info("Falls der Onboard-Prozess gerade läuft, kann er den Test beeinflussen.")
+
+    mediamtx = onboard_dir / "Extern" / "mediamtx"
+    config = onboard_dir / "Extern" / "mediamtx.yml"
+    if not mediamtx.exists():
+        fail(f"mediamtx binary nicht gefunden: {mediamtx}")
+        return 1
+    if not config.exists():
+        fail(f"mediamtx.yml nicht gefunden: {config}")
+        return 1
+
+    # Vorhandene Prozesse stoppen, damit die Kamera frei ist.
+    run(["pkill", "-9", "-f", "Extern/mediamtx"], timeout=5)
+    run(["pkill", "-9", "-f", "mtxrpicam"], timeout=5)
+    time.sleep(2)
+
+    info(f"Starte {mediamtx} mit {config}")
+    proc = subprocess.Popen(
+        [str(mediamtx), str(config)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        text=True,
+    )
+
+    observed = []
+    camera_acquired = False
+    rtsp_ready = False
+    pipeline_in_use = False
+
+    def reader():
+        try:
+            for line in proc.stdout:
+                observed.append(line.rstrip())
+        except Exception:
+            pass
+
+    import threading
+    t = threading.Thread(target=reader, daemon=True)
+    t.start()
+
+    check_after = 8
+    for i in range(20):
+        time.sleep(1)
+        recent = observed[-30:]
+        for line in recent:
+            low = line.lower()
+            if "pipeline handler in use by another process" in low:
+                pipeline_in_use = True
+            if ("rpi camera source" in low and "started" in low) or "camera acquired" in low:
+                camera_acquired = True
+        if i == check_after and not rtsp_ready:
+            ok_rtsp, _ = check_rtsp_stream(stream_name, timeout=8)
+            if ok_rtsp:
+                rtsp_ready = True
+        if pipeline_in_use:
+            break
+
+    proc.terminate()
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait(timeout=5)
+    run(["pkill", "-9", "-f", "mtxrpicam"], timeout=5)
+
+    print()
+    info("MediaMTX-Output (letzte 30 Zeilen):")
+    for line in observed[-30:]:
+        print(color(f"    {line}", Colors.INFO))
+
+    print()
+    if pipeline_in_use:
+        fail("Kamera-Pipeline war beim Start belegt (anderer Prozess hält sie)")
+        return 1
+    if rtsp_ready:
+        ok(f"RTSP-Stream war nach ~{i+1}s erreichbar")
+    else:
+        fail("RTSP-Stream war nach 20s nicht erreichbar")
+    if camera_acquired or rtsp_ready:
+        ok("Kamera konnte von MediaMTX genutzt werden")
+    else:
+        warn("Kamera-Nutzung konnte nicht eindeutig bestätigt werden")
+
+    return 0 if rtsp_ready else 1
+
+
 def main() -> int:
-    print(color("LteCar Video-Stack Diagnose", Colors.BOLD + Colors.INFO))
-    print(color(f"Gestartet: {time.strftime('%Y-%m-%d %H:%M:%S')}", Colors.INFO))
+    parser = argparse.ArgumentParser(description="LteCar Video-Stack Diagnose")
+    parser.add_argument(
+        "--start-test",
+        action="store_true",
+        help="MediaMTX manuell starten und Kamera-Start testen (stoppt danach wieder)",
+    )
+    parser.add_argument(
+        "--stream",
+        default=None,
+        help="Stream-Name für den Start-Test (Default: erster aktiver RPI-Stream)",
+    )
+    parser.add_argument(
+        "--json",
+        action="store_true",
+        help="Ergebnisse als JSON ausgeben (für die UI-Auswertung)",
+    )
+    args = parser.parse_args()
+
+    set_json_mode(args.json)
+
+    if not _json_mode:
+        print(color("LteCar Video-Stack Diagnose", Colors.BOLD + Colors.INFO))
+        print(color(f"Gestartet: {time.strftime('%Y-%m-%d %H:%M:%S')}", Colors.INFO))
 
     onboard_dir = find_onboard_dir()
     info(f"Onboard-Verzeichnis: {onboard_dir}")
@@ -370,24 +665,76 @@ def main() -> int:
         warn("Kein aktiver RPI-Kamera-Stream konfiguriert.")
 
     # Wir testen den ersten aktiven RPI-Stream
-    test_stream_name = enabled_rpi[0][0] if enabled_rpi else next(iter(streams.keys()), None)
+    test_stream_name = args.stream or (enabled_rpi[0][0] if enabled_rpi else next(iter(streams.keys()), None))
     test_stream_cfg = streams.get(test_stream_name, {})
     test_stream_db_id = test_stream_cfg.get("serverId")
 
     info(f"Prüfe Stream: {test_stream_name}")
     errors: list[str] = []
 
-    # Schritt 0: Onboard läuft
     print_step(0, "Onboard-Prozess läuft")
-    running, procs = check_process("LteCar.Onboard", r"LteCar\.Onboard$")
+    running, procs = check_process("LteCar.Onboard", r"LteCar\.Onboard(\.dll)?$")
     if running:
         ok(f"LteCar.Onboard läuft (PID {procs[0]['pid']})")
+        # Hinweis, wenn der laufende Build nicht dem systemd-Release entspricht.
+        full_cmd = procs[0]["cmd"]
+        if "/bin/Debug/" in full_cmd:
+            warn(f"Der laufende Onboard ist ein Debug-Build: {full_cmd}")
+            warn("Der systemd-Service verwendet normalerweise bin/Release/net10.0/publish/")
+        elif "/publish/" not in full_cmd:
+            warn("Der laufende Onboard scheint nicht der veröffentlichte Release-Build zu sein.")
     else:
         fail("LteCar.Onboard läuft NICHT")
         errors.append("Onboard-Prozess fehlt")
         fail("Abbruch: Ohne Onboard kann der Rest nicht funktionieren.")
         print_summary(errors)
         return 1
+
+    # Optional: MediaMTX wirklich starten und Kamera-Start beobachten.
+    if args.start_test:
+        return start_test_mediamtx(onboard_dir, test_stream_name)
+
+    # Schritt 0.5: Kamera-Konflikte in der Konfiguration
+    print_step(0.5, "Kamera-Konflikte in der Konfiguration")
+    ok_conf, conflicts = check_camera_conflicts(streams)
+    if ok_conf:
+        ok("Keine aktivierten RPI-Kamera-Streams teilen sich eine CamID")
+    else:
+        for c in conflicts:
+            fail(c)
+        errors.extend(conflicts)
+
+    # Schritt 0.6: Verwaiste Kamera-Prozesse
+    print_step(0.6, "Verwaiste Kamera-Prozesse")
+    ok_left, leftover = check_leftover_processes()
+    if ok_left:
+        ok("Keine verwaisten mediamtx/mtxrpicam/ffmpeg-Prozesse gefunden")
+    else:
+        for line in leftover:
+            warn(line)
+        errors.append("Verwaiste Kamera-Prozesse gefunden")
+
+    # Schritt 0.7: systemd-Service-Status
+    print_step(0.7, "systemd-Service 'ltecar-onboard.service'")
+    svc = check_systemd_service()
+    if svc.get("failed"):
+        fail("ltecar-onboard.service ist im Zustand 'failed'")
+        errors.append("systemd-Service ltecar-onboard.service failed")
+    elif svc.get("active"):
+        ok("ltecar-onboard.service ist aktiv")
+    else:
+        warn("ltecar-onboard.service ist nicht aktiv")
+    if "active_line" in svc:
+        info(svc["active_line"])
+
+    # Schritt 0.8: Häufiger Crash-Grund im Onboard-Error-Log
+    print_step(0.8, "Onboard-Error-Log auf bekannte Crashes")
+    crash_reason = check_onboard_error_log()
+    if crash_reason:
+        fail(f"Onboard-Error-Log zeigt: {crash_reason}")
+        errors.append(f"Onboard-Crash: {crash_reason}")
+    else:
+        ok("Kein bekannter Crash im Onboard-Error-Log gefunden")
 
     # Vorab: ist ein Stream aktiv? Wir prüfen Janus-Mountpoint und lokalen MediaMTX.
     # - Beides nicht aktiv -> Stream ist im Ruhezustand (kein Fehler, nur Hinweis).
@@ -470,6 +817,16 @@ def main() -> int:
     else:
         fail(f"Janus NICHT erreichbar: {janus_data}")
         errors.append("Janus nicht erreichbar")
+
+    if _json_mode:
+        report = {
+            "timestamp": time.strftime("%Y-%m-%dT%H:%M:%S"),
+            "streamName": test_stream_name,
+            "checks": _checks,
+            "hasErrors": len(errors) > 0,
+        }
+        print(json.dumps(report, ensure_ascii=False))
+        return 1 if errors else 0
 
     print_summary(errors)
     return 1 if errors else 0

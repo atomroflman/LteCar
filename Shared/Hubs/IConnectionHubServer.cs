@@ -3,6 +3,8 @@ using LteCar.Shared.Channels;
 using LteCar.Shared.FileTransfer;
 using LteCar.Shared.Video;
 
+
+
 public interface IConnectionHubServer
 {
     // Connection lifecycle (onboard → server, browser → server)
@@ -43,4 +45,8 @@ public interface IConnectionHubServer
     Task ChangeVideoStreamSettings(int streamId, VideoSettingsModel settings);
     Task StopVideoStream(int streamId);
     Task SetVideoStreamEnabled(int carId, int streamId, bool enabled);
+
+    // Diagnostics (browser → server → onboard)
+    Task<OnboardDiagnosticsReport> GetOnboardDiagnostics(int carId);
+    Task<OnboardDiagnosticsReport> RunOnboardStartupTest(int carId);
 }

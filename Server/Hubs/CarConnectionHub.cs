@@ -774,6 +774,61 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
         await Clients.Car(stream.CarId).StartVideoStream(stream.StreamId, settingsToApply);
     }
 
+    public async Task<OnboardDiagnosticsReport> GetOnboardDiagnostics(int carId)
+    {
+        return await ForwardDiagnosticsAsync(carId, "GetOnboardDiagnostics");
+    }
+
+    public async Task<OnboardDiagnosticsReport> RunOnboardStartupTest(int carId)
+    {
+        return await ForwardDiagnosticsAsync(carId, "RunOnboardStartupTest");
+    }
+
+    private async Task<OnboardDiagnosticsReport> ForwardDiagnosticsAsync(int carId, string methodName)
+    {
+        if (!_connectionStore.TryGetValue(carId.ToString(), out var connectionInfo) || string.IsNullOrEmpty(connectionInfo.ConnectionId))
+        {
+            Logger.LogWarning("GetOnboardDiagnostics requested for car {CarId}, but no onboard connection is active", carId);
+            return new OnboardDiagnosticsReport
+            {
+                Timestamp = DateTime.UtcNow,
+                StreamName = "",
+                HasErrors = true,
+                Checks = new List<DiagnosticCheck>
+                {
+                    new()
+                    {
+                        Step = "0",
+                        Title = "Onboard nicht verbunden",
+                        Status = DiagnosticStatus.Error,
+                        Message = $"Fahrzeug {carId} ist nicht mit dem Server verbunden."
+                    }
+                }
+            };
+        }
+
+        Logger.LogInformation("Forwarding diagnostics request {MethodName} for car {CarId} to onboard connection {ConnectionId}", methodName, carId, connectionInfo.ConnectionId);
+        var report = methodName == "RunOnboardStartupTest"
+            ? await Clients.Client(connectionInfo.ConnectionId).RunOnboardStartupTest()
+            : await Clients.Client(connectionInfo.ConnectionId).GetOnboardDiagnostics();
+        return report ?? new OnboardDiagnosticsReport
+        {
+            Timestamp = DateTime.UtcNow,
+            StreamName = "",
+            HasErrors = true,
+            Checks = new List<DiagnosticCheck>
+            {
+                new()
+                {
+                    Step = "0",
+                    Title = "Leere Diagnose-Antwort",
+                    Status = DiagnosticStatus.Error,
+                    Message = "Das Onboard hat keine Diagnose-Daten zurückgegeben."
+                }
+            }
+        };
+    }
+
     public async Task SetVideoStreamEnabled(int carId, int streamId, bool enabled)
     {
         await EnsureDriverCanManageStreamAsync(carId);
