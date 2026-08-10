@@ -125,6 +125,10 @@ const deMessages = {
     save: 'Speichern',
     enable: 'Aktivieren',
     disable: 'Deaktivieren',
+    startStream: 'Stream starten',
+    stopStream: 'Stream stoppen',
+    startStreamFailed: 'Stream konnte nicht gestartet werden.',
+    stopStreamFailed: 'Stream konnte nicht gestoppt werden.',
   },
   sessionTransfer: {
     title: 'Sitzung ubertragen',
@@ -482,6 +486,10 @@ const enMessages: Messages = {
     save: 'Save',
     enable: 'Enable',
     disable: 'Disable',
+    startStream: 'Start stream',
+    stopStream: 'Stop stream',
+    startStreamFailed: 'Failed to start stream.',
+    stopStreamFailed: 'Failed to stop stream.',
   },
   sessionTransfer: {
     title: 'Session Transfer',

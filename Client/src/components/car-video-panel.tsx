@@ -190,25 +190,9 @@ export default function CarVideoPanel({ carId }: CarVideoPanelProps): JSX.Elemen
     [selectedStreamId, streams],
   );
 
-  useEffect(() => {
-    if (!videoConnection || !selectedStream || !selectedStream.enabled || !documentVisible) {
-      return;
-    }
-
-    let disposed = false;
-    void videoConnection.invoke('ActivateStream', selectedStream.id).catch((activationError: unknown) => {
-      if (!disposed) {
-        console.error('Failed to activate stream:', activationError);
-      }
-    });
-
-    return () => {
-      disposed = true;
-      void videoConnection.invoke('DeactivateStream', selectedStream.id).catch((deactivationError: unknown) => {
-        console.error('Failed to deactivate stream:', deactivationError);
-      });
-    };
-  }, [documentVisible, reconnectVersion, selectedStream, videoConnection]);
+  // NOTE: Streams are no longer activated/deactivated automatically when the
+  // panel mounts or the selection changes. Use the Video Settings panel to
+  // start/stop a stream manually.
 
   if (!carId) {
     return (
