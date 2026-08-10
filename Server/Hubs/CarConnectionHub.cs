@@ -636,6 +636,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
 
     public async Task StartVideoStream(int streamId)
     {
+        Logger.LogInformation($"Starting Video Stream: {streamId}");
         var stream = await GetStreamAsync(streamId);
         await StartStreamForViewersAsync(stream);
     }
