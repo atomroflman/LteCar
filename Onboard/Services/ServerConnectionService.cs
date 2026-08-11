@@ -34,6 +34,7 @@ public class ServerConnectionService
     private HubConnection _connection = null!;
     private ChannelMapSyncResponse? _lastSync;
     private int? _serverAssignedCarId;
+    private string? _carIdentityKey;
 
     public bool IsConnected => _connection?.State == HubConnectionState.Connected;
 
@@ -88,11 +89,9 @@ public class ServerConnectionService
     
     public async Task ConnectToServer(string carIdentityKey)
     {
+        _carIdentityKey = carIdentityKey;
         _connection = ConnectToHub(HubPaths.CarConnectionHub);
-        _connection.Reconnected += async (connectionId) =>
-        {
-            Logger.LogInformation($"Connection {connectionId} reestablished.");
-        };
+        _connection.Reconnected += OnReconnectedAsync;
         _connection.Reconnecting += (connectionId) =>
         {
             Logger.LogWarning($"Reconnecting to server with connection ID: {connectionId}");
@@ -104,7 +103,6 @@ public class ServerConnectionService
             return Task.CompletedTask;
         };
         await _connection.StartAsync();
-        _connection.Reconnected += _ => RegisterAvailableTypesAsync();
 
         // Register each Onboard service under its own narrow SignalR-client
         // interface so the merged hub can push the matching subset of calls
@@ -126,47 +124,71 @@ public class ServerConnectionService
         Logger.LogDebug($"Tested... Open connection with carIdentityKey: {carIdentityKey}");
 
         await CheckServerVersionAsync();
-        
-        var connectionServer = _connection.CreateHubProxy<IConnectionHubServer>();
-        Logger.LogDebug("Proxy created...");
-        
-        // Prefer hash from last SyncChannelMap (if sync already performed before OpenCarConnection is called)
-        var channelMapHash = _lastSync?.Hash ?? ChannelMapHashProvider.GenerateHash(_channelMap);
-        var config = await connectionServer.OpenCarConnection(carIdentityKey, channelMapHash);
-        if (config == null)
+        await PerformServerHandshakeAsync();
+    }
+
+    private async Task OnReconnectedAsync(string? connectionId)
+    {
+        Logger.LogInformation($"Connection {connectionId} reestablished.");
+        await PerformServerHandshakeAsync();
+    }
+
+    private async Task PerformServerHandshakeAsync()
+    {
+        if (_connection == null || string.IsNullOrEmpty(_carIdentityKey))
         {
-            Logger.LogError("Failed to open car connection.");
+            Logger.LogWarning("Cannot perform server handshake: connection or identity key missing.");
             return;
         }
-        
-        // Store server-assigned CarId for all future operations
-        _serverAssignedCarId = config.ServerAssignedCarId;
-        Logger.LogInformation($"Server assigned CarId: {_serverAssignedCarId}");
-        
-        // SPOT handshake: the server is the sole source of truth. OpenCarConnection
-        // returns the current server map when the client is out of date or when the
-        // server has no config (empty map). Apply it to the local store.
-        if (config.ChannelMap != null)
-        {
-            await controlService.ApplyChannelMap(config.ChannelMap, config.ChannelMapHash);
-            Logger.LogInformation("Applied server channel map from OpenCarConnection (hash {Hash}).", config.ChannelMapHash);
-        }
-        
-        Logger.LogDebug($"OpenCarConnection called: {JsonSerializer.Serialize(config)}");
-        var configService = ServiceProvider.GetRequiredService<ServerCarConfigurationService>();
-        configService.UpdateConfiguration(config);
 
-        var buildInfo = _buildInfo.GetBuildInfo();
         try
         {
-            await connectionServer.ReportOnboardVersion(buildInfo.Branch, buildInfo.Commit);
+            var connectionServer = _connection.CreateHubProxy<IConnectionHubServer>();
+            Logger.LogDebug("Proxy created...");
+
+            // Prefer hash from last SyncChannelMap (if sync already performed before OpenCarConnection is called)
+            var channelMapHash = _lastSync?.Hash ?? ChannelMapHashProvider.GenerateHash(_channelMap);
+            var config = await connectionServer.OpenCarConnection(_carIdentityKey, channelMapHash);
+            if (config == null)
+            {
+                Logger.LogError("Failed to open car connection.");
+                return;
+            }
+
+            // Store server-assigned CarId for all future operations
+            _serverAssignedCarId = config.ServerAssignedCarId;
+            Logger.LogInformation($"Server assigned CarId: {_serverAssignedCarId}");
+
+            // SPOT handshake: the server is the sole source of truth. OpenCarConnection
+            // returns the current server map when the client is out of date or when the
+            // server has no config (empty map). Apply it to the local store.
+            if (config.ChannelMap != null)
+            {
+                var controlService = ServiceProvider.GetRequiredService<ControlService>();
+                await controlService.ApplyChannelMap(config.ChannelMap, config.ChannelMapHash);
+                Logger.LogInformation("Applied server channel map from OpenCarConnection (hash {Hash}).", config.ChannelMapHash);
+            }
+
+            Logger.LogDebug($"OpenCarConnection called: {JsonSerializer.Serialize(config)}");
+            var configService = ServiceProvider.GetRequiredService<ServerCarConfigurationService>();
+            configService.UpdateConfiguration(config);
+
+            var buildInfo = _buildInfo.GetBuildInfo();
+            try
+            {
+                await connectionServer.ReportOnboardVersion(buildInfo.Branch, buildInfo.Commit);
+            }
+            catch (Exception ex)
+            {
+                Logger.LogWarning(ex, "Failed to report onboard version to server");
+            }
+
+            await RegisterAvailableTypesAsync();
         }
         catch (Exception ex)
         {
-            Logger.LogWarning(ex, "Failed to report onboard version to server");
+            Logger.LogError(ex, "Failed to perform server handshake.");
         }
-
-        await RegisterAvailableTypesAsync();
     }
 
     private async Task RegisterAvailableTypesAsync()
