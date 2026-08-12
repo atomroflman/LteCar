@@ -679,8 +679,32 @@ StandardError=append:$LOG_DIR/onboard.err
 WantedBy=multi-user.target
 EOF
 
+   cat > /etc/systemd/system/ltecar-mediamtx.service <<EOF
+[Unit]
+Description=LteCar mediamtx
+After=ltecar-onboard.service
+Wants=ltecar-onboard.service
+# Endless retry: Onboard must always come back, even after a hard crash.
+StartLimitIntervalSec=infinity
+
+[Service]
+Type=simple
+ExecStart=$REPO_DIR/Onboard/Extern/mediamtx
+Restart=always
+RestartSec=5
+User=$RUN_USER
+WorkingDirectory=$REPO_DIR/Onboard/Extern
+Environment=PATH=$DOTNET_ROOT:$DOTNET_ROOT/tools:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+StandardOutput=append:$LOG_DIR/mediamtx.log
+StandardError=append:$LOG_DIR/mediamtx.err
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
     systemctl daemon-reload
     systemctl enable ltecar-onboard.service
+    systemctl enable ltecar-mediamtx.service
 
     echo ""
     echo "Service installed and enabled for future boots."
