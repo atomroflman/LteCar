@@ -38,7 +38,7 @@ public interface IConnectionHubServer
 
     // Video streams (onboard + browser → server; formerly ICarVideoServer)
     Task ConnectCar(string carIdentityKey);
-    Task<IReadOnlyList<VideoStreamInfoModel>> GetVideoStreamsForCar(int carId);
+    Task<IReadOnlyList<VideoStreamMapItem>> GetVideoStreamsForCar(int carId);
     Task ActivateStream(int streamId);
     Task DeactivateStream(int streamId);
     Task StartVideoStream(int streamId);

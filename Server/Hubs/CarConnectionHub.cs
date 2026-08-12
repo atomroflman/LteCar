@@ -779,19 +779,11 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
     {
         var stream = await GetStreamAsync(streamId);
         var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
-        Logger.LogInformation("Stopping video stream {StreamId} ({StreamName}) for car {CarId}", stream.Id, stream.Name, stream.CarId);
-        await Clients.Car(stream.CarId).StopVideoStream(stream.StreamId);
-        await _streamService.StopStream(streamId);
         Logger.LogInformation("Changing video stream settings for stream {StreamId} ({StreamName}) for car {CarId}", stream.Id, stream.Name, stream.CarId);
         settings.ApplySettings(stream);
         await SanitizeStreamSettings(stream);
         await dbContext.SaveChangesAsync();
-
-        if (_viewerRegistry.GetViewerCount(streamId) == 0)
-        {
-            return;
-        }
-
+        
         Logger.LogInformation("Restarting video stream {StreamId} ({StreamName}) for car {CarId} with new settings", stream.Id, stream.Name, stream.CarId);
         var settingsToApply = new VideoSettings()
         {
@@ -808,7 +800,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
             Protocol = stream.Protocol,
             TargetPort = stream.Port
         };
-        await Clients.Car(stream.CarId).StartVideoStream(stream.StreamId, settingsToApply);
+        await Clients.Car(stream.CarId).UpdateVideoStream(stream.StreamId, settingsToApply);
     }
 
     public async Task<OnboardDiagnosticsReport> GetOnboardDiagnostics(int carId)
@@ -905,10 +897,10 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
     {
         var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
         Logger.LogInformation("Starting video stream {StreamId} ({StreamName}) for car {CarId}", stream.Id, stream.Name, stream.CarId);
-        var settings = await _streamService.StartStreamAsync(stream.Id);
+        await _streamService.StartStreamAsync(stream.Id);
         stream.IsActive = true;
         await dbContext.SaveChangesAsync();
-        await Clients.Car(stream.CarId).StartVideoStream(stream.StreamId, settings);
+        await Clients.Car(stream.CarId).StartVideoStream(stream.StreamId);
     }
 
     private async Task StopStreamForViewersAsync(CarVideoStream stream)
@@ -954,5 +946,10 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
             .ToList();
         foreach (var link in links) dbContext.Set<UserSetupLink>().Remove(link);
         foreach (var node in nodes) dbContext.Set<TNode>().Remove(node);
+    }
+
+    Task<IReadOnlyList<VideoStreamMapItem>> IConnectionHubServer.GetVideoStreamsForCar(int carId)
+    {
+        throw new NotImplementedException();
     }
 }

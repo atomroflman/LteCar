@@ -309,7 +309,7 @@ case "$DEFAULT_DEPLOY_MODE" in
     onboard|Onboard) DEFAULT_DEPLOY_MODE="2" ;;
 esac
 
-if [[ -n "$DEPLOY_MODE" ]]; then
+if [[ -z "$DEPLOY_MODE" ]]; then
     echo "What do you want to install?"
     echo "  1) Server   (Compose stack: client + server + nginx + janus + postgres)"
     echo "  2) Onboard  (Bare metal: vehicle / car client for Raspberry Pi)"

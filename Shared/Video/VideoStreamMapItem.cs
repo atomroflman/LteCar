@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using LteCar.Shared.Video;
 using MessagePack;
 
 namespace LteCar.Shared.Channels;
@@ -34,22 +35,27 @@ public class VideoStreamMapItem
 
     [Key(7)]
     [JsonPropertyName("rpiCamId")]
+    [MediaMtxName("rpiCameraCamID")]
     public int? RpiCamId { get; set; }
 
     [Key(8)]
+    [MediaMtxName("rpiCameraWidth")]
     [JsonPropertyName("width")]
     public int? Width { get; set; }
 
     [Key(9)]
+    [MediaMtxName("rpiCameraHeight")]
     [JsonPropertyName("height")]
     public int? Height { get; set; }
 
     [Key(10)]
     [JsonPropertyName("framerate")]
+    [MediaMtxName("rpiCameraFPS")]
     public int? Framerate { get; set; }
 
     [Key(11)]
     [JsonPropertyName("bitrate")]
+    [MediaMtxName("rpiCameraBitrate")]    
     public int? Bitrate { get; set; }
 
     [Key(12)]
@@ -62,25 +68,35 @@ public class VideoStreamMapItem
 
     [Key(14)]
     [JsonPropertyName("gain")]
+    [MediaMtxName("rpiCameraGain")]
     public float? Gain { get; set; }
 
     [Key(15)]
     [JsonPropertyName("shutter")]
+    [MediaMtxName("rpiCameraShutter")]
     public int? Shutter { get; set; }
 
     [Key(16)]
     [JsonPropertyName("brightness")]
+    [MediaMtxName("rpiCameraBrightness")]
     public float? Brightness { get; set; }
 
     [Key(17)]
     [JsonPropertyName("contrast")]
+    [MediaMtxName("rpiCameraContrast")]    
     public float? Contrast { get; set; }
 
     [Key(18)]
     [JsonPropertyName("ev")]
+    [MediaMtxName("rpiCameraEV")]
     public float? EV { get; set; }
 
     [Key(19)]
     [JsonPropertyName("exposure")]
+    [MediaMtxName("rpiCameraExposure")]
     public string? Exposure { get; set; }
+
+    [Key(20)]
+    [JsonPropertyName("port")]
+    public int Port {get;set;}
 }

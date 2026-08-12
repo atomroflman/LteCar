@@ -5,6 +5,7 @@ using LteCar.Shared.Channels;
 using LteCar.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using LteCar.Shared.Video;
 
 namespace LteCar.Onboard;
 
@@ -23,16 +24,16 @@ public class MediaMtxConfiguration
 
 public interface IMediaMtxConfigurator
 {
-    Task<string> GenerateConfigurationAsync(MediaMtxConfiguration config);
-    Task GenerateFromChannelMapAsync(ChannelMap channelMap, IReadOnlyDictionary<string, int> streamPorts);
-    Task UpdateServerAddressAsync(string serverHost, int videoPort, int audioPort);
-    Task StartProcessAsync();
-    Task StopAsync();
-    Task RestartAsync();
-    MediaMtxConfiguration CurrentConfiguration { get; }
+    // Task<string> GenerateConfigurationAsync(MediaMtxConfiguration config);
+    Task GenerateFromChannelMapAsync(ChannelMap channelMap);
+    // Task UpdateServerAddressAsync(string serverHost, int videoPort, int audioPort);
+    // Task StartProcessAsync();
+    // Task StopAsync();
+    // Task RestartAsync();
+    // MediaMtxConfiguration CurrentConfiguration { get; }
 }
 
-public class MediaMtxConfigurator : IMediaMtxConfigurator, IDisposable
+public class MediaMtxConfigurator : IMediaMtxConfigurator
 {
     private readonly ILogger<MediaMtxConfigurator> _logger;
     private readonly IConfiguration _configuration;
@@ -61,7 +62,7 @@ public class MediaMtxConfigurator : IMediaMtxConfigurator, IDisposable
                 Path.GetFullPath("./Extern/mediamtx"));
         }
 
-        _currentConfig = LoadCurrentConfiguration();
+        // _currentConfig = LoadCurrentConfiguration();
         _originalConfig = File.ReadAllText(_configPath);
     }
 
@@ -89,22 +90,22 @@ public class MediaMtxConfigurator : IMediaMtxConfigurator, IDisposable
         return null;
     }
 
-    private MediaMtxConfiguration LoadCurrentConfiguration()
-    {
-        var config = new MediaMtxConfiguration();
+    // private MediaMtxConfiguration LoadCurrentConfiguration()
+    // {
+    //     var config = new MediaMtxConfiguration();
         
-        config.Host = _configuration.GetValue<string>("ServerName") ?? "localhost";
-        config.VideoPort = _configuration.GetValue<int?>("VideoPort") ?? 10001;
-        config.AudioPort = _configuration.GetValue<int?>("AudioPort") ?? 11001;
-        config.Width = _configuration.GetValue<int?>("VideoWidth") ?? 1024;
-        config.Height = _configuration.GetValue<int?>("VideoHeight") ?? 768;
-        config.Framerate = _configuration.GetValue<int?>("VideoFramerate") ?? 22;
-        config.Bitrate = _configuration.GetValue<int?>("VideoBitrate") ?? 1000000;
-        config.CameraLib = _configuration.GetValue<string>("CameraOptions:CameraLib") ?? "libcamera-vid";
-        config.StreamName = _configuration.GetValue<string>("VideoStreamName") ?? "rpi0";
+    //     config.Host = _configuration.GetValue<string>("ServerName") ?? "localhost";
+    //     config.VideoPort = _configuration.GetValue<int?>("VideoPort") ?? 10001;
+    //     config.AudioPort = _configuration.GetValue<int?>("AudioPort") ?? 11001;
+    //     config.Width = _configuration.GetValue<int?>("VideoWidth") ?? 1024;
+    //     config.Height = _configuration.GetValue<int?>("VideoHeight") ?? 768;
+    //     config.Framerate = _configuration.GetValue<int?>("VideoFramerate") ?? 22;
+    //     config.Bitrate = _configuration.GetValue<int?>("VideoBitrate") ?? 1000000;
+    //     config.CameraLib = _configuration.GetValue<string>("CameraOptions:CameraLib") ?? "libcamera-vid";
+    //     config.StreamName = _configuration.GetValue<string>("VideoStreamName") ?? "rpi0";
         
-        return config;
-    }
+    //     return config;
+    // }
 
     public async Task<string> GenerateConfigurationAsync(MediaMtxConfiguration config)
     {
@@ -139,96 +140,110 @@ public class MediaMtxConfigurator : IMediaMtxConfigurator, IDisposable
         return template;
     }
 
-    public async Task GenerateFromChannelMapAsync(ChannelMap channelMap, IReadOnlyDictionary<string, int> streamPorts)
+    public async Task GenerateFromChannelMapAsync(ChannelMap channelMap)
     {
-        var template = await File.ReadAllTextAsync(_configPath);
+        // var template = await File.ReadAllTextAsync(_configPath);
         var generatedPaths = new StringBuilder();
+        var sourceHost = string.IsNullOrWhiteSpace(_currentConfig.Host) ? "localhost" : _currentConfig.Host;
 
+        generatedPaths.AppendLine("paths:");
         foreach (var stream in channelMap.VideoStreams.Where(s => s.Value.Enabled))
         {
-            if (!streamPorts.TryGetValue(stream.Value.StreamId, out var targetPort))
+            var cameraDevice = string.IsNullOrWhiteSpace(stream.Value.CameraDevice) ? "/dev/video0" : stream.Value.CameraDevice;
+
+            generatedPaths.AppendLine($"  {stream.Key}:");
+            generatedPaths.AppendLine($"    source: rpiCamera");
+            generatedPaths.AppendLine($"    runOnInitRestart: yes");
+            generatedPaths.AppendLine($"    ffmpeg -f v4l2 -framerate {stream.Value.Framerate} -video_size {stream.Value.Width}x{stream.Value.Height} -i {cameraDevice} -c:v libx264 -preset veryfast -tune zerolatency -b:v {stream.Value.Bitrate} -f rtp rtp://{sourceHost}:{stream.Value.Port}?pkt_size=1300");
+            
+            foreach (var prop in stream.GetType().GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.GetProperty)
+                .Select(e => new {
+                    e, 
+                    mtxName = e.GetCustomAttributes(true).OfType<MediaMtxNameAttribute>().FirstOrDefault(),
+                    value = e.GetValue(stream)
+                })
+                .Where(e => e.mtxName != null && e.value != null))
             {
-                continue;
+                generatedPaths.AppendLine($"    {prop.mtxName}: {prop.value}");
             }
 
-            generatedPaths.AppendLine(BuildPathSection(stream.Key, stream.Value, targetPort));
         }
 
         generatedPaths.AppendLine("  all_others:");
 
-        template = ReplacePathsSection(template, generatedPaths.ToString().TrimEnd());
+        // template = ReplacePathsSection(template, generatedPaths.ToString().TrimEnd());
 
-        await File.WriteAllTextAsync(_configPath, template);
+        await File.WriteAllTextAsync(_configPath, generatedPaths.ToString());
     }
 
-    private string BuildPathSection(string pathName, VideoStreamMapItem stream, int targetPort)
-    {
-        var width = stream.Width ?? _currentConfig.Width;
-        var height = stream.Height ?? _currentConfig.Height;
-        var framerate = stream.Framerate ?? _currentConfig.Framerate;
-        var bitrate = stream.Bitrate ?? _currentConfig.Bitrate;
-        var cameraDevice = string.IsNullOrWhiteSpace(stream.CameraDevice) ? "/dev/video0" : stream.CameraDevice;
-        var camId = stream.RpiCamId ?? 0;
-        var sourceHost = string.IsNullOrWhiteSpace(_currentConfig.Host) ? "localhost" : _currentConfig.Host;
+    // private string BuildPathSection(string pathName, VideoStreamMapItem stream, int targetPort)
+    // {
+    //     var width = stream.Width ?? _currentConfig.Width;
+    //     var height = stream.Height ?? _currentConfig.Height;
+    //     var framerate = stream.Framerate ?? _currentConfig.Framerate;
+    //     var bitrate = stream.Bitrate ?? _currentConfig.Bitrate;
+    //     var cameraDevice = string.IsNullOrWhiteSpace(stream.CameraDevice) ? "/dev/video0" : stream.CameraDevice;
+    //     var camId = stream.RpiCamId ?? 0;
+    //     var sourceHost = string.IsNullOrWhiteSpace(_currentConfig.Host) ? "localhost" : _currentConfig.Host;
 
-        if (string.Equals(stream.Type, "v4l2", StringComparison.OrdinalIgnoreCase))
-        {
-            return $@"  {pathName}:
-    source: publisher
-    runOnInit: ffmpeg -f v4l2 -framerate {framerate} -video_size {width}x{height} -i {cameraDevice} -c:v libx264 -preset veryfast -tune zerolatency -b:v {bitrate} -f rtp rtp://{sourceHost}:{targetPort}?pkt_size=1300
-    runOnInitRestart: yes";
-        }
+    //     if (string.Equals(stream.Type, "v4l2", StringComparison.OrdinalIgnoreCase))
+    //     {
+    //         return $@"  {pathName}:
+    // source: publisher
+    // runOnInit: ffmpeg -f v4l2 -framerate {framerate} -video_size {width}x{height} -i {cameraDevice} -c:v libx264 -preset veryfast -tune zerolatency -b:v {bitrate} -f rtp rtp://{sourceHost}:{targetPort}?pkt_size=1300
+    // runOnInitRestart: yes";
+    //     }
 
-        var exposure = string.IsNullOrWhiteSpace(stream.Exposure) ? "normal" : stream.Exposure;
-        var brightness = stream.Brightness ?? 0.3f;
-        var gain = stream.Gain ?? 0f;
-        var contrast = stream.Contrast ?? 1f;
-        var ev = stream.EV ?? 0f;
+    //     var exposure = string.IsNullOrWhiteSpace(stream.Exposure) ? "normal" : stream.Exposure;
+    //     var brightness = stream.Brightness ?? 0.3f;
+    //     var gain = stream.Gain ?? 0f;
+    //     var contrast = stream.Contrast ?? 1f;
+    //     var ev = stream.EV ?? 0f;
 
-        var section = $@"  {pathName}:
-    source: rpiCamera
-    runOnInit: ffmpeg -t 2147483647 -i rtsp://localhost:8554/{pathName} -c copy -f rtp rtp://{sourceHost}:{targetPort}?pkt_size=1300
-    runOnInitRestart: yes
-    rpiCameraCamID: {camId}
-    rpiCameraWidth: {width}
-    rpiCameraHeight: {height}
-    rpiCameraFPS: {framerate}
-    rpiCameraTextOverlay: '%Y-%m-%d %H:%M:%S - {pathName}'
-    rpiCameraBrightness: {brightness.ToString(System.Globalization.CultureInfo.InvariantCulture)}
-    rpiCameraContrast: {contrast.ToString(System.Globalization.CultureInfo.InvariantCulture)}
-    rpiCameraExposure: {exposure}
-    rpiCameraEV: {ev.ToString(System.Globalization.CultureInfo.InvariantCulture)}
-    rpiCameraGain: {gain.ToString(System.Globalization.CultureInfo.InvariantCulture)}
-    rpiCameraBitrate: {bitrate}
-    rpiCameraIDRPeriod: 60";
+    //     var section = $@"  {pathName}:
+    // source: rpiCamera
+    // runOnInit: ffmpeg -t 2147483647 -i rtsp://localhost:8554/{pathName} -c copy -f rtp rtp://{sourceHost}:{targetPort}?pkt_size=1300
+    // runOnInitRestart: yes
+    // rpiCameraCamID: {camId}
+    // rpiCameraWidth: {width}
+    // rpiCameraHeight: {height}
+    // rpiCameraFPS: {framerate}
+    // rpiCameraTextOverlay: '%Y-%m-%d %H:%M:%S - {pathName}'
+    // rpiCameraBrightness: {brightness.ToString(System.Globalization.CultureInfo.InvariantCulture)}
+    // rpiCameraContrast: {contrast.ToString(System.Globalization.CultureInfo.InvariantCulture)}
+    // rpiCameraExposure: {exposure}
+    // rpiCameraEV: {ev.ToString(System.Globalization.CultureInfo.InvariantCulture)}
+    // rpiCameraGain: {gain.ToString(System.Globalization.CultureInfo.InvariantCulture)}
+    // rpiCameraBitrate: {bitrate}
+    // rpiCameraIDRPeriod: 60";
 
-        if (stream.Shutter.HasValue && stream.Shutter.Value > 0)
-        {
-            section += $"\n    rpiCameraShutter: {stream.Shutter.Value}";
-        }
+    //     if (stream.Shutter.HasValue && stream.Shutter.Value > 0)
+    //     {
+    //         section += $"\n    rpiCameraShutter: {stream.Shutter.Value}";
+    //     }
 
-        return section;
-    }
+    //     return section;
+    // }
 
-    private string ReplacePathsSection(string content, string newPathsSection)
-    {
-        var pathsStart = content.IndexOf("paths:", StringComparison.Ordinal);
-        if (pathsStart < 0)
-        {
-            return content;
-        }
+    // private string ReplacePathsSection(string content, string newPathsSection)
+    // {
+    //     var pathsStart = content.IndexOf("paths:", StringComparison.Ordinal);
+    //     if (pathsStart < 0)
+    //     {
+    //         return content;
+    //     }
 
-        var allOthersIndex = content.IndexOf("all_others:", pathsStart, StringComparison.Ordinal);
-        if (allOthersIndex < 0)
-        {
-            return content[..pathsStart] + "paths:\n" + newPathsSection + "\n";
-        }
+    //     var allOthersIndex = content.IndexOf("all_others:", pathsStart, StringComparison.Ordinal);
+    //     if (allOthersIndex < 0)
+    //     {
+    //         return content[..pathsStart] + "paths:\n" + newPathsSection + "\n";
+    //     }
 
-        var allOthersLineEnd = content.IndexOf('\n', allOthersIndex);
-        var prefix = content[..pathsStart];
-        var suffix = allOthersLineEnd >= 0 ? content[(allOthersLineEnd + 1)..] : string.Empty;
-        return prefix + "paths:\n" + newPathsSection + "\n" + suffix;
-    }
+    //     var allOthersLineEnd = content.IndexOf('\n', allOthersIndex);
+    //     var prefix = content[..pathsStart];
+    //     var suffix = allOthersLineEnd >= 0 ? content[(allOthersLineEnd + 1)..] : string.Empty;
+    //     return prefix + "paths:\n" + newPathsSection + "\n" + suffix;
+    // }
 
     private string ReplaceOrAddLine(string content, string key, string newValue)
     {
@@ -303,79 +318,79 @@ public class MediaMtxConfigurator : IMediaMtxConfigurator, IDisposable
         return string.Join('\n', lines);
     }
 
-    public async Task UpdateServerAddressAsync(string serverHost, int videoPort, int audioPort)
-    {
-        _logger.LogInformation("Updating MediaMTX config: Server={Host}, Video={VideoPort}, Audio={AudioPort}",
-            serverHost, videoPort, audioPort);
+    // public async Task UpdateServerAddressAsync(string serverHost, int videoPort, int audioPort)
+    // {
+    //     _logger.LogInformation("Updating MediaMTX config: Server={Host}, Video={VideoPort}, Audio={AudioPort}",
+    //         serverHost, videoPort, audioPort);
 
-        var newConfig = new MediaMtxConfiguration
-        {
-            Host = serverHost,
-            VideoPort = videoPort,
-            AudioPort = audioPort,
-            Width = _currentConfig.Width,
-            Height = _currentConfig.Height,
-            Framerate = _currentConfig.Framerate,
-            Bitrate = _currentConfig.Bitrate,
-            CameraLib = _currentConfig.CameraLib,
-            StreamName = _currentConfig.StreamName
-        };
+    //     var newConfig = new MediaMtxConfiguration
+    //     {
+    //         Host = serverHost,
+    //         VideoPort = videoPort,
+    //         AudioPort = audioPort,
+    //         Width = _currentConfig.Width,
+    //         Height = _currentConfig.Height,
+    //         Framerate = _currentConfig.Framerate,
+    //         Bitrate = _currentConfig.Bitrate,
+    //         CameraLib = _currentConfig.CameraLib,
+    //         StreamName = _currentConfig.StreamName
+    //     };
 
-        var newConfigContent = await GenerateConfigurationAsync(newConfig);
+    //     var newConfigContent = await GenerateConfigurationAsync(newConfig);
         
-        await File.WriteAllTextAsync(_configPath + ".new", newConfigContent);
+    //     await File.WriteAllTextAsync(_configPath + ".new", newConfigContent);
         
-        if (File.Exists(_configPath + ".backup"))
-        {
-            File.Delete(_configPath + ".backup");
-        }
-        File.Copy(_configPath, _configPath + ".backup");
-        File.Copy(_configPath + ".new", _configPath, true);
-        File.Delete(_configPath + ".new");
+    //     if (File.Exists(_configPath + ".backup"))
+    //     {
+    //         File.Delete(_configPath + ".backup");
+    //     }
+    //     File.Copy(_configPath, _configPath + ".backup");
+    //     File.Copy(_configPath + ".new", _configPath, true);
+    //     File.Delete(_configPath + ".new");
         
-        _logger.LogInformation("MediaMTX configuration updated successfully");
-    }
+    //     _logger.LogInformation("MediaMTX configuration updated successfully");
+    // }
 
-    public async Task StopAsync()
-    {
-        if (_mediamtxProcess == null || _mediamtxProcess.HasExited)
-        {
-            _mediamtxProcess = null;
-            return;
-        }
+    // public async Task StopAsync()
+    // {
+    //     if (_mediamtxProcess == null || _mediamtxProcess.HasExited)
+    //     {
+    //         _mediamtxProcess = null;
+    //         return;
+    //     }
 
-        _logger.LogInformation("Stopping MediaMTX process (PID {PID}) and its child processes...", _mediamtxProcess.Id);
-        try
-        {
-            // Kill the entire process tree so that helper processes such as
-            // mtxrpicam are terminated as well. On Linux mtxrpicam is a direct
-            // child of mediamtx and would otherwise keep the camera pipeline
-            // locked, causing "Pipeline handler in use by another process" on
-            // the next start.
-            _mediamtxProcess.Kill(entireProcessTree: true);
-            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-            await _mediamtxProcess.WaitForExitAsync(cts.Token);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to stop MediaMTX process tree gracefully.");
-        }
-        finally
-        {
-            _mediamtxProcess = null;
-        }
-    }
+    //     _logger.LogInformation("Stopping MediaMTX process (PID {PID}) and its child processes...", _mediamtxProcess.Id);
+    //     try
+    //     {
+    //         // Kill the entire process tree so that helper processes such as
+    //         // mtxrpicam are terminated as well. On Linux mtxrpicam is a direct
+    //         // child of mediamtx and would otherwise keep the camera pipeline
+    //         // locked, causing "Pipeline handler in use by another process" on
+    //         // the next start.
+    //         _mediamtxProcess.Kill(entireProcessTree: true);
+    //         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+    //         await _mediamtxProcess.WaitForExitAsync(cts.Token);
+    //     }
+    //     catch (Exception ex)
+    //     {
+    //         _logger.LogWarning(ex, "Failed to stop MediaMTX process tree gracefully.");
+    //     }
+    //     finally
+    //     {
+    //         _mediamtxProcess = null;
+    //     }
+    // }
 
-    public async Task RestartAsync()
-    {
-        _logger.LogInformation("Restarting MediaMTX...");
+    // public async Task RestartAsync()
+    // {
+    //     _logger.LogInformation("Restarting MediaMTX...");
         
-        await StopAsync();
+    //     await StopAsync();
         
-        await StartProcessAsync();
-    }
+    //     await StartProcessAsync();
+    // }
 
-    private bool IsMediaMtxRunning()
+    public bool IsMediaMtxRunning()
     {
         if (_mediamtxProcess != null && !_mediamtxProcess.HasExited)
         {
@@ -402,80 +417,80 @@ public class MediaMtxConfigurator : IMediaMtxConfigurator, IDisposable
         return false;
     }
 
-    public async Task StartProcessAsync()
-    {
-        if (IsMediaMtxRunning())
-        {
-            _logger.LogInformation("MediaMTX is already running.");
-            return;
-        }
+    // public async Task StartProcessAsync()
+    // {
+    //     if (IsMediaMtxRunning())
+    //     {
+    //         _logger.LogInformation("MediaMTX is already running.");
+    //         return;
+    //     }
 
-        if (string.IsNullOrEmpty(_mediamtxBinary))
-        {
-            _logger.LogError("Cannot start MediaMTX: binary not found.");
-            return;
-        }
+    //     if (string.IsNullOrEmpty(_mediamtxBinary))
+    //     {
+    //         _logger.LogError("Cannot start MediaMTX: binary not found.");
+    //         return;
+    //     }
 
-        var startInfo = new ProcessStartInfo
-        {
-            FileName = "bash",
-            Arguments = $"-c \"{_mediamtxBinary} {_configPath}\"",
-            UseShellExecute = false,
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            CreateNoWindow = true
-        };
+    //     var startInfo = new ProcessStartInfo
+    //     {
+    //         FileName = "bash",
+    //         Arguments = $"-c \"{_mediamtxBinary} {_configPath}\"",
+    //         UseShellExecute = false,
+    //         RedirectStandardOutput = true,
+    //         RedirectStandardError = true,
+    //         CreateNoWindow = true
+    //     };
 
-        _mediamtxProcess = new Process { StartInfo = startInfo };
+    //     _mediamtxProcess = new Process { StartInfo = startInfo };
         
-        _mediamtxProcess.OutputDataReceived += (sender, e) =>
-        {
-            if (!string.IsNullOrEmpty(e.Data))
-            {
-                _logger.LogInformation("[MediaMTX] {Data}", e.Data);
-            }
-        };
+    //     _mediamtxProcess.OutputDataReceived += (sender, e) =>
+    //     {
+    //         if (!string.IsNullOrEmpty(e.Data))
+    //         {
+    //             _logger.LogInformation("[MediaMTX] {Data}", e.Data);
+    //         }
+    //     };
 
-        _mediamtxProcess.ErrorDataReceived += (sender, e) =>
-        {
-            if (!string.IsNullOrEmpty(e.Data))
-            {
-                if (e.Data.StartsWith("ERR"))
-                {
-                    _logger.LogError("[MediaMTX ERROR] {Data}", e.Data);
-                }
-                else
-                {
-                    _logger.LogWarning("[MediaMTX] {Data}", e.Data);
-                }
-            }
-        };
+    //     _mediamtxProcess.ErrorDataReceived += (sender, e) =>
+    //     {
+    //         if (!string.IsNullOrEmpty(e.Data))
+    //         {
+    //             if (e.Data.StartsWith("ERR"))
+    //             {
+    //                 _logger.LogError("[MediaMTX ERROR] {Data}", e.Data);
+    //             }
+    //             else
+    //             {
+    //                 _logger.LogWarning("[MediaMTX] {Data}", e.Data);
+    //             }
+    //         }
+    //     };
 
-        _mediamtxProcess.EnableRaisingEvents = true;
-        _mediamtxProcess.Start();
-        _mediamtxProcess.BeginOutputReadLine();
-        _mediamtxProcess.BeginErrorReadLine();
+    //     _mediamtxProcess.EnableRaisingEvents = true;
+    //     _mediamtxProcess.Start();
+    //     _mediamtxProcess.BeginOutputReadLine();
+    //     _mediamtxProcess.BeginErrorReadLine();
         
-        _logger.LogInformation("MediaMTX process started with PID {PID}", _mediamtxProcess.Id);
-    }
+    //     _logger.LogInformation("MediaMTX process started with PID {PID}", _mediamtxProcess.Id);
+    // }
 
-    public void Stop()
-    {
-        StopAsync().Wait();
-    }
+    // public void Stop()
+    // {
+    //     StopAsync().Wait();
+    // }
 
-    public async Task RestoreOriginalConfigurationAsync()
-    {
-        if (File.Exists(_backupPath))
-        {
-            File.Copy(_backupPath, _configPath, true);
-            _logger.LogInformation("MediaMTX configuration restored to original");
-        }
-    }
+    // public async Task RestoreOriginalConfigurationAsync()
+    // {
+    //     if (File.Exists(_backupPath))
+    //     {
+    //         File.Copy(_backupPath, _configPath, true);
+    //         _logger.LogInformation("MediaMTX configuration restored to original");
+    //     }
+    // }
 
-    public void Dispose()
-    {
-        Stop();
-        _mediamtxProcess?.Dispose();
-    }
+    // public void Dispose()
+    // {
+    //     Stop();
+    //     _mediamtxProcess?.Dispose();
+    // }
 }
