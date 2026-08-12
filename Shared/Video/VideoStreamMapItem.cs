@@ -59,4 +59,28 @@ public class VideoStreamMapItem
     [Key(13)]
     [JsonPropertyName("options")]
     public Dictionary<string, object> Options { get; set; } = new();
+
+    [Key(14)]
+    [JsonPropertyName("gain")]
+    public float? Gain { get; set; }
+
+    [Key(15)]
+    [JsonPropertyName("shutter")]
+    public int? Shutter { get; set; }
+
+    [Key(16)]
+    [JsonPropertyName("brightness")]
+    public float? Brightness { get; set; }
+
+    [Key(17)]
+    [JsonPropertyName("contrast")]
+    public float? Contrast { get; set; }
+
+    [Key(18)]
+    [JsonPropertyName("ev")]
+    public float? EV { get; set; }
+
+    [Key(19)]
+    [JsonPropertyName("exposure")]
+    public string? Exposure { get; set; }
 }

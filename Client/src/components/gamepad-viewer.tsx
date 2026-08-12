@@ -16,7 +16,7 @@ export type GamepadUnifiedEvent = {
 export default function GamepadViewer({ onUpdate, onRegisterInputChannelValue, hideFlowButtons }: { onUpdate?: (event: GamepadUnifiedEvent) => void, onRegisterInputChannelValue?: (input: { name: string, value: number, gamepadId: string }) => void, hideFlowButtons?: boolean }) {
   const { messages } = useI18n();
   const [fps, setFps] = React.useState(15);
-  const [collapsed, setCollapsed] = React.useState(false);
+  const [collapsed, setCollapsed] = React.useState(true);
   const [axesCollapsed, setAxesCollapsed] = useState<{ [gpId: string]: boolean }>({});
   const [buttonsCollapsed, setButtonsCollapsed] = useState<{ [gpId: string]: boolean }>({});
   const [calibCollapsed, setCalibCollapsed] = useState<{ [gpId: string]: boolean }>({});

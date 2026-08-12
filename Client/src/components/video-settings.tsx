@@ -34,6 +34,11 @@ export default function VideoSettingsControl(props: { carId?: number; canManageE
         framerate: stream.framerate,
         bitrateKbps: stream.bitrateKbps,
         brightness: stream.brightness,
+        gain: stream.gain ?? null,
+        shutter: stream.shutter ?? null,
+        contrast: stream.contrast ?? null,
+        ev: stream.ev ?? null,
+        exposure: stream.exposure ?? 'normal',
         resolutionMode: 'preset'
       };
     });
@@ -111,7 +116,7 @@ export default function VideoSettingsControl(props: { carId?: number; canManageE
     { key: 'custom', w: null, h: null }
   ];
 
-  function updateFieldFor(streamId: number, key: keyof VideoSettingsPayload, value: number) {
+  function updateFieldFor(streamId: number, key: keyof VideoSettingsPayload, value: number | string) {
     setSettingsMap(m => ({ ...m, [streamId]: { ...(m[streamId] || {}), [key]: value } }));
   }
 
@@ -126,6 +131,11 @@ export default function VideoSettingsControl(props: { carId?: number; canManageE
       framerate: cfg.framerate,
       bitrateKbps: cfg.bitrateKbps,
       brightness: cfg.brightness,
+      gain: cfg.gain ?? null,
+      shutter: cfg.shutter ?? null,
+      contrast: cfg.contrast ?? null,
+      ev: cfg.ev ?? null,
+      exposure: cfg.exposure ?? 'normal',
     };
 
     try {
@@ -268,6 +278,36 @@ export default function VideoSettingsControl(props: { carId?: number; canManageE
                 <div>
                   <label className="block text-xs text-zinc-300">{messages.common.brightness}</label>
                   <input type="range" min="0" max="100" className="w-full" value={Math.round(((cfg.brightness ?? s.brightness ?? 0.5) as number) * 100)} onChange={e => updateFieldFor(s.id, 'brightness', Number(e.target.value) / 100)} />
+                </div>
+
+                <div>
+                  <label className="block text-xs text-zinc-300">{messages.common.exposure ?? 'Exposure'}</label>
+                  <select className="w-full text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={cfg.exposure ?? s.exposure ?? 'normal'} onChange={e => updateFieldFor(s.id, 'exposure', e.target.value)}>
+                    <option value="normal">normal</option>
+                    <option value="short">short</option>
+                    <option value="long">long</option>
+                    <option value="custom">custom</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-xs text-zinc-300">{messages.common.gain ?? 'Gain'}</label>
+                  <input type="number" step="0.1" min="0" className="w-full text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={cfg.gain ?? s.gain ?? ''} onChange={e => updateFieldFor(s.id, 'gain', e.target.value ? Number(e.target.value) : null as any)} />
+                </div>
+
+                <div>
+                  <label className="block text-xs text-zinc-300">{messages.common.shutter ?? 'Shutter (µs)'}</label>
+                  <input type="number" min="0" className="w-full text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={cfg.shutter ?? s.shutter ?? ''} onChange={e => updateFieldFor(s.id, 'shutter', e.target.value ? Number(e.target.value) : null as any)} />
+                </div>
+
+                <div>
+                  <label className="block text-xs text-zinc-300">{messages.common.contrast ?? 'Contrast'}</label>
+                  <input type="number" step="0.1" min="0" max="16" className="w-full text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={cfg.contrast ?? s.contrast ?? ''} onChange={e => updateFieldFor(s.id, 'contrast', e.target.value ? Number(e.target.value) : null as any)} />
+                </div>
+
+                <div>
+                  <label className="block text-xs text-zinc-300">{messages.common.ev ?? 'EV'}</label>
+                  <input type="number" step="0.1" min="-10" max="10" className="w-full text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={cfg.ev ?? s.ev ?? ''} onChange={e => updateFieldFor(s.id, 'ev', e.target.value ? Number(e.target.value) : null as any)} />
                 </div>
               </div>
 

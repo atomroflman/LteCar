@@ -10,6 +10,11 @@ export type VideoStreamInfo = {
   bitrateKbps: number;
   framerate: number;
   brightness: number;
+  gain?: number | null;
+  shutter?: number | null;
+  contrast?: number | null;
+  ev?: number | null;
+  exposure?: string | null;
   enabled: boolean;
   isActive: boolean;
   viewerCount: number;
@@ -21,4 +26,9 @@ export type VideoSettingsPayload = {
   framerate: number;
   bitrateKbps: number;
   brightness: number;
+  gain?: number | null;
+  shutter?: number | null;
+  contrast?: number | null;
+  ev?: number | null;
+  exposure?: string | null;
 };

@@ -668,6 +668,32 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
             Logger.LogWarning("Sanitizing brightness {Brightness} for stream {StreamId}", s.Brightness, s.StreamId);
             s.Brightness = Math.Clamp(s.Brightness, -1, 1);
         }
+        if (s.Contrast is < 0 or > 16)
+        {
+            Logger.LogWarning("Sanitizing contrast {Contrast} for stream {StreamId}", s.Contrast, s.StreamId);
+            s.Contrast = Math.Clamp(s.Contrast.Value, 0, 16);
+        }
+        if (s.Gain is < 0)
+        {
+            Logger.LogWarning("Sanitizing gain {Gain} for stream {StreamId}", s.Gain, s.StreamId);
+            s.Gain = 0;
+        }
+        if (s.EV is < -10 or > 10)
+        {
+            Logger.LogWarning("Sanitizing EV {EV} for stream {StreamId}", s.EV, s.StreamId);
+            s.EV = Math.Clamp(s.EV.Value, -10, 10);
+        }
+        if (s.Shutter is < 0)
+        {
+            Logger.LogWarning("Sanitizing shutter {Shutter} for stream {StreamId}", s.Shutter, s.StreamId);
+            s.Shutter = 0;
+        }
+        var validExposures = new[] { "normal", "short", "long", "custom" };
+        if (!string.IsNullOrEmpty(s.Exposure) && !validExposures.Contains(s.Exposure, StringComparer.OrdinalIgnoreCase))
+        {
+            Logger.LogWarning("Sanitizing exposure {Exposure} for stream {StreamId}", s.Exposure, s.StreamId);
+            s.Exposure = "normal";
+        }
         if (s.BitrateKbps % 64 != 0)
         {
             var original = s.BitrateKbps;
@@ -704,6 +730,11 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
                 BitrateKbps = s.BitrateKbps,
                 Framerate = s.Framerate,
                 Brightness = s.Brightness,
+                Gain = s.Gain,
+                Shutter = s.Shutter,
+                Contrast = s.Contrast,
+                EV = s.EV,
+                Exposure = s.Exposure,
                 Enabled = s.Enabled,
                 IsActive = s.IsActive,
                 ViewerCount = _viewerRegistry.GetViewerCount(s.Id)
@@ -769,6 +800,11 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
             Framerate = stream.Framerate,
             BitrateKbps = stream.BitrateKbps,
             Brightness = stream.Brightness,
+            Gain = stream.Gain,
+            Shutter = stream.Shutter,
+            Contrast = stream.Contrast,
+            EV = stream.EV,
+            Exposure = stream.Exposure,
             Protocol = stream.Protocol,
             TargetPort = stream.Port
         };

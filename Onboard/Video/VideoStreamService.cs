@@ -50,10 +50,6 @@ public class VideoStreamService : IDisposable, ICarVideoClient, IHubConnectionOb
         Configuration = configuration;
         _channelMap = channelMap;
         _mediaMtxConfigurator = mediaMtxConfigurator;
-        ConfigService.OnConfigurationChanged += () =>
-        {
-            _ = RestartCameraProcessesAsync();
-        };
     }
 
     public void RestartCameraProcesses()

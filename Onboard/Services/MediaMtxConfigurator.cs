@@ -125,6 +125,10 @@ public class MediaMtxConfigurator : IMediaMtxConfigurator, IDisposable
     rpiCameraFPS: {config.Framerate}
     rpiCameraTextOverlay: '%Y-%m-%d %H:%M:%S - {config.StreamName}'
     rpiCameraBrightness: 0.3
+    rpiCameraContrast: 1
+    rpiCameraExposure: normal
+    rpiCameraEV: 0
+    rpiCameraGain: 0
     rpiCameraBitrate: {config.Bitrate}
     rpiCameraIDRPeriod: 60";
 
@@ -175,7 +179,13 @@ public class MediaMtxConfigurator : IMediaMtxConfigurator, IDisposable
     runOnInitRestart: yes";
         }
 
-        return $@"  {pathName}:
+        var exposure = string.IsNullOrWhiteSpace(stream.Exposure) ? "normal" : stream.Exposure;
+        var brightness = stream.Brightness ?? 0.3f;
+        var gain = stream.Gain ?? 0f;
+        var contrast = stream.Contrast ?? 1f;
+        var ev = stream.EV ?? 0f;
+
+        var section = $@"  {pathName}:
     source: rpiCamera
     runOnInit: ffmpeg -t 2147483647 -i rtsp://localhost:8554/{pathName} -c copy -f rtp rtp://{sourceHost}:{targetPort}?pkt_size=1300
     runOnInitRestart: yes
@@ -184,9 +194,20 @@ public class MediaMtxConfigurator : IMediaMtxConfigurator, IDisposable
     rpiCameraHeight: {height}
     rpiCameraFPS: {framerate}
     rpiCameraTextOverlay: '%Y-%m-%d %H:%M:%S - {pathName}'
-    rpiCameraBrightness: 0.3
+    rpiCameraBrightness: {brightness.ToString(System.Globalization.CultureInfo.InvariantCulture)}
+    rpiCameraContrast: {contrast.ToString(System.Globalization.CultureInfo.InvariantCulture)}
+    rpiCameraExposure: {exposure}
+    rpiCameraEV: {ev.ToString(System.Globalization.CultureInfo.InvariantCulture)}
+    rpiCameraGain: {gain.ToString(System.Globalization.CultureInfo.InvariantCulture)}
     rpiCameraBitrate: {bitrate}
     rpiCameraIDRPeriod: 60";
+
+        if (stream.Shutter.HasValue && stream.Shutter.Value > 0)
+        {
+            section += $"\n    rpiCameraShutter: {stream.Shutter.Value}";
+        }
+
+        return section;
     }
 
     private string ReplacePathsSection(string content, string newPathsSection)
@@ -354,9 +375,36 @@ public class MediaMtxConfigurator : IMediaMtxConfigurator, IDisposable
         await StartProcessAsync();
     }
 
-    public async Task StartProcessAsync()
+    private bool IsMediaMtxRunning()
     {
         if (_mediamtxProcess != null && !_mediamtxProcess.HasExited)
+        {
+            return true;
+        }
+
+        try
+        {
+            var processes = Process.GetProcessesByName("mediamtx");
+            if (processes.Length > 0)
+            {
+                foreach (var p in processes)
+                {
+                    p.Dispose();
+                }
+                return true;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to check if MediaMTX is already running.");
+        }
+
+        return false;
+    }
+
+    public async Task StartProcessAsync()
+    {
+        if (IsMediaMtxRunning())
         {
             _logger.LogInformation("MediaMTX is already running.");
             return;

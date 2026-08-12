@@ -19,6 +19,11 @@ public class VideoSettings : IVideoSettings
     public int Framerate { get; set; }
     public float Brightness { get; set; }
     public int BitrateKbps { get; set; }
+    public float? Gain { get; set; }
+    public int? Shutter { get; set; }
+    public float? Contrast { get; set; }
+    public float? EV { get; set; }
+    public string? Exposure { get; set; }
     public StreamProtocol Protocol { get; set; }
     public int TargetPort { get; set; }
     public string Encoding { get; set; } = "H264";
