@@ -771,8 +771,8 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
 
     public async Task StopVideoStream(int streamId)
     {
+        Logger.LogInformation("Connection {ConnectionId} deactivated stream {StreamId}.", Context.ConnectionId, streamId);
         var stream = await GetStreamAsync(streamId);
-        _viewerRegistry.ClearStream(streamId);
         await StopStreamForViewersAsync(stream);
     }
 
