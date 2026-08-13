@@ -122,7 +122,7 @@ public class VideoStreamService : ICarVideoClient, IHubConnectionObserver
             Logger.LogWarning($"Syncronizing streams for update...");
             var allStreams = await CarVideoServer.GetVideoStreamsForCar(this.ConfigService.ServerAssignedCarId.Value);
             var unnamedCounter = 0;
-            _channelMap.VideoStreams = allStreams.ToDictionary(s => s.Name ?? (unnamedCounter++).ToString(), s => s);
+            _channelMap.VideoStreams = allStreams.ToDictionary(s => !string.IsNullOrEmpty(s.StreamId) ? s.StreamId : (unnamedCounter++).ToString(), s => s);
             if (!_channelMap.VideoStreams.TryGetValue(streamId, out selectedStream))
             {
                 Logger.LogError($"Update to unknown stream requested: '{streamId}'!");
