@@ -118,12 +118,14 @@ export default function VideoSettingsControl(props: { carId?: number; canManageE
 
   function updateFieldFor(streamId: number, key: keyof VideoSettingsPayload, value: number | string) {
     setSettingsMap(m => ({ ...m, [streamId]: { ...(m[streamId] || {}), [key]: value } }));
+    handleSave(streamId);
   }
 
   async function handleSave(streamId: number) {
     setError(null);
     const cfg = settingsMap[streamId];
-    if (!cfg) return setError(messages.videoSettings.noSettingsForStream);
+    if (!cfg) 
+      return setError(messages.videoSettings.noSettingsForStream);
     setBusyMap(b => ({ ...b, [streamId]: true }));
     const payload = {
       height: cfg.height,
