@@ -75,7 +75,7 @@ namespace LteCar.Onboard.Hardware
             object? instance = null;
             if (type == typeof(Pca9685PwmExtension))
             {
-                instance = ActivatorUtilities.CreateInstance(_serviceProvider, type, logger);
+                instance = ActivatorUtilities.CreateInstance(_serviceProvider, type, _serviceProvider);
             }
             else
             {
@@ -143,6 +143,8 @@ namespace LteCar.Onboard.Hardware
                     }
                     else
                     {
+                        if (kv.Value is not IConvertible)
+                            continue;
                         // Handle primitive types directly
                         if (pi.PropertyType == typeof(string))
                             pi.SetValue(instance, kv.Value.ToString());

@@ -360,19 +360,19 @@ public class ControlService : IControlClient, IHubConnectionObserver
         if (channelMap == null) return;
 
         ChannelMap.PinManagers.Clear();
-        foreach (var kv in channelMap.PinManagers)
+        foreach (var kv in channelMap?.PinManagers ?? new Dictionary<string, PinManagerMapItem>())
             ChannelMap.PinManagers[kv.Key] = kv.Value;
 
         ChannelMap.ControlChannels.Clear();
-        foreach (var kv in channelMap.ControlChannels)
+        foreach (var kv in channelMap?.ControlChannels ?? new Dictionary<string, ControlChannelMapItem>())
             ChannelMap.ControlChannels[kv.Key] = kv.Value;
 
         ChannelMap.TelemetryChannels.Clear();
-        foreach (var kv in channelMap.TelemetryChannels)
+        foreach (var kv in channelMap?.TelemetryChannels ?? new Dictionary<string, TelemetryChannelMapItem>())
             ChannelMap.TelemetryChannels[kv.Key] = kv.Value;
 
         ChannelMap.VideoStreams.Clear();
-        foreach (var kv in channelMap.VideoStreams)
+        foreach (var kv in channelMap?.VideoStreams ?? new Dictionary<string, VideoStreamMapItem>())
             ChannelMap.VideoStreams[kv.Key] = kv.Value;
 
         await ChannelStore.ReplaceAllAsync(ChannelMap);
