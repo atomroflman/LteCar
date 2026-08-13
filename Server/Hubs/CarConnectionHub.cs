@@ -776,32 +776,50 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
         await StopStreamForViewersAsync(stream);
     }
 
-    public async Task ChangeVideoStreamSettings(int streamId, VideoSettingsModel settings)
+    public async Task ChangeVideoStreamSettings(int streamId, VideoStreamMapItem settings)
     {
         var stream = await GetStreamAsync(streamId);
         var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
         Logger.LogInformation("Changing video stream settings for stream {StreamId} ({StreamName}) for car {CarId}", stream.Id, stream.Name, stream.CarId);
-        settings.ApplySettings(stream);
+        
+        stream.BitrateKbps = settings.Bitrate ?? stream.BitrateKbps;
+        stream.Brightness = settings.Brightness ?? stream.Brightness;
+        stream.Width = settings.Width ?? stream.Width;
+        stream.Height = settings.Height ?? stream.Height;
+        stream.Framerate = settings.Framerate ?? stream.Framerate;
+        stream.Gain = settings.Gain ?? stream.Gain;
+        stream.Shutter = settings.Shutter ?? stream.Shutter;
+        stream.Contrast = settings.Contrast ?? stream.Contrast;
+        stream.EV = settings.EV ?? stream.EV;
+        stream.Exposure = settings.Exposure ?? stream.Exposure;
+        stream.ModifiedAt = DateTime.UtcNow;
+        
         await SanitizeStreamSettings(stream);
         await dbContext.SaveChangesAsync();
         
         Logger.LogInformation("Restarting video stream {StreamId} ({StreamName}) for car {CarId} with new settings", stream.Id, stream.Name, stream.CarId);
-        var settingsToApply = new VideoSettings()
-        {
-            Height = stream.Height,
-            Width = stream.Width,
-            Framerate = stream.Framerate,
-            BitrateKbps = stream.BitrateKbps,
-            Brightness = stream.Brightness,
-            Gain = stream.Gain,
-            Shutter = stream.Shutter,
-            Contrast = stream.Contrast,
-            EV = stream.EV,
-            Exposure = stream.Exposure,
-            Protocol = stream.Protocol,
-            TargetPort = stream.Port
-        };
-        await Clients.Car(stream.CarId).UpdateVideoStream(stream.StreamId, settingsToApply);
+
+        settings.Name = stream.Name;
+        settings.Type = stream.Type;
+        settings.Location = stream.Location;
+        settings.Enabled = stream.Enabled;
+        settings.CameraDevice = stream.CameraDevice;
+        settings.RpiCamId = stream.RpiCamId;
+        settings.Port = stream.Port;
+        settings.Width = stream.Width;
+        settings.Height = stream.Height;
+        settings.Framerate = stream.Framerate;
+        settings.Bitrate = stream.BitrateKbps;
+        settings.Brightness = stream.Brightness;
+        settings.Gain = stream.Gain;
+        settings.Shutter = stream.Shutter;
+        settings.Contrast = stream.Contrast;
+        settings.EV = stream.EV;
+        settings.Exposure = stream.Exposure;
+        settings.ServerId = stream.Id;
+        settings.ModifiedAt = stream.ModifiedAt;
+
+        await Clients.Car(stream.CarId).UpdateVideoStream(stream.StreamId, settings);
     }
 
     public async Task<OnboardDiagnosticsReport> GetOnboardDiagnostics(int carId)

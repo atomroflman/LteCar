@@ -1,3 +1,4 @@
+using LteCar.Shared.Channels;
 using LteCar.Shared.Video;
 
 namespace LteCar.Shared.HubClients;
@@ -16,5 +17,5 @@ public interface ICarVideoClient
     /// </summary>
     Task StopVideoStream(string streamId);
 
-    Task UpdateVideoStream(string streamId, VideoSettings settings);
+    Task UpdateVideoStream(string streamId, VideoStreamMapItem settings);
 }

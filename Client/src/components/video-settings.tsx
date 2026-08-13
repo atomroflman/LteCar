@@ -1,7 +1,7 @@
 import React, { JSX, useEffect, useRef, useState } from "react";
 import { useControlFlowStore } from "./control-flow-store";
 import CollapsibleSection from "./collapsible-section";
-import type { VideoSettingsPayload, VideoStreamInfo } from "@/types/video-stream";
+import type { VideoSettingsPayload, VideoStreamInfo, VideoStreamMapItem } from "@/types/video-stream";
 import { useI18n } from "@/i18n/provider";
 
 type VideoSettingsState = VideoSettingsPayload & {
@@ -17,7 +17,7 @@ export default function VideoSettingsControl(props: { carId?: number; canManageE
 
   const [videoConnection, setVideoConnection] = useState<any>(undefined);
 
-  const [streams, setStreams] = useState<VideoStreamInfo[]>([]);
+  const [streams, setStreams] = useState<VideoStreamMapItem[]>([]);
   const [settingsMap, setSettingsMap] = useState<Record<number, VideoSettingsState>>({});
   const settingsMapRef = useRef<Record<number, VideoSettingsState>>({});
   const loadedCarIdRef = useRef<number | undefined>(undefined);
@@ -25,33 +25,33 @@ export default function VideoSettingsControl(props: { carId?: number; canManageE
   const [error, setError] = useState<string | null>(null);
 
   async function loadStreams(hub: any, nextCarId: number) {
-    const list = await hub.invoke('GetVideoStreamsForCar', nextCarId) as VideoStreamInfo[];
+    const list = await hub.invoke('GetVideoStreamsForCar', nextCarId) as VideoStreamMapItem[];
     setStreams(list);
 
-    const map: Record<number, VideoSettingsState> = {};
-    list.forEach(stream => {
-      map[stream.serverId] = {
-        width: stream.width,
-        height: stream.height,
-        framerate: stream.framerate,
-        bitrateKbps: stream.bitrateKbps,
-        brightness: stream.brightness,
-        gain: stream.gain ?? null,
-        shutter: stream.shutter ?? null,
-        contrast: stream.contrast ?? null,
-        ev: stream.ev ?? null,
-        exposure: stream.exposure ?? 'normal',
-        resolutionMode: 'preset'
-      };
-    });
-    setSettingsMap(current => {
-      const next: Record<number, VideoSettingsState> = {};
-      list.forEach(stream => {
-        next[stream.serverId] = current[stream.serverId] ?? map[stream.serverId];
-      });
-      settingsMapRef.current = next;
-      return next;
-    });
+    // const map: Record<number, VideoSettingsState> = {};
+    // list.forEach(stream => {
+    //   map[stream.serverId] = {
+    //     width: stream.width,
+    //     height: stream.height,
+    //     framerate: stream.framerate,
+    //     bitrateKbps: stream.bitrateKbps,
+    //     brightness: stream.brightness,
+    //     gain: stream.gain ?? null,
+    //     shutter: stream.shutter ?? null,
+    //     contrast: stream.contrast ?? null,
+    //     ev: stream.ev ?? null,
+    //     exposure: stream.exposure ?? 'normal',
+    //     resolutionMode: 'preset'
+    //   };
+    // });
+    // setSettingsMap(current => {
+    //   const next: Record<number, VideoSettingsState> = {};
+    //   list.forEach(stream => {
+    //     next[stream.serverId] = current[stream.serverId] ?? map[stream.serverId];
+    //   });
+    //   settingsMapRef.current = next;
+    //   return next;
+    // });
   }
 
   useEffect(() => {
@@ -153,7 +153,7 @@ export default function VideoSettingsControl(props: { carId?: number; canManageE
       height: cfg.height,
       width: cfg.width,
       framerate: cfg.framerate,
-      bitrateKbps: cfg.bitrateKbps,
+      bitrate: cfg.bitrate,
       brightness: cfg.brightness,
       gain: cfg.gain ?? null,
       shutter: cfg.shutter ?? null,
@@ -302,7 +302,7 @@ export default function VideoSettingsControl(props: { carId?: number; canManageE
 
                 <div>
                   <label className="block text-xs text-zinc-300">{messages.common.bitrateKbps}</label>
-                  <input type="number" className="w-full text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={cfg.bitrateKbps ?? s.bitrateKbps ?? ''} onChange={e => updateFieldFor(s.serverId, 'bitrateKbps', e.target.value ? Number(e.target.value) : 0)} onBlur={() => void handleSave(s.serverId)} />
+                  <input type="number" className="w-full text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={cfg.bitrate ?? s.bitrate ?? ''} onChange={e => updateFieldFor(s.serverId, 'bitrate', e.target.value ? Number(e.target.value) : 0)} onBlur={() => void handleSave(s.serverId)} />
                 </div>
 
                 <div>

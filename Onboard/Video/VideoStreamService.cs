@@ -132,22 +132,33 @@ public class VideoStreamService : ICarVideoClient, IHubConnectionObserver
         return selectedStream;
     }
 
-    public async Task UpdateVideoStream(string streamId, VideoSettings settings)
+    public async Task UpdateVideoStream(string streamId, VideoStreamMapItem settings)
     {
         var selectedStream = await GetStream(streamId);
         if (selectedStream == null)
             return;
-        
-        selectedStream.Bitrate = settings.BitrateKbps;
+
+        selectedStream.ServerId = settings.ServerId;
+        selectedStream.StreamId = settings.StreamId;
+        selectedStream.Name = settings.Name;
+        selectedStream.Location = settings.Location;
+        selectedStream.Type = settings.Type;
+        selectedStream.Enabled = settings.Enabled;
+        selectedStream.CameraDevice = settings.CameraDevice;
+        selectedStream.RpiCamId = settings.RpiCamId;
+        selectedStream.Width = settings.Width;
+        selectedStream.Height = settings.Height;
+        selectedStream.Framerate = settings.Framerate;
+        selectedStream.Bitrate = settings.Bitrate;
+        selectedStream.Options = settings.Options;
+        selectedStream.ModifiedAt = settings.ModifiedAt;
+        selectedStream.Gain = settings.Gain;
+        selectedStream.Shutter = settings.Shutter;
         selectedStream.Brightness = settings.Brightness;
         selectedStream.Contrast = settings.Contrast;
         selectedStream.EV = settings.EV;
         selectedStream.Exposure = settings.Exposure;
-        selectedStream.Framerate = settings.Framerate;
-        selectedStream.Gain = settings.Gain;
-        selectedStream.Height = settings.Height;
-        selectedStream.Shutter = settings.Shutter;
-        selectedStream.Width = settings.Width;
+        selectedStream.Port = settings.Port;
 
         await _mediaMtxConfigurator.GenerateFromChannelMapAsync(_channelMap);
     }

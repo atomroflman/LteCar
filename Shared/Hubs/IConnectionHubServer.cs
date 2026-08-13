@@ -42,7 +42,7 @@ public interface IConnectionHubServer
     Task ActivateStream(int streamId);
     Task DeactivateStream(int streamId);
     Task StartVideoStream(int streamId);
-    Task ChangeVideoStreamSettings(int streamId, VideoSettingsModel settings);
+    Task ChangeVideoStreamSettings(int streamId, VideoStreamMapItem settings);
     Task StopVideoStream(int streamId);
     Task SetVideoStreamEnabled(int carId, int streamId, bool enabled);
 
