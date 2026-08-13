@@ -135,7 +135,9 @@ public class MediaMtxConfigurator : IMediaMtxConfigurator
             generatedPaths.AppendLine($"  {stream.Key}:");
             generatedPaths.AppendLine($"    source: rpiCamera");
             generatedPaths.AppendLine($"    runOnInitRestart: yes");
-            generatedPaths.AppendLine($"    runOnInit: ffmpeg -f v4l2 -framerate {stream.Value.Framerate} -video_size {stream.Value.Width}x{stream.Value.Height} -i rtsp://localhost:8554/{stream.Key} -c:v libx264 -preset veryfast -tune zerolatency -b:v {stream.Value.Bitrate} -f rtp rtp://{sourceHost}:{stream.Value.Port}?pkt_size=1300");
+            //
+            generatedPaths.AppendLine($"    runOnInit: ffmpeg -t 2147483647 -i rtsp://localhost:8554/{stream.Key} -c copy -f rtp rtp://{sourceHost}:{stream.Value.Port}?pkt_size=1300");
+            //generatedPaths.AppendLine($"    runOnInit: ffmpeg -f v4l2 -framerate {stream.Value.Framerate} -video_size {stream.Value.Width}x{stream.Value.Height} -i rtsp://localhost:8554/{stream.Key} -c:v libx264 -preset veryfast -tune zerolatency -b:v {stream.Value.Bitrate} -f rtp rtp://{sourceHost}:{stream.Value.Port}?pkt_size=1300");
             
             foreach (var prop in stream.Value.GetType().GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
                 .Select(e => new {
