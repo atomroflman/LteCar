@@ -707,7 +707,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
         }
     }
 
-    public async Task<IReadOnlyList<VideoStreamInfoModel>> GetVideoStreamsForCar(int carId)
+    public async Task<IReadOnlyList<VideoStreamMapItem>> GetVideoStreamsForCar(int carId)
     {
         var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
         var streams = await dbContext.CarVideoStreams
@@ -717,17 +717,15 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
             .ToListAsync();
 
         return streams
-            .Select(s => new VideoStreamInfoModel()
+            .Select(s => new VideoStreamMapItem()
             {
-                Id = s.Id,
                 Name = s.Name,
                 StreamId = s.StreamId,
                 Type = s.Type,
                 Location = s.Location,
-                Priority = s.Priority,
                 Width = s.Width,
                 Height = s.Height,
-                BitrateKbps = s.BitrateKbps,
+                Bitrate = s.BitrateKbps,
                 Framerate = s.Framerate,
                 Brightness = s.Brightness,
                 Gain = s.Gain,
@@ -736,8 +734,11 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
                 EV = s.EV,
                 Exposure = s.Exposure,
                 Enabled = s.Enabled,
-                IsActive = s.IsActive,
-                ViewerCount = _viewerRegistry.GetViewerCount(s.Id)
+                CameraDevice = s.CameraDevice,
+                ModifiedAt = s.ModifiedAt,
+                Port = s.Port,
+                RpiCamId = s.RpiCamId,
+                ServerId = s.Id
             })
             .ToList();
     }

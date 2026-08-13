@@ -47,7 +47,7 @@ public class MediaMtxConfigurator : IMediaMtxConfigurator
     {
         _logger = logger;
         _configuration = configuration;
-        _configPath = Path.GetFullPath("./Extern/mediamtx.yml");
+        _configPath = ResolveMediaMtxBinary(logger) + ".yml";
         _backupPath = Path.GetFullPath("./Extern/mediamtx.yml.backup");
 
         _mediamtxBinary = ResolveMediaMtxBinary(_logger) ?? string.Empty;
@@ -371,32 +371,32 @@ public class MediaMtxConfigurator : IMediaMtxConfigurator
     //     await StartProcessAsync();
     // }
 
-    public bool IsMediaMtxRunning()
-    {
-        if (_mediamtxProcess != null && !_mediamtxProcess.HasExited)
-        {
-            return true;
-        }
+    // public bool IsMediaMtxRunning()
+    // {
+    //     if (_mediamtxProcess != null && !_mediamtxProcess.HasExited)
+    //     {
+    //         return true;
+    //     }
 
-        try
-        {
-            var processes = Process.GetProcessesByName("mediamtx");
-            if (processes.Length > 0)
-            {
-                foreach (var p in processes)
-                {
-                    p.Dispose();
-                }
-                return true;
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to check if MediaMTX is already running.");
-        }
+    //     try
+    //     {
+    //         var processes = Process.GetProcessesByName("mediamtx");
+    //         if (processes.Length > 0)
+    //         {
+    //             foreach (var p in processes)
+    //             {
+    //                 p.Dispose();
+    //             }
+    //             return true;
+    //         }
+    //     }
+    //     catch (Exception ex)
+    //     {
+    //         _logger.LogWarning(ex, "Failed to check if MediaMTX is already running.");
+    //     }
 
-        return false;
-    }
+    //     return false;
+    // }
 
     // public async Task StartProcessAsync()
     // {

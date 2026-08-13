@@ -302,7 +302,8 @@ public class ChannelsController : ControllerBase
             if (sid != streamId)
             {
                 var old = await _context.CarVideoStreams.FirstOrDefaultAsync(v => v.CarId == carId && v.StreamId == streamId);
-                if (old != null) _context.CarVideoStreams.Remove(old);
+                if (old != null) 
+                    _context.CarVideoStreams.Remove(old);
             }
         }
         s.Name = body.Name ?? s.Name;
