@@ -40,11 +40,6 @@ public class MediaMtxConfigurator : IMediaMtxConfigurator
     private readonly string _configPath;
     private readonly string _backupPath;
     private readonly string _mediamtxBinary;
-    private MediaMtxConfiguration _currentConfig = new MediaMtxConfiguration();
-    private string _originalConfig = string.Empty;
-    private Process? _mediamtxProcess;
-
-    public MediaMtxConfiguration CurrentConfiguration => _currentConfig;
 
     public MediaMtxConfigurator(
         ILogger<MediaMtxConfigurator> logger,
@@ -61,13 +56,15 @@ public class MediaMtxConfigurator : IMediaMtxConfigurator
             _logger.LogError("mediamtx binary not found. Install it via your package manager (apt/pacman) or place it at {Path}.",
                 Path.GetFullPath("./Extern/mediamtx"));
         }
-
-        // _currentConfig = LoadCurrentConfiguration();
-        _originalConfig = File.ReadAllText(_configPath);
     }
 
-    private static string? ResolveMediaMtxBinary(ILogger logger)
+    private string? ResolveMediaMtxBinary(ILogger logger)
     {
+        var configPath = _configuration.GetSection("MediaMtxPath").Get<string>() ?? "/";
+        var configExePath = Path.Combine(configPath, "mediamtx");
+        if (File.Exists(configExePath))
+            return configExePath;
+
         var pathDirs = (Environment.GetEnvironmentVariable("PATH") ?? string.Empty)
             .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries);
         foreach (var dir in pathDirs)
@@ -90,61 +87,45 @@ public class MediaMtxConfigurator : IMediaMtxConfigurator
         return null;
     }
 
-    // private MediaMtxConfiguration LoadCurrentConfiguration()
-    // {
-    //     var config = new MediaMtxConfiguration();
+//     public async Task<string> GenerateConfigurationAsync(MediaMtxConfiguration config)
+//     {
+//         var template = await File.ReadAllTextAsync(_configPath);
         
-    //     config.Host = _configuration.GetValue<string>("ServerName") ?? "localhost";
-    //     config.VideoPort = _configuration.GetValue<int?>("VideoPort") ?? 10001;
-    //     config.AudioPort = _configuration.GetValue<int?>("AudioPort") ?? 11001;
-    //     config.Width = _configuration.GetValue<int?>("VideoWidth") ?? 1024;
-    //     config.Height = _configuration.GetValue<int?>("VideoHeight") ?? 768;
-    //     config.Framerate = _configuration.GetValue<int?>("VideoFramerate") ?? 22;
-    //     config.Bitrate = _configuration.GetValue<int?>("VideoBitrate") ?? 1000000;
-    //     config.CameraLib = _configuration.GetValue<string>("CameraOptions:CameraLib") ?? "libcamera-vid";
-    //     config.StreamName = _configuration.GetValue<string>("VideoStreamName") ?? "rpi0";
+//         template = ReplaceOrAddLine(template, "webrtcLocalUDPAddress", $"webrtcLocalUDPAddress: :{config.AudioPort + 100}");
+//         template = ReplaceOrAddLine(template, "rtpAddress", $"rtpAddress: :{config.VideoPort}");
+//         template = ReplaceOrAddLine(template, "rtcpAddress", $"rtcpAddress: :{config.VideoPort + 1}");
         
-    //     return config;
-    // }
+//         var rpiCameraSection = $@"
+//   {config.StreamName}:
+//     source: rpiCamera
+//     runOnInit: ffmpeg -t 2147483647 -i rtsp://localhost:8554/{config.StreamName} -c copy -f rtp rtp://{config.Host}:{config.VideoPort}?pkt_size=1300
+//     runOnInitRestart: yes
+//     rpiCameraCamID: 0
+//     rpiCameraWidth: {config.Width}
+//     rpiCameraHeight: {config.Height}
+//     rpiCameraFPS: {config.Framerate}
+//     rpiCameraTextOverlay: '%Y-%m-%d %H:%M:%S - {config.StreamName}'
+//     rpiCameraBrightness: 0.3
+//     rpiCameraContrast: 1
+//     rpiCameraExposure: normal
+//     rpiCameraEV: 0
+//     rpiCameraGain: 0
+//     rpiCameraBitrate: {config.Bitrate}
+//     rpiCameraIDRPeriod: 60";
 
-    public async Task<string> GenerateConfigurationAsync(MediaMtxConfiguration config)
-    {
-        var template = await File.ReadAllTextAsync(_configPath);
+//         template = UpdateOrAddPathSection(template, config.StreamName, rpiCameraSection);
         
-        template = ReplaceOrAddLine(template, "webrtcLocalUDPAddress", $"webrtcLocalUDPAddress: :{config.AudioPort + 100}");
-        template = ReplaceOrAddLine(template, "rtpAddress", $"rtpAddress: :{config.VideoPort}");
-        template = ReplaceOrAddLine(template, "rtcpAddress", $"rtcpAddress: :{config.VideoPort + 1}");
-        
-        var rpiCameraSection = $@"
-  {config.StreamName}:
-    source: rpiCamera
-    runOnInit: ffmpeg -t 2147483647 -i rtsp://localhost:8554/{config.StreamName} -c copy -f rtp rtp://{config.Host}:{config.VideoPort}?pkt_size=1300
-    runOnInitRestart: yes
-    rpiCameraCamID: 0
-    rpiCameraWidth: {config.Width}
-    rpiCameraHeight: {config.Height}
-    rpiCameraFPS: {config.Framerate}
-    rpiCameraTextOverlay: '%Y-%m-%d %H:%M:%S - {config.StreamName}'
-    rpiCameraBrightness: 0.3
-    rpiCameraContrast: 1
-    rpiCameraExposure: normal
-    rpiCameraEV: 0
-    rpiCameraGain: 0
-    rpiCameraBitrate: {config.Bitrate}
-    rpiCameraIDRPeriod: 60";
+//         _currentConfig = config;
 
-        template = UpdateOrAddPathSection(template, config.StreamName, rpiCameraSection);
-        
-        _currentConfig = config;
-
-        return template;
-    }
+//         return template;
+//     }
 
     public async Task GenerateFromChannelMapAsync(ChannelMap channelMap)
     {
         // var template = await File.ReadAllTextAsync(_configPath);
         var generatedPaths = new StringBuilder();
-        var sourceHost = string.IsNullOrWhiteSpace(_currentConfig.Host) ? "localhost" : _currentConfig.Host;
+        var host = _configuration.GetSection("ServerName").Get<string>();
+        var sourceHost = string.IsNullOrWhiteSpace(host) ? "localhost" : host;
 
         generatedPaths.AppendLine("paths:");
         foreach (var stream in channelMap.VideoStreams.Where(s => s.Value.Enabled))
@@ -154,17 +135,17 @@ public class MediaMtxConfigurator : IMediaMtxConfigurator
             generatedPaths.AppendLine($"  {stream.Key}:");
             generatedPaths.AppendLine($"    source: rpiCamera");
             generatedPaths.AppendLine($"    runOnInitRestart: yes");
-            generatedPaths.AppendLine($"    ffmpeg -f v4l2 -framerate {stream.Value.Framerate} -video_size {stream.Value.Width}x{stream.Value.Height} -i {cameraDevice} -c:v libx264 -preset veryfast -tune zerolatency -b:v {stream.Value.Bitrate} -f rtp rtp://{sourceHost}:{stream.Value.Port}?pkt_size=1300");
+            generatedPaths.AppendLine($"    runOnInit: ffmpeg -f v4l2 -framerate {stream.Value.Framerate} -video_size {stream.Value.Width}x{stream.Value.Height} -i rtsp://localhost:8554/{stream.Key} -c:v libx264 -preset veryfast -tune zerolatency -b:v {stream.Value.Bitrate} -f rtp rtp://{sourceHost}:{stream.Value.Port}?pkt_size=1300");
             
-            foreach (var prop in stream.GetType().GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.GetProperty)
+            foreach (var prop in stream.Value.GetType().GetProperties(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance)
                 .Select(e => new {
                     e, 
                     mtxName = e.GetCustomAttributes(true).OfType<MediaMtxNameAttribute>().FirstOrDefault(),
-                    value = e.GetValue(stream)
+                    value = e.GetValue(stream.Value)
                 })
                 .Where(e => e.mtxName != null && e.value != null))
             {
-                generatedPaths.AppendLine($"    {prop.mtxName}: {prop.value}");
+                generatedPaths.AppendLine($"    {prop.mtxName!.Name}: {prop.value}");
             }
 
         }

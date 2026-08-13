@@ -184,11 +184,11 @@ update_onboard_appsettings() {
         return 0
     fi
 
-    python3 - "$appsettings_path" "${LTECAR_SERVER_NAME:-}" "${LTECAR_SERVER_PORT:-}" "$(normalize_boolean "${LTECAR_USE_HTTPS:-false}")" <<'PY'
+    python3 - "$appsettings_path" "${LTECAR_SERVER_NAME:-}" "${LTECAR_SERVER_PORT:-}" "$(normalize_boolean "${LTECAR_USE_HTTPS:-false}")" $(MEDIAMTX_DEST) <<'PY'
 import json
 import sys
 
-path, server_name, server_port, use_https = sys.argv[1:5]
+path, server_name, server_port, use_https, mtx_dest = sys.argv[1:6]
 
 with open(path, encoding="utf-8") as handle:
     data = json.load(handle)
@@ -197,6 +197,8 @@ if server_name:
     data["ServerName"] = server_name
 if server_port:
     data["ServerPort"] = int(server_port)
+if mtx_dest:
+    data["MediaMtxPath"] = mtx_dest
 data["UseHttps"] = use_https == "true"
 
 with open(path, "w", encoding="utf-8") as handle:
