@@ -94,7 +94,7 @@ public class VideoStreamService : ICarVideoClient, IHubConnectionObserver
         if (selectedStream == null)
             return;
 
-        selectedStream.Enabled = true;
+        selectedStream.Enabled = false;
 
         await _mediaMtxConfigurator.GenerateFromChannelMapAsync(_channelMap);
     }
