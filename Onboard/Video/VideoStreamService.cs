@@ -95,6 +95,7 @@ public class VideoStreamService : ICarVideoClient, IHubConnectionObserver
             return;
 
         selectedStream.Enabled = false;
+        Logger.LogInformation($"Stream: {streamId} disabled.");
 
         await _mediaMtxConfigurator.GenerateFromChannelMapAsync(_channelMap);
     }
@@ -106,6 +107,7 @@ public class VideoStreamService : ICarVideoClient, IHubConnectionObserver
             return;
 
         selectedStream.Enabled = true;
+        Logger.LogInformation($"Stream: {streamId} started.");
 
         await _mediaMtxConfigurator.GenerateFromChannelMapAsync(_channelMap);
     }
@@ -159,6 +161,7 @@ public class VideoStreamService : ICarVideoClient, IHubConnectionObserver
         selectedStream.EV = settings.EV;
         selectedStream.Exposure = settings.Exposure;
         selectedStream.Port = settings.Port;
+        Logger.LogInformation($"Stream: {streamId} updated.");
 
         await _mediaMtxConfigurator.GenerateFromChannelMapAsync(_channelMap);
     }
