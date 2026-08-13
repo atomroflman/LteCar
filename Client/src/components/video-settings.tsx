@@ -1,4 +1,4 @@
-import React, { JSX, useEffect, useState } from "react";
+import React, { JSX, useEffect, useRef, useState } from "react";
 import { useControlFlowStore } from "./control-flow-store";
 import CollapsibleSection from "./collapsible-section";
 import type { VideoSettingsPayload, VideoStreamInfo } from "@/types/video-stream";
@@ -19,6 +19,8 @@ export default function VideoSettingsControl(props: { carId?: number; canManageE
 
   const [streams, setStreams] = useState<VideoStreamInfo[]>([]);
   const [settingsMap, setSettingsMap] = useState<Record<number, VideoSettingsState>>({});
+  const settingsMapRef = useRef<Record<number, VideoSettingsState>>({});
+  const loadedCarIdRef = useRef<number | undefined>(undefined);
   const [busyMap, setBusyMap] = useState<Record<number, boolean>>({});
   const [error, setError] = useState<string | null>(null);
 
@@ -28,7 +30,7 @@ export default function VideoSettingsControl(props: { carId?: number; canManageE
 
     const map: Record<number, VideoSettingsState> = {};
     list.forEach(stream => {
-      map[stream.id] = {
+      map[stream.serverId] = {
         width: stream.width,
         height: stream.height,
         framerate: stream.framerate,
@@ -42,7 +44,14 @@ export default function VideoSettingsControl(props: { carId?: number; canManageE
         resolutionMode: 'preset'
       };
     });
-    setSettingsMap(map);
+    setSettingsMap(current => {
+      const next: Record<number, VideoSettingsState> = {};
+      list.forEach(stream => {
+        next[stream.serverId] = current[stream.serverId] ?? map[stream.serverId];
+      });
+      settingsMapRef.current = next;
+      return next;
+    });
   }
 
   useEffect(() => {
@@ -50,7 +59,15 @@ export default function VideoSettingsControl(props: { carId?: number; canManageE
     if (!carId) {
       setStreams([]);
       setSettingsMap({});
+      settingsMapRef.current = {};
+      loadedCarIdRef.current = undefined;
       return;
+    }
+
+    if (loadedCarIdRef.current !== carId) {
+      loadedCarIdRef.current = carId;
+      settingsMapRef.current = {};
+      setSettingsMap({});
     }
 
     // Prefer the dedicated CarVideoHub connection when available
@@ -117,13 +134,18 @@ export default function VideoSettingsControl(props: { carId?: number; canManageE
   ];
 
   function updateFieldFor(streamId: number, key: keyof VideoSettingsPayload, value: number | string) {
-    setSettingsMap(m => ({ ...m, [streamId]: { ...(m[streamId] || {}), [key]: value } }));
-    handleSave(streamId);
+    const current = settingsMapRef.current;
+    const next = {
+      ...current,
+      [streamId]: { ...(current[streamId] || {}), [key]: value }
+    };
+    settingsMapRef.current = next;
+    setSettingsMap(next);
   }
 
   async function handleSave(streamId: number) {
     setError(null);
-    const cfg = settingsMap[streamId];
+    const cfg = settingsMapRef.current[streamId];
     if (!cfg) 
       return setError(messages.videoSettings.noSettingsForStream);
     setBusyMap(b => ({ ...b, [streamId]: true }));
@@ -224,13 +246,13 @@ export default function VideoSettingsControl(props: { carId?: number; canManageE
         {streams.length === 0 && <div className="text-zinc-400">{messages.videoSettings.noStreams}</div>}
 
         {streams.map(s => {
-          const cfg = settingsMap[s.id] || {};
+          const cfg = settingsMap[s.serverId] || {};
           const presetValue = cfg.resolutionMode === 'custom' ? 'custom' : ((cfg.width ?? s.width) && (cfg.height ?? s.height) ? `${cfg.width ?? s.width}x${cfg.height ?? s.height}` : '');
 
           return (
-            <div key={s.id} className="mb-2 p-2 bg-zinc-800 border border-zinc-700 rounded">
+            <div key={s.serverId} className="mb-2 p-2 bg-zinc-800 border border-zinc-700 rounded">
               <div className="flex items-center justify-between mb-2">
-                <div className="font-medium text-zinc-100">{s.name} <span className="text-[11px] text-zinc-400">(#{s.id})</span></div>
+                <div className="font-medium text-zinc-100">{s.name} <span className="text-[11px] text-zinc-400">(#{s.serverId})</span></div>
                 <div className="text-[11px] text-zinc-400">{s.location || s.type || messages.common.streamFallback}</div>
               </div>
 
@@ -248,12 +270,18 @@ export default function VideoSettingsControl(props: { carId?: number; canManageE
                   <select className="w-full text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={presetValue} onChange={e => {
                     const val = e.target.value;
                     if (val === 'custom') {
-                      setSettingsMap(m => ({ ...m, [s.id]: { ...(m[s.id]||{}), resolutionMode: 'custom', width: m[s.id]?.width ?? s.width ?? null, height: m[s.id]?.height ?? s.height ?? null } }));
+                      const current = settingsMapRef.current[s.serverId] || {};
+                      const next = { ...settingsMapRef.current, [s.serverId]: { ...current, resolutionMode: 'custom' as const, width: current.width ?? s.width, height: current.height ?? s.height } };
+                      settingsMapRef.current = next;
+                      setSettingsMap(next);
                     } else {
                       const [w,h] = val.split('x').map(Number);
-                      setSettingsMap(m => ({ ...m, [s.id]: { ...(m[s.id]||{}), resolutionMode: 'preset', width: w, height: h } }));
+                      const current = settingsMapRef.current[s.serverId] || {};
+                      const next = { ...settingsMapRef.current, [s.serverId]: { ...current, resolutionMode: 'preset' as const, width: w, height: h } };
+                      settingsMapRef.current = next;
+                      setSettingsMap(next);
                     }
-                  }}>
+                  }} onBlur={() => void handleSave(s.serverId)}>
                     {resolutionPresets.map(p => (
                       <option key={p.key} value={p.key === 'custom' ? 'custom' : `${p.w}x${p.h}`}>{p.key === 'custom' ? `${messages.common.custom}...` : `${p.w}×${p.h}`}</option>
                     ))}
@@ -261,30 +289,30 @@ export default function VideoSettingsControl(props: { carId?: number; canManageE
 
                   {cfg.resolutionMode === 'custom' && (
                     <div className="mt-1 flex gap-1">
-                      <input type="number" className="w-1/2 text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={cfg.width ?? ''} onChange={e => updateFieldFor(s.id, 'width', e.target.value ? Number(e.target.value) : s.width)} placeholder={messages.common.width} />
-                      <input type="number" className="w-1/2 text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={cfg.height ?? ''} onChange={e => updateFieldFor(s.id, 'height', e.target.value ? Number(e.target.value) : s.height)} placeholder={messages.common.height} />
+                      <input type="number" className="w-1/2 text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={cfg.width ?? ''} onChange={e => updateFieldFor(s.serverId, 'width', e.target.value ? Number(e.target.value) : s.width)} onBlur={() => void handleSave(s.serverId)} placeholder={messages.common.width} />
+                      <input type="number" className="w-1/2 text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={cfg.height ?? ''} onChange={e => updateFieldFor(s.serverId, 'height', e.target.value ? Number(e.target.value) : s.height)} onBlur={() => void handleSave(s.serverId)} placeholder={messages.common.height} />
                     </div>
                   )}
                 </div>
 
                 <div>
                   <label className="block text-xs text-zinc-300">{messages.common.framerate}</label>
-                  <input type="number" className="w-full text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={cfg.framerate ?? s.framerate ?? ''} onChange={e => updateFieldFor(s.id, 'framerate', e.target.value ? Number(e.target.value) : s.framerate)} />
+                  <input type="number" className="w-full text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={cfg.framerate ?? s.framerate ?? ''} onChange={e => updateFieldFor(s.serverId, 'framerate', e.target.value ? Number(e.target.value) : s.framerate)} onBlur={() => void handleSave(s.serverId)} />
                 </div>
 
                 <div>
                   <label className="block text-xs text-zinc-300">{messages.common.bitrateKbps}</label>
-                  <input type="number" className="w-full text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={cfg.bitrateKbps ?? s.bitrateKbps ?? ''} onChange={e => updateFieldFor(s.id, 'bitrateKbps', e.target.value ? Number(e.target.value) : 0)} />
+                  <input type="number" className="w-full text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={cfg.bitrateKbps ?? s.bitrateKbps ?? ''} onChange={e => updateFieldFor(s.serverId, 'bitrateKbps', e.target.value ? Number(e.target.value) : 0)} onBlur={() => void handleSave(s.serverId)} />
                 </div>
 
                 <div>
                   <label className="block text-xs text-zinc-300">{messages.common.brightness}</label>
-                  <input type="range" min="0" max="100" className="w-full" value={Math.round(((cfg.brightness ?? s.brightness ?? 0.5) as number) * 100)} onChange={e => updateFieldFor(s.id, 'brightness', Number(e.target.value) / 100)} />
+                  <input type="range" min="0" max="100" className="w-full" value={Math.round(((cfg.brightness ?? s.brightness ?? 0.5) as number) * 100)} onChange={e => updateFieldFor(s.serverId, 'brightness', Number(e.target.value) / 100)} onBlur={() => void handleSave(s.serverId)} />
                 </div>
 
                 <div>
                   <label className="block text-xs text-zinc-300">{messages.common.exposure ?? 'Exposure'}</label>
-                  <select className="w-full text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={cfg.exposure ?? s.exposure ?? 'normal'} onChange={e => updateFieldFor(s.id, 'exposure', e.target.value)}>
+                  <select className="w-full text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={cfg.exposure ?? s.exposure ?? 'normal'} onChange={e => updateFieldFor(s.serverId, 'exposure', e.target.value)} onBlur={() => void handleSave(s.serverId)}>
                     <option value="normal">normal</option>
                     <option value="short">short</option>
                     <option value="long">long</option>
@@ -294,32 +322,32 @@ export default function VideoSettingsControl(props: { carId?: number; canManageE
 
                 <div>
                   <label className="block text-xs text-zinc-300">{messages.common.gain ?? 'Gain'}</label>
-                  <input type="number" step="0.1" min="0" className="w-full text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={cfg.gain ?? s.gain ?? ''} onChange={e => updateFieldFor(s.id, 'gain', e.target.value ? Number(e.target.value) : null as any)} />
+                  <input type="number" step="0.1" min="0" className="w-full text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={cfg.gain ?? s.gain ?? ''} onChange={e => updateFieldFor(s.serverId, 'gain', e.target.value ? Number(e.target.value) : null as any)} onBlur={() => void handleSave(s.serverId)} />
                 </div>
 
                 <div>
                   <label className="block text-xs text-zinc-300">{messages.common.shutter ?? 'Shutter (µs)'}</label>
-                  <input type="number" min="0" className="w-full text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={cfg.shutter ?? s.shutter ?? ''} onChange={e => updateFieldFor(s.id, 'shutter', e.target.value ? Number(e.target.value) : null as any)} />
+                  <input type="number" min="0" className="w-full text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={cfg.shutter ?? s.shutter ?? ''} onChange={e => updateFieldFor(s.serverId, 'shutter', e.target.value ? Number(e.target.value) : null as any)} onBlur={() => void handleSave(s.serverId)} />
                 </div>
 
                 <div>
                   <label className="block text-xs text-zinc-300">{messages.common.contrast ?? 'Contrast'}</label>
-                  <input type="number" step="0.1" min="0" max="16" className="w-full text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={cfg.contrast ?? s.contrast ?? ''} onChange={e => updateFieldFor(s.id, 'contrast', e.target.value ? Number(e.target.value) : null as any)} />
+                  <input type="number" step="0.1" min="0" max="16" className="w-full text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={cfg.contrast ?? s.contrast ?? ''} onChange={e => updateFieldFor(s.serverId, 'contrast', e.target.value ? Number(e.target.value) : null as any)} onBlur={() => void handleSave(s.serverId)} />
                 </div>
 
                 <div>
                   <label className="block text-xs text-zinc-300">{messages.common.ev ?? 'EV'}</label>
-                  <input type="number" step="0.1" min="-10" max="10" className="w-full text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={cfg.ev ?? s.ev ?? ''} onChange={e => updateFieldFor(s.id, 'ev', e.target.value ? Number(e.target.value) : null as any)} />
+                  <input type="number" step="0.1" min="-10" max="10" className="w-full text-xs p-1 rounded bg-zinc-900 border border-zinc-700 text-zinc-100" value={cfg.ev ?? s.ev ?? ''} onChange={e => updateFieldFor(s.serverId, 'ev', e.target.value ? Number(e.target.value) : null as any)} onBlur={() => void handleSave(s.serverId)} />
                 </div>
               </div>
 
               <div className="flex gap-2 flex-wrap">
-                <button className="px-2 py-1 text-xs rounded bg-zinc-700 hover:bg-zinc-600 text-zinc-100" onClick={() => handleSave(s.id)} disabled={busyMap[s.id]}>{busyMap[s.id] ? '...' : messages.videoSettings.save}</button>
+                <button className="px-2 py-1 text-xs rounded bg-zinc-700 hover:bg-zinc-600 text-zinc-100" onClick={() => handleSave(s.serverId)} disabled={busyMap[s.serverId]}>{busyMap[s.serverId] ? '...' : messages.videoSettings.save}</button>
                 {props.canManageEnabled && (
                   <button
                     className={`px-2 py-1 text-xs rounded text-zinc-100 ${s.enabled ? 'bg-amber-700 hover:bg-amber-600' : 'bg-green-700 hover:bg-green-600'}`}
-                    onClick={() => handleEnable(s.id, !s.enabled)}
-                    disabled={busyMap[s.id]}
+                    onClick={() => handleEnable(s.serverId, !s.enabled)}
+                    disabled={busyMap[s.serverId]}
                   >
                     {s.enabled ? messages.videoSettings.disable : messages.videoSettings.enable}
                   </button>
@@ -328,15 +356,15 @@ export default function VideoSettingsControl(props: { carId?: number; canManageE
                   <>
                     <button
                       className="px-2 py-1 text-xs rounded bg-blue-700 hover:bg-blue-600 text-zinc-100"
-                      onClick={() => handleStartStream(s.id)}
-                      disabled={busyMap[s.id] || s.isActive}
+                      onClick={() => handleStartStream(s.serverId)}
+                      disabled={busyMap[s.serverId] || s.isActive}
                     >
                       {messages.videoSettings.startStream}
                     </button>
                     <button
                       className="px-2 py-1 text-xs rounded bg-red-700 hover:bg-red-600 text-zinc-100"
-                      onClick={() => handleStopStream(s.id)}
-                      disabled={busyMap[s.id] || !s.isActive}
+                      onClick={() => handleStopStream(s.serverId)}
+                      disabled={busyMap[s.serverId] || !s.isActive}
                     >
                       {messages.videoSettings.stopStream}
                     </button>

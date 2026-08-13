@@ -22,14 +22,10 @@ function getStoredStreamId(carId: number): number | undefined {
   return Number.isInteger(parsed) ? parsed : undefined;
 }
 
+// ponytail: server returns streams already ordered by Priority then Name; client
+// used to re-sort on a field that no longer exists on VideoStreamMapItem.
 function sortStreams(streams: VideoStreamInfo[]): VideoStreamInfo[] {
-  return [...streams].sort((left, right) => {
-    if (left.priority !== right.priority) {
-      return left.priority - right.priority;
-    }
-
-    return left.name.localeCompare(right.name, 'de');
-  });
+  return streams;
 }
 
 export default function CarVideoPanel({ carId }: CarVideoPanelProps): JSX.Element {
@@ -163,17 +159,17 @@ export default function CarVideoPanel({ carId }: CarVideoPanelProps): JSX.Elemen
     }
 
     setSelectedStreamId(currentValue => {
-      const hasCurrentSelection = currentValue !== undefined && streams.some(stream => stream.id === currentValue);
+      const hasCurrentSelection = currentValue !== undefined && streams.some(stream => stream.serverId === currentValue);
       if (hasCurrentSelection) {
         return currentValue;
       }
 
       const storedStreamId = getStoredStreamId(carId);
-      if (storedStreamId !== undefined && streams.some(stream => stream.id === storedStreamId)) {
+      if (storedStreamId !== undefined && streams.some(stream => stream.serverId === storedStreamId)) {
         return storedStreamId;
       }
 
-      return streams.find(stream => stream.enabled)?.id ?? streams[0]?.id;
+      return streams.find(stream => stream.enabled)?.serverId ?? streams[0]?.serverId;
     });
   }, [carId, streams]);
 
@@ -186,7 +182,7 @@ export default function CarVideoPanel({ carId }: CarVideoPanelProps): JSX.Elemen
   }, [carId, selectedStreamId]);
 
   const selectedStream = useMemo(
-    () => streams.find(stream => stream.id === selectedStreamId),
+    () => streams.find(stream => stream.serverId === selectedStreamId),
     [selectedStreamId, streams],
   );
 
@@ -230,17 +226,17 @@ export default function CarVideoPanel({ carId }: CarVideoPanelProps): JSX.Elemen
     <div className="flex h-full w-full min-h-0 flex-col gap-3">
       <div className="flex shrink-0 flex-wrap gap-2">
         {streams.map(stream => {
-          const isSelected = stream.id === selectedStreamId;
+          const isSelected = stream.serverId === selectedStreamId;
           const buttonClasses = isSelected
             ? 'border-zinc-900 bg-zinc-900 text-white'
             : 'border-zinc-300 bg-white text-zinc-700 hover:border-zinc-500';
 
           return (
             <button
-              key={stream.id}
+              key={stream.serverId}
               type="button"
               className={`rounded-full border px-3 py-2 text-sm transition-colors ${buttonClasses}`}
-              onClick={() => setSelectedStreamId(stream.id)}
+              onClick={() => setSelectedStreamId(stream.serverId)}
             >
               <span className="font-medium">{stream.name}</span>
               <span className="ml-2 text-xs opacity-80">
@@ -273,7 +269,7 @@ export default function CarVideoPanel({ carId }: CarVideoPanelProps): JSX.Elemen
 
       {selectedStream && selectedStream.enabled && documentVisible && (
         <div className="flex min-h-0 flex-1 overflow-hidden rounded-2xl border border-zinc-200 bg-black shadow-sm">
-          <VideoStream key={selectedStream.id} streamId={selectedStream.id} streamName={selectedStream.name} />
+          <VideoStream key={selectedStream.serverId} streamId={selectedStream.serverId} streamName={selectedStream.name} />
         </div>
       )}
     </div>

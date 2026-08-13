@@ -1,10 +1,11 @@
+// ponytail: server's GetVideoStreamsForCar returns VideoStreamMapItem (serverId),
+// not VideoStreamInfoModel (id) anymore. Match the server.
 export type VideoStreamInfo = {
-  id: number;
+  serverId: number;
   name: string;
   streamId: string;
   type: string;
   location?: string | null;
-  priority: number;
   width: number;
   height: number;
   bitrateKbps: number;
