@@ -89,7 +89,7 @@ public class ChannelsController : ControllerBase
                     Width = s.Width,
                     Height = s.Height,
                     Framerate = s.Framerate,
-                    Bitrate = s.BitrateKbps,
+                    Bitrate = s.Bitrate,
                     CameraDevice = s.CameraDevice,
                     RpiCamId = s.RpiCamId,
                     Options = DeserializeOptions(s.OptionsJson),
@@ -314,7 +314,7 @@ public class ChannelsController : ControllerBase
         if (body.Width.HasValue) s.Width = body.Width.Value;
         if (body.Height.HasValue) s.Height = body.Height.Value;
         if (body.Framerate.HasValue) s.Framerate = body.Framerate.Value;
-        if (body.BitrateKbps.HasValue) s.BitrateKbps = body.BitrateKbps.Value;
+        if (body.BitrateKbps.HasValue) s.Bitrate = body.BitrateKbps.Value;
         if (body.Brightness.HasValue) s.Brightness = body.Brightness.Value;
         if (body.Priority.HasValue) s.Priority = body.Priority.Value;
         if (body.Port.HasValue) s.Port = body.Port.Value;
@@ -446,7 +446,7 @@ public class ChannelsController : ControllerBase
         Width = s.Width,
         Height = s.Height,
         Framerate = s.Framerate,
-        Bitrate = s.BitrateKbps,
+        Bitrate = s.Bitrate,
         CameraDevice = s.CameraDevice,
         RpiCamId = s.RpiCamId,
         Options = DeserializeOptions(s.OptionsJson),

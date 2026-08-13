@@ -25,7 +25,7 @@ public class VideoSettingsModel
         settings.Framerate = Framerate;
         settings.Brightness = Brightness;
     
-        settings.BitrateKbps = BitrateKbps;
+        settings.Bitrate = BitrateKbps;
         settings.Gain = Gain;
         settings.Shutter = Shutter;
         settings.Contrast = Contrast;

@@ -95,7 +95,7 @@ public class VideoStreamReceiverService
         {
             Protocol = protocol,
             TargetPort = port,
-            BitrateKbps = stream.BitrateKbps,
+            Bitrate = stream.Bitrate,
             Brightness = stream.Brightness,
             Gain = stream.Gain,
             Shutter = stream.Shutter,

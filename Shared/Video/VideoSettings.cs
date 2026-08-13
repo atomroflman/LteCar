@@ -10,7 +10,7 @@ public class VideoSettings : IVideoSettings
         Width = 640,
         Height = 480,
         Framerate = 22,
-        BitrateKbps = 1500,
+        Bitrate = 1500,
         Brightness = 0,
     };
 
@@ -18,7 +18,7 @@ public class VideoSettings : IVideoSettings
     public int Height { get; set; }
     public int Framerate { get; set; }
     public float Brightness { get; set; }
-    public int BitrateKbps { get; set; }
+    public int Bitrate { get; set; }
     public float? Gain { get; set; }
     public int? Shutter { get; set; }
     public float? Contrast { get; set; }

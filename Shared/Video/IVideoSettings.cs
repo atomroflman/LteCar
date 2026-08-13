@@ -6,7 +6,7 @@ public interface IVideoSettings
     public int Height { get; set; }
     public int Framerate { get; set; }
     public float Brightness { get; set; }
-    public int BitrateKbps { get; set; }
+    public int Bitrate { get; set; }
     public float? Gain { get; set; }
     public int? Shutter { get; set; }
     public float? Contrast { get; set; }

@@ -643,10 +643,10 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
 
     private async Task SanitizeStreamSettings(CarVideoStream s)
     {
-        if (s.BitrateKbps < 256 || s.BitrateKbps > 100000)
+        if (s.Bitrate < 256 || s.Bitrate > 10_000_000)
         {
-            Logger.LogWarning("Sanitizing bitrate {BitrateKbps} for stream {StreamId}", s.BitrateKbps, s.StreamId);
-            s.BitrateKbps = Math.Clamp(s.BitrateKbps, 256, 100000);
+            Logger.LogWarning("Sanitizing bitrate {BitrateKbps} for stream {StreamId}", s.Bitrate, s.StreamId);
+            s.Bitrate = Math.Clamp(s.Bitrate, 256, 10_000_000);
         }
         if (s.Framerate < 1 || s.Framerate > 60)
         {
@@ -694,11 +694,11 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
             Logger.LogWarning("Sanitizing exposure {Exposure} for stream {StreamId}", s.Exposure, s.StreamId);
             s.Exposure = "normal";
         }
-        if (s.BitrateKbps % 64 != 0)
+        if (s.Bitrate % 64 != 0)
         {
-            var original = s.BitrateKbps;
-            s.BitrateKbps = (s.BitrateKbps / 64) * 64;
-            Logger.LogWarning("Adjusting bitrate {OriginalBitrateKbps} to nearest multiple of 64: {AdjustedBitrateKbps} for stream {StreamId}", original, s.BitrateKbps, s.StreamId);
+            var original = s.Bitrate;
+            s.Bitrate = (s.Bitrate / 64) * 64;
+            Logger.LogWarning("Adjusting bitrate {OriginalBitrateKbps} to nearest multiple of 64: {AdjustedBitrateKbps} for stream {StreamId}", original, s.Bitrate, s.StreamId);
         }
         if (s.Port < _configService.Janus.PortRangeStart || s.Port > _configService.Janus.PortRangeEnd)
         {
@@ -725,7 +725,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
                 Location = s.Location,
                 Width = s.Width,
                 Height = s.Height,
-                Bitrate = s.BitrateKbps,
+                Bitrate = s.Bitrate,
                 Framerate = s.Framerate,
                 Brightness = s.Brightness,
                 Gain = s.Gain,
@@ -782,7 +782,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
         var dbContext = Context.GetHttpContext()!.RequestServices.GetRequiredService<LteCarContext>();
         Logger.LogInformation("Changing video stream settings for stream {StreamId} ({StreamName}) for car {CarId}", stream.Id, stream.Name, stream.CarId);
         
-        stream.BitrateKbps = settings.Bitrate ?? stream.BitrateKbps;
+        stream.Bitrate = settings.Bitrate ?? stream.Bitrate;
         stream.Brightness = settings.Brightness ?? stream.Brightness;
         stream.Width = settings.Width ?? stream.Width;
         stream.Height = settings.Height ?? stream.Height;
@@ -809,7 +809,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
         settings.Width = stream.Width;
         settings.Height = stream.Height;
         settings.Framerate = stream.Framerate;
-        settings.Bitrate = stream.BitrateKbps;
+        settings.Bitrate = stream.Bitrate;
         settings.Brightness = stream.Brightness;
         settings.Gain = stream.Gain;
         settings.Shutter = stream.Shutter;
