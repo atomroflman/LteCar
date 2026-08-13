@@ -133,25 +133,29 @@ export default function VideoSettingsControl(props: { carId?: number; canManageE
     { key: 'custom', w: null, h: null }
   ];
 
-  function updateFieldFor(streamId: number, key: keyof VideoSettingsPayload, value: number | string) {
+  function updateFieldFor(serverId: number, key: keyof VideoSettingsPayload, value: number | string) {
     const current = settingsMapRef.current;
     const next = {
       ...current,
-      [streamId]: { ...(current[streamId] || {}), [key]: value }
+      [serverId]: { ...(current[serverId] || {}), [key]: value }
     };
     settingsMapRef.current = next;
     setSettingsMap(next);
   }
 
-  async function handleSave(streamId: number) {
+  async function handleSave(serverId: number) {
     setError(null);
-    const cfg = settingsMapRef.current[streamId];
-    if (!cfg) 
+    const cfg = settingsMapRef.current[serverId];
+    if (!cfg)
       return setError(messages.videoSettings.noSettingsForStream);
-    setBusyMap(b => ({ ...b, [streamId]: true }));
-    const payload = {
-      height: cfg.height,
+    setBusyMap(b => ({ ...b, [serverId]: true }));
+    const stream = streams.find(x => x.serverId === serverId);
+    if (!stream)
+      return setError(messages.videoSettings.noSettingsForStream);
+    const payload: VideoStreamMapItem = {
+      ...stream,
       width: cfg.width,
+      height: cfg.height,
       framerate: cfg.framerate,
       bitrate: cfg.bitrate,
       brightness: cfg.brightness,
@@ -165,7 +169,7 @@ export default function VideoSettingsControl(props: { carId?: number; canManageE
     try {
       const hub = videoConnection;
       if (hub) {
-        await hub.invoke('ChangeVideoStreamSettings', streamId, payload);
+        await hub.invoke('ChangeVideoStreamSettings', serverId, payload);
       }
     } catch (e) {
       console.error('Failed to save stream settings:', e);
@@ -175,7 +179,7 @@ export default function VideoSettingsControl(props: { carId?: number; canManageE
         await loadStreams(videoConnection, carId);
       }
       window.dispatchEvent(new Event(STREAM_REFRESH_EVENT));
-      setBusyMap(b => ({ ...b, [streamId]: false }));
+      setBusyMap(b => ({ ...b, [serverId]: false }));
     }
   }
 
