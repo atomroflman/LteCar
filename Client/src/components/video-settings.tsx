@@ -361,14 +361,14 @@ export default function VideoSettingsControl(props: { carId?: number; canManageE
                     <button
                       className="px-2 py-1 text-xs rounded bg-blue-700 hover:bg-blue-600 text-zinc-100"
                       onClick={() => handleStartStream(s.serverId)}
-                      disabled={busyMap[s.serverId] || s.isActive}
+                      disabled={busyMap[s.serverId]}
                     >
                       {messages.videoSettings.startStream}
                     </button>
                     <button
                       className="px-2 py-1 text-xs rounded bg-red-700 hover:bg-red-600 text-zinc-100"
                       onClick={() => handleStopStream(s.serverId)}
-                      disabled={busyMap[s.serverId] || !s.isActive}
+                      disabled={busyMap[s.serverId]}
                     >
                       {messages.videoSettings.stopStream}
                     </button>
