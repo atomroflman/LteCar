@@ -184,7 +184,7 @@ update_onboard_appsettings() {
         return 0
     fi
 
-    python3 - "$appsettings_path" "${LTECAR_SERVER_NAME:-}" "${LTECAR_SERVER_PORT:-}" "$(normalize_boolean "${LTECAR_USE_HTTPS:-false}")" $(MEDIAMTX_DEST) <<'PY'
+    python3 - "$appsettings_path" "${LTECAR_SERVER_NAME:-}" "${LTECAR_SERVER_PORT:-}" "$(normalize_boolean "${LTECAR_USE_HTTPS:-false}")" "$(MEDIAMTX_DEST)" <<'PY'
 import json
 import sys
 
