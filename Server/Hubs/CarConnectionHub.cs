@@ -758,15 +758,10 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
         }
     }
 
+    [Obsolete]
     public async Task DeactivateStream(int streamId)
     {
-        var stream = await GetStreamAsync(streamId);
-        var lastViewer = _viewerRegistry.Deactivate(Context.ConnectionId, streamId);
-        Logger.LogInformation("Connection {ConnectionId} deactivated stream {StreamId}. Viewers: {ViewerCount}", Context.ConnectionId, streamId, _viewerRegistry.GetViewerCount(streamId));
-        if (lastViewer)
-        {
-            await StopStreamForViewersAsync(stream);
-        }
+        await StopVideoStream(streamId);
     }
 
     public async Task StopVideoStream(int streamId)
