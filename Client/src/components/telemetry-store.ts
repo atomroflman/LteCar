@@ -71,7 +71,10 @@ export const useTelemetryStore = create<TelemetryState>((set, get) => ({
 
     connection.on("UpdateTelemetry", (valueName: string, value: string) => {
       const { subscribedChannels } = get();
-      if (!subscribedChannels.has(valueName)) return;
+      if (!subscribedChannels.has(valueName)) {
+        console.warn(`[telemetry] UpdateTelemetry for unsubscribed channel: ${valueName}`);
+        return;
+      }
       set({ entries: upsertEntry(get().entries, { name: valueName, value, updatedAt: Date.now() }) });
     });
 

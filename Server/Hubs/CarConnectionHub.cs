@@ -580,18 +580,34 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
     {
         var db = Context.GetHttpContext()?.RequestServices.GetService<LteCarContext>();
         if (db == null) return;
-        if (!int.TryParse(carId, out var carIdInt)) return;
+        if (!int.TryParse(carId, out var carIdInt))
+        {
+            Logger.LogWarning("PersistTelemetrySubscription: invalid carId {CarId}", carId);
+            return;
+        }
 
         var user = await HubUserHelper.GetUserAsync(Context.GetHttpContext()!, db);
-        if (user == null) return;
+        if (user == null)
+        {
+            Logger.LogWarning("PersistTelemetrySubscription: no authenticated user for car {CarId} channel {Channel}", carId, channelName);
+            return;
+        }
 
         var setup = await db.UserSetups
             .FirstOrDefaultAsync(s => s.UserId == user.Id && s.CarId == carIdInt);
-        if (setup == null) return;
+        if (setup == null)
+        {
+            Logger.LogWarning("PersistTelemetrySubscription: no UserSetup for user {UserId} car {CarId} channel {Channel}", user.Id, carId, channelName);
+            return;
+        }
 
         var telemetry = await db.CarTelemetry
             .FirstOrDefaultAsync(t => t.CarId == carIdInt && t.ChannelName == channelName);
-        if (telemetry == null) return;
+        if (telemetry == null)
+        {
+            Logger.LogWarning("PersistTelemetrySubscription: unknown CarTelemetry for car {CarId} channel {Channel}", carId, channelName);
+            return;
+        }
 
         var existing = await db.UserSetupTelemetries
             .FirstOrDefaultAsync(t => t.UserSetupId == setup.Id && t.CarTelemetryId == telemetry.Id);
@@ -761,6 +777,7 @@ public class CarConnectionHub : Hub<IConnectionHubClient>, IConnectionHubServer
     [Obsolete]
     public async Task DeactivateStream(int streamId)
     {
+        Logger.LogInformation("Connection {ConnectionId} deactivated stream {StreamId}. (Legacy Endpoint!!!)", Context.ConnectionId, streamId);
         await StopVideoStream(streamId);
     }
 

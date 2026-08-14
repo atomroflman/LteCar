@@ -28,10 +28,6 @@ public class TelemetryService : IHubConnectionObserver, ITelemetryClient
     // Channels the UI has asked us to publish. Key = channel name (e.g. "battery.voltage").
     private readonly HashSet<string> _subscribedChannels = new(StringComparer.Ordinal);
 
-    // All channels discovered in the ChannelMap, keyed by channel name. Allows
-    // us to look up group/options without re-scanning the map on every tick.
-    private readonly Dictionary<string, TelemetryChannelMapItem> _channelIndex = new(StringComparer.Ordinal);
-
     // Reader instances, keyed by groupKey (e.g. "battery"). Multiple channels
     // that share a source share a single reader instance and a single tick.
     private readonly Dictionary<string, TelemetryReaderBase> _sourceReaders = new(StringComparer.Ordinal);
@@ -55,11 +51,6 @@ public TelemetryService(ChannelMap channelMap, ServerConnectionService serverCon
         Logger = logger;
         CarConfigurationService = carConfigurationService;
         CarConfigurationService.OnConfigurationChanged += HandleCarConfigurationChanged;
-
-        foreach (var kv in ChannelMap.TelemetryChannels)
-        {
-            _channelIndex[kv.Key] = kv.Value;
-        }
     }
 
     public async Task ConnectToServer()
@@ -162,7 +153,7 @@ public TelemetryService(ChannelMap channelMap, ServerConnectionService serverCon
 
     public Task<IEnumerable<string>> GetAvailableTelemetryChannels()
     {
-        return Task.FromResult<IEnumerable<string>>(_channelIndex.Keys.ToList());
+        return Task.FromResult<IEnumerable<string>>(ChannelMap.TelemetryChannels.Keys.ToList());
     }
 
     public async Task UpdateTelemetry(string valueName, string value)
@@ -264,7 +255,7 @@ public TelemetryService(ChannelMap channelMap, ServerConnectionService serverCon
 
     public Task SubscribeToTelemetryChannel(string channelName)
     {
-        if (!_channelIndex.TryGetValue(channelName, out var definition))
+        if (!ChannelMap.TelemetryChannels.TryGetValue(channelName, out var definition))
         {
             Logger.LogWarning("Unknown telemetry channel {Channel}; ignoring subscribe request.", channelName);
             return Task.CompletedTask;
@@ -305,7 +296,7 @@ public TelemetryService(ChannelMap channelMap, ServerConnectionService serverCon
             return Task.CompletedTask;
         }
 
-        var groupKey = _channelIndex.TryGetValue(channelName, out var def)
+        var groupKey = ChannelMap.TelemetryChannels.TryGetValue(channelName, out var def)
             ? ResolveGroupKey(channelName, def)
             : channelName;
 
