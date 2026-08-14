@@ -25,9 +25,6 @@ public class TelemetryService : IHubConnectionObserver, ITelemetryClient
     private string? _carId;
     private bool _reconnectHandlersAttached;
 
-    // Channels the UI has asked us to publish. Key = channel name (e.g. "battery.voltage").
-    private readonly HashSet<string> _subscribedChannels = new(StringComparer.Ordinal);
-
     // Reader instances, keyed by groupKey (e.g. "battery"). Multiple channels
     // that share a source share a single reader instance and a single tick.
     private readonly Dictionary<string, TelemetryReaderBase> _sourceReaders = new(StringComparer.Ordinal);
@@ -183,6 +180,7 @@ public TelemetryService(ChannelMap channelMap, ServerConnectionService serverCon
         {
             _tick = 1;
         }
+        EnsureReaders();
         foreach (var (sourceKey, reader) in _sourceReaders.ToList())
         {
             var interval = Math.Max(1, reader.ReadIntervalTicks);
@@ -213,10 +211,6 @@ public TelemetryService(ChannelMap channelMap, ServerConnectionService serverCon
 
             foreach (var channelName in channels)
             {
-                if (!_subscribedChannels.Contains(channelName))
-                {
-                    continue;
-                }
                 if (!TryResolveValue(channelName, values, out var value))
                 {
                     continue;
@@ -230,6 +224,50 @@ public TelemetryService(ChannelMap channelMap, ServerConnectionService serverCon
                 {
                     Logger.LogError(ex, "Failed to send telemetry update for {Channel}", channelName);
                 }
+            }
+        }
+    }
+
+    private void EnsureReaders()
+    {
+        foreach (var (groupKey, channels) in _sourceChannels.ToList())
+        {
+            var stillPresent = channels.Where(c => ChannelMap.TelemetryChannels.ContainsKey(c)).ToList();
+            if (stillPresent.Count == 0)
+            {
+                _sourceChannels.Remove(groupKey);
+                if (_sourceReaders.Remove(groupKey, out var dropped))
+                {
+                    try { dropped.Dispose(); } catch { }
+                }
+            }
+            else if (stillPresent.Count != channels.Count)
+            {
+                _sourceChannels[groupKey] = stillPresent;
+            }
+        }
+
+        foreach (var (channelName, definition) in ChannelMap.TelemetryChannels)
+        {
+            var groupKey = ResolveGroupKey(channelName, definition);
+            if (!_sourceChannels.TryGetValue(groupKey, out var channels))
+            {
+                channels = new List<string>();
+                _sourceChannels[groupKey] = channels;
+            }
+            if (!channels.Contains(channelName))
+            {
+                channels.Add(channelName);
+            }
+            if (!_sourceReaders.ContainsKey(groupKey))
+            {
+                var reader = CreateReader(channelName, definition);
+                if (reader == null)
+                {
+                    continue;
+                }
+                _sourceReaders[groupKey] = reader;
+                Logger.LogInformation("Created telemetry reader for source {Source} (channel {Channel}).", groupKey, channelName);
             }
         }
     }
@@ -255,67 +293,17 @@ public TelemetryService(ChannelMap channelMap, ServerConnectionService serverCon
 
     public Task SubscribeToTelemetryChannel(string channelName)
     {
-        if (!ChannelMap.TelemetryChannels.TryGetValue(channelName, out var definition))
-        {
-            Logger.LogWarning("Unknown telemetry channel {Channel}; ignoring subscribe request.", channelName);
-            return Task.CompletedTask;
-        }
-
-        _subscribedChannels.Add(channelName);
-
-        var groupKey = ResolveGroupKey(channelName, definition);
-        if (!_sourceChannels.TryGetValue(groupKey, out var channels))
-        {
-            channels = new List<string>();
-            _sourceChannels[groupKey] = channels;
-        }
-        if (!channels.Contains(channelName))
-        {
-            channels.Add(channelName);
-        }
-
-        if (!_sourceReaders.ContainsKey(groupKey))
-        {
-            var reader = CreateReader(channelName, definition);
-            if (reader == null)
-            {
-                return Task.CompletedTask;
-            }
-            _sourceReaders[groupKey] = reader;
-            Logger.LogInformation("Created telemetry reader for source {Source} (channel {Channel}).", groupKey, channelName);
-        }
-
-        Logger.LogInformation("Subscribed to telemetry channel: {Channel}", channelName);
+        // No-op: telemetry is published unconditionally from ChannelMap. Kept
+        // for the hub contract — server still calls it on per-user subscribe.
+        // UI display preference is tracked separately via UserSetupTelemetry.
+        Logger.LogDebug("SubscribeToTelemetryChannel({Channel}) ignored; always-on flow.", channelName);
         return Task.CompletedTask;
     }
 
     public Task UnsubscribeFromTelemetryChannel(string channelName)
     {
-        if (!_subscribedChannels.Remove(channelName))
-        {
-            return Task.CompletedTask;
-        }
-
-        var groupKey = ChannelMap.TelemetryChannels.TryGetValue(channelName, out var def)
-            ? ResolveGroupKey(channelName, def)
-            : channelName;
-
-        if (_sourceChannels.TryGetValue(groupKey, out var channels))
-        {
-            channels.Remove(channelName);
-            if (channels.Count == 0)
-            {
-                _sourceChannels.Remove(groupKey);
-                if (_sourceReaders.TryGetValue(groupKey, out var reader))
-                {
-                    reader.Dispose();
-                    _sourceReaders.Remove(groupKey);
-                    Logger.LogInformation("Disposed telemetry reader for source {Source}.", groupKey);
-                }
-            }
-        }
-
-        Logger.LogInformation("Unsubscribed from telemetry channel: {Channel}", channelName);
+        // No-op: see SubscribeToTelemetryChannel.
+        Logger.LogDebug("UnsubscribeFromTelemetryChannel({Channel}) ignored; always-on flow.", channelName);
         return Task.CompletedTask;
     }
 
