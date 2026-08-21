@@ -24,7 +24,7 @@ graph LR
 
 | Project | Description | Technologies |
 |---------|-------------|-------------|
-| **Server** | Central hub for vehicles and users. Hosts the REST API and all SignalR hubs. Manages the database, video streams, and routing. | ASP.NET Core 8, SignalR, EF Core 9 (SQL Server), MessagePack |
+| **Server** | Central hub for vehicles and users. Hosts the REST API and all SignalR hubs. Manages the database, video streams, and routing. | ASP.NET Core 8, SignalR, EF Core 9 (PostgreSQL), MessagePack |
 | **Onboard** | Runs on the vehicle (Raspberry Pi). Connects to the server, receives control commands, drives hardware (PWM/GPIO), and sends telemetry and video. | .NET 8 Console App, System.Device.Gpio, TypedSignalR, MediaMTX |
 | **Client** | Web UI in the browser. Control via gamepad, configuration through a flow editor, video reception via WebRTC. | Next.js 15, React 19, ReactFlow, Zustand, Web Crypto API |
 | **Shared** | Shared DTOs, interfaces, and utilities for Server and Onboard. | .NET 8 Class Library |
@@ -44,7 +44,7 @@ The vehicle is a Raspberry Pi with attached hardware (motors, servos, sensors, c
 
 ### Server
 
-The server is the central intermediary. It manages user sessions, vehicle connections, and the database. It routes control commands from the browser to the correct vehicle and telemetry data back. It controls Janus for video streaming and provides the REST API for CRUD operations. In the standard deployment, it runs as a container alongside Postgres, Janus, and the client.
+The server is the central intermediary. It manages user sessions, vehicle connections, and the database. It routes control commands from the browser to the correct vehicle and telemetry data back. It controls Janus for video streaming and provides the REST API for CRUD operations. In the standard deployment, it runs as a container alongside Postgres, Janus, a coturn TURN server, nginx, and the client.
 
 ### Janus (video gateway)
 
