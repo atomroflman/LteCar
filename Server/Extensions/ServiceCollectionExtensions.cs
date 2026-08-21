@@ -13,6 +13,8 @@ public static class ServiceCollectionExtensions
             configuration.GetSection(JanusConfiguration.SectionName));
         services.Configure<FileTransferConfiguration>(
             configuration.GetSection(FileTransferConfiguration.SectionName));
+        services.Configure<WebRtcConfiguration>(
+            configuration.GetSection(WebRtcConfiguration.SectionName));
 
         // Register configuration service
         services.AddSingleton<IConfigurationService, ConfigurationService>();

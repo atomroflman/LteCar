@@ -8,6 +8,7 @@ public interface IConfigurationService
     ApplicationConfiguration Application { get; }
     JanusConfiguration Janus { get; }
     FileTransferConfiguration FileTransfer { get; }
+    WebRtcConfiguration WebRtc { get; }
     string DefaultConnectionString { get; }
 }
 
@@ -19,14 +20,16 @@ public class ConfigurationService : IConfigurationService
         IOptions<ApplicationConfiguration> appConfig,
         IOptions<JanusConfiguration> janusConfig,
         IOptions<FileTransferConfiguration> fileTransferConfig,
+        IOptions<WebRtcConfiguration> webRtcConfig,
         ILogger<ConfigurationService> logger)
     {
         _logger = logger;
-        
+
         Application = appConfig.Value;
         Janus = janusConfig.Value;
         FileTransfer = fileTransferConfig.Value;
-        
+        WebRtc = webRtcConfig.Value;
+
         ValidateConfiguration();
         LogConfiguration();
     }
@@ -34,6 +37,7 @@ public class ConfigurationService : IConfigurationService
     public ApplicationConfiguration Application { get; }
     public JanusConfiguration Janus { get; }
     public FileTransferConfiguration FileTransfer { get; }
+    public WebRtcConfiguration WebRtc { get; }
     public string DefaultConnectionString => Application.ConnectionStrings.DefaultConnection;
 
     private void ValidateConfiguration()
@@ -78,5 +82,8 @@ public class ConfigurationService : IConfigurationService
         _logger.LogInformation("- DefaultConnection: [CONFIGURED]");
         _logger.LogInformation("- FileTransfer Throttle: {Rate} KB/s, MaxSize: {Max} MB, Storage: {Path}",
             FileTransfer.ThrottleKBytesPerSecond, FileTransfer.MaxFileSizeMB, FileTransfer.StoragePath);
+        _logger.LogInformation("- WebRtc: {Count} TURN url(s), credentials {Status}",
+            WebRtc.Urls.Count,
+            WebRtc.Urls.Count == 0 ? "n/a" : (string.IsNullOrEmpty(WebRtc.Username) || string.IsNullOrEmpty(WebRtc.Credential) ? "MISSING" : "configured"));
     }
 }

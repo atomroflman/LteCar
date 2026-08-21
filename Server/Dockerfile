@@ -28,5 +28,5 @@ COPY install.sh /app/install.sh
 COPY VehicleTemplates /app/VehicleTemplates
 # ffmpeg is used by VideoStreamReceiverService to relay
 # the TCP stream from the Onboard to Janus via RTP.
-RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg curl && rm -rf /var/lib/apt/lists/*
 ENTRYPOINT ["dotnet", "LteCar.Server.dll"]

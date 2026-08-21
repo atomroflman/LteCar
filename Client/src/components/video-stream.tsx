@@ -146,10 +146,26 @@ function initJanus(JanusCtor: JanusStatic): Promise<void> {
   });
 }
 
-function createJanusSession(JanusCtor: JanusStatic, servers: string[]): Promise<Janus> {
+async function fetchIceServers(): Promise<RTCIceServer[] | undefined> {
+  try {
+    const res = await fetch('/api/webrtc/ice-servers');
+    if (!res.ok) return undefined;
+    const data = (await res.json()) as { iceServers?: RTCIceServer[] };
+    return Array.isArray(data.iceServers) ? data.iceServers : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function createJanusSession(
+  JanusCtor: JanusStatic,
+  servers: string[],
+  iceServers?: RTCIceServer[],
+): Promise<Janus> {
   return new Promise((resolve, reject) => {
     const janus = new JanusCtor({
       server: servers,
+      iceServers,
       success: () => resolve(janus),
       error: (err: string) => reject(new Error(err)),
       destroyed: () => {
@@ -458,7 +474,8 @@ function useJanusStreaming(
         if (!mountedRef.current) return;
 
         setPhase('connecting');
-        const janus = await createJanusSession(JanusCtor, JANUS_SERVERS);
+        const iceServers = await fetchIceServers();
+        const janus = await createJanusSession(JanusCtor, JANUS_SERVERS, iceServers);
         if (!mountedRef.current) {
           janus.destroy({ cleanupHandles: true });
           return;
