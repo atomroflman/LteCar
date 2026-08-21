@@ -54,11 +54,4 @@ vehicleTemplates/
 
 ## Using Templates
 
-Templates are selected and managed through the onboard setup tool:
-
-```bash
-# On the vehicle
-dotnet run -- setup
-```
-
-The setup tool will guide you through template selection and configuration.
+There is no console tool for selecting/applying templates anymore. Copy the relevant configuration from a template's files by hand; vehicle configuration and testing happen in the web client at `/car/[carId]`.

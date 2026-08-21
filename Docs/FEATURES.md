@@ -78,7 +78,7 @@ Janus's WebRTC media (all video streams) uses the UDP range configured on the `j
 
 ### Status
 
-The audio signaling hub (`CarAudioHub`, `Server/Hubs/CarAudioHub.cs`) exists in the codebase but is **not currently registered** in `Server/Program.cs`, so it isn't reachable yet. The `audio` feature flag (toggleable from the setup tool) doesn't gate anything at runtime either way.
+The audio signaling hub (`CarAudioHub`, `Server/Hubs/CarAudioHub.cs`) exists in the codebase but is **not currently registered** in `Server/Program.cs`, so it isn't reachable yet. The `audio` feature flag doesn't gate anything at runtime either way.
 
 ---
 
@@ -110,8 +110,7 @@ Command dispatch and output streaming use two different hubs:
 
 ### Enable
 
-1. Via Setup Tool: **6. Feature Flags** → **F2. Bash Tool** → Enable
-2. Or via `appSettings.json`:
+Set it in `appSettings.json`:
 
 ```json
 {
@@ -119,7 +118,7 @@ Command dispatch and output streaming use two different hubs:
 }
 ```
 
-This is the one feature flag that's actually read at startup (`Onboard/Program.cs`, falls back to `false` if the key is absent) — it's the only flag from the setup tool's Feature Flags menu that currently has any runtime effect.
+This is the one feature flag that's actually read at startup (`Onboard/Program.cs`, falls back to `false` if the key is absent) — it's the only one of the five feature flags that currently has any runtime effect.
 
 ### Usage
 
@@ -155,13 +154,13 @@ The Channel Tester allows testing individual hardware channels from the web inte
 - Check LED connections
 - Validate sensor readings
 
-The web client's `/car/[carId]/test` page provides this today, independent of any feature flag. The `channelTester` flag in the setup tool's Feature Flags menu is stored in `appSettings.json` but currently has no effect — it doesn't gate this page or anything else.
+The web client's `/car/[carId]/test` page provides this today, independent of any feature flag. The `channelTester` flag can be stored in `appSettings.json` but currently has no effect — it doesn't gate this page or anything else.
 
 ---
 
 ## Web-Based Vehicle Configuration
 
-There's no dedicated "Web Setup Interface" gated by a `webSetup` flag — that flag exists in the setup tool's menu but is currently inert (nothing reads it). What *is* available, always, with no flag needed, is the web client itself at `/car/[carId]`:
+There's no dedicated "Web Setup Interface" gated by a `webSetup` flag — that flag can be set in `appSettings.json` but is currently inert (nothing reads it). What *is* available, always, with no flag needed, is the web client itself at `/car/[carId]`:
 
 - **Templates panel** — import/export gamepad-to-channel flow-graph configurations
 - **Channels page** (`/car/[carId]/channels`) — channel configuration
@@ -199,28 +198,19 @@ vehicleTemplates/
 }
 ```
 
-### Creating a Template
+### Creating or Applying a Template
 
-1. Configure your vehicle
-2. Run setup: `dotnet run -- setup`
-3. Go to **5. Templates** → **T3. Create Template from Current**
-4. Enter name and description
-
-### Applying a Template
-
-1. Run setup: `dotnet run -- setup`
-2. Go to **5. Templates** → **T2. Select Template**
-3. Choose template from list
+The filesystem templates under `VehicleTemplates/`/`vehicleTemplates/` are created and applied by hand (copy a folder, edit `config.json`/`metadata.json`) — see [VehicleTemplates/README.md](../VehicleTemplates/README.md). There is no console tool for this anymore.
 
 ### Template Base Path
 
-Templates are looked up from (`Onboard/Setup/SetupMenu.cs`):
+Templates are looked up from:
 1. `VEHICLE_TEMPLATES_PATH` environment variable
 2. `~/vehicleTemplates/` by default (the user's home directory, not `~/.ltecar/`)
 
 ### A second, separate template system
 
-The console tool's filesystem templates above are independent of a newer, **server-side** template store: `GET/POST /api/templates` (`Server/Controllers/TemplatesController.cs`) persists named `ChannelTemplate` rows in the database and can push one onto a car's live channel map (`POST /api/templates/cars/{carId}/apply/{templateId}`). The web client's Templates panel (`/car/[carId]`) and the setup tool's console templates currently work independently of each other — applying one does not update the other.
+The filesystem templates above are independent of a newer, **server-side** template store: `GET/POST /api/templates` (`Server/Controllers/TemplatesController.cs`) persists named `ChannelTemplate` rows in the database and can push one onto a car's live channel map (`POST /api/templates/cars/{carId}/apply/{templateId}`). This is managed from the web client's Templates panel (`/car/[carId]`) and currently works independently of the filesystem templates — applying one does not update the other.
 
 ---
 
@@ -239,7 +229,7 @@ The server only needs to be reachable at whatever `ServerName`/`ServerPort`/`Use
 
 ## Feature Flags Summary
 
-The setup tool's Feature Flags menu (`dotnet run -- setup` → **6. Feature Flags**) can toggle all five flags below, and they're all persisted to `appSettings.json`. Only one of them currently changes what the running Onboard process does:
+All five flags below can be set in `appSettings.json`. Only one of them currently changes what the running Onboard process does:
 
 | Feature | Actually wired up at runtime? |
 |---------|---------|

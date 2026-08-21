@@ -41,7 +41,6 @@ curl -fsSL https://raw.githubusercontent.com/atomroflman/SignalRC/master/install
 cd Server && dotnet run
 
 # Onboard (Fahrzeug)
-cd Onboard && dotnet run -- setup    # interaktives Erstsetup
 cd Onboard && dotnet run             # normaler Start
 
 # Voller Stack (Client + Server + nginx + Janus + Postgres + TURN)
@@ -72,7 +71,7 @@ docker compose down
 | Channel Tester | Hardware-Kanäle über die Web-UI testen |
 | Templates | Fahrzeugkonfigurationen teilen und wiederverwenden |
 
-**Feature Flags**: Das Onboard-Setup-Tool (`dotnet run -- setup` → **Feature Flags**) kann `webSetup`, `bashTool`, `channelTester`, `audio`, `video` umschalten. Davon wirkt sich aktuell nur `bashTool` tatsächlich auf das Laufzeitverhalten aus (schaltet die Bash-Relay-Verbindung zum Server frei, Standard ist aus, wenn der Wert fehlt). Die übrigen Flags werden zwar in `appSettings.json` gespeichert, steuern aber derzeit nichts. Details siehe [Docs/CONFIGURATION.md](Docs/CONFIGURATION.md#feature-flags) (Englisch).
+**Feature Flags**: `appSettings.json` kennt die Flags `webSetup`, `bashTool`, `channelTester`, `audio`, `video`. Davon wirkt sich aktuell nur `bashTool` tatsächlich auf das Laufzeitverhalten aus (schaltet die Bash-Relay-Verbindung zum Server frei, Standard ist aus, wenn der Wert fehlt). Die übrigen Flags werden zwar in `appSettings.json` gespeichert, steuern aber derzeit nichts. Details siehe [Docs/CONFIGURATION.md](Docs/CONFIGURATION.md#feature-flags) (Englisch).
 
 ---
 
@@ -105,26 +104,9 @@ cd SignalRC && sudo bash install.sh
 
 ---
 
-## Setup-Tool (raspi-config-Style)
-
-```bash
-cd Onboard && dotnet run -- setup
-```
-
-Menüstruktur:
-1. **System Options** – Hostname, SSH, Boot
-2. **Network / Server** – Server-URL konfigurieren
-3. **Vehicle Configuration** – Kanäle, Name
-4. **Hardware Test** – Outputs, Servos, Motoren testen
-5. **Templates** – Fahrzeugvorlagen verwalten
-6. **Feature Flags** – Features ein/aus
-7. **Update / Recovery** – Updates, Backup, Factory Reset
-
-**Details:** [Docs/SETUP.md](Docs/SETUP.md) (Englisch)
-
----
-
 ## Konfiguration
+
+Die fahrzeugspezifische Konfiguration (Kanäle, Name, Hardware) sowie das Testen erfolgen über den Web-Client unter `/car/[carId]` – siehe den "Neues Fahrzeug installieren"-Flow oben. Ein Konsolen-Setup-Tool gibt es nicht mehr.
 
 ### Onboard (appSettings.json)
 
@@ -182,7 +164,6 @@ Menüstruktur:
 - [Docs/README.md](Docs/README.md) – Übersicht (Englisch)
 - [Docs/README.de.md](Docs/README.de.md) – Deutsche Docs-Übersicht
 - [Docs/INSTALLATION.md](Docs/INSTALLATION.md) – Installationsanleitung (Englisch)
-- [Docs/SETUP.md](Docs/SETUP.md) – Setup-Tool (Englisch)
 - [Docs/FEATURES.md](Docs/FEATURES.md) – Feature-Dokumentation (Englisch)
 - [Docs/CONFIGURATION.md](Docs/CONFIGURATION.md) – Konfigurationsreferenz (Englisch)
 
@@ -193,7 +174,7 @@ Menüstruktur:
 | Variable | Beschreibung |
 |----------|--------------|
 | `CONFIG_DIR` | Konfigurationsverzeichnis (Onboard) |
-| `VEHICLE_TEMPLATES_PATH` | Template-Pfad (vom Konsolen-Setup-Tool genutzt) |
+| `VEHICLE_TEMPLATES_PATH` | Template-Pfad (Dateisystem-Fahrzeugvorlagen in `VehicleTemplates/`/`vehicleTemplates/`) |
 | `COTURN_EXTERNAL_IP` / `COTURN_USERNAME` / `COTURN_CREDENTIAL` | Öffentliche IP und Zugangsdaten des TURN-Servers (Docker Compose) |
 | `JANUS_NAT_1_1` | Öffentliche IP für Janus-WebRTC-NAT-Traversal (Docker Compose); fällt ohne Angabe auf Azure IMDS zurück |
 

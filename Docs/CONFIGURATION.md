@@ -21,8 +21,6 @@ Located in the config directory (see [Config Directory](#config-directory) below
 }
 ```
 
-> **Note**: the interactive console setup tool (`Onboard/Setup/VehicleSetupTool.cs`) has its own internal `AppSettings` model with different, `camelCase` field names (`carId`, `carName`, `carPasswordHash`, `serverUrl`, `apiKey`, plus the five feature flags below) — it does not line up with the fields above one-to-one. Treat the PascalCase shape shown here as authoritative for what the running app actually consumes; if you edit `appSettings.json` by hand, use these field names.
-
 Optional feature-flag keys (`webSetup`, `bashTool`, `channelTester`, `audio`, `video`) can also be set here — see [Feature Flags](#feature-flags) for which of them actually do anything.
 
 ### channelMap.json (Onboard)
@@ -79,7 +77,7 @@ There's no `minPulse`/`maxPulse`/`centerPulse` or `priority` field on channel it
 
 ## Feature Flags
 
-The setup tool's `AppSettings` model (`Onboard/Setup/VehicleSetupTool.cs`) declares five boolean flags, all defaulting to `true` in that class — but the shipped `appSettings.json` doesn't set any of them, and only one is actually read anywhere at runtime:
+`appSettings.json` supports five boolean feature flags, but the shipped default doesn't set any of them, and only one is actually read anywhere at runtime:
 
 | Flag | Actually read at runtime? |
 |------|-------------|
@@ -91,14 +89,8 @@ The setup tool's `AppSettings` model (`Onboard/Setup/VehicleSetupTool.cs`) decla
 
 ### Enabling Features
 
-**Via Setup Tool:**
-1. Run `dotnet run -- setup`
-2. Go to **6. Feature Flags**
-3. Select feature to toggle
+Set the flag directly in `appSettings.json` — as shown above, only `bashTool` currently changes behavior:
 
-This writes the flag into `appSettings.json`, but as shown above, only `bashTool` currently changes behavior.
-
-**Via JSON:**
 ```json
 {
   "bashTool": true
@@ -170,7 +162,7 @@ Exists in code but **not mapped/reachable**:
 | Variable | Description |
 |----------|-------------|
 | `CONFIG_DIR` | Config directory path (`Onboard/Program.cs`) |
-| `VEHICLE_TEMPLATES_PATH` | Template base path, only used by the console setup tool's filesystem templates (`Onboard/Setup/SetupMenu.cs`) |
+| `VEHICLE_TEMPLATES_PATH` | Template base path for filesystem vehicle templates (`VehicleTemplates/`/`vehicleTemplates/`) |
 
 There is no `LTE_USE_NEW_CONNECTION_MODEL` variable in the current code — it doesn't appear anywhere outside old documentation. The single-hub connection model it used to toggle is now simply the only model.
 

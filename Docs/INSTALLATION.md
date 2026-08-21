@@ -110,7 +110,7 @@ Open the server in a browser. With no vehicle selected, the page shows an instal
 curl -fsSL https://YOUR-SERVER/api/install/onboard.sh | sudo bash
 ```
 
-This is `install.sh` itself with `DEPLOY_MODE=onboard` and the server settings pre-filled as shell variables (see `Server/Services/OnboardInstallScriptService.cs`); it still asks interactively for anything not pre-filled and does **not** start the onboard service immediately unless you opt into the systemd prompt at the end. Vehicle-specific configuration (channels, hardware, name) is done afterwards from the web client at `/car/[carId]`, or via the console `dotnet run -- setup` tool.
+This is `install.sh` itself with `DEPLOY_MODE=onboard` and the server settings pre-filled as shell variables (see `Server/Services/OnboardInstallScriptService.cs`); it still asks interactively for anything not pre-filled and does **not** start the onboard service immediately unless you opt into the systemd prompt at the end. Vehicle-specific configuration (channels, hardware, name) and testing are done afterwards from the web client at `/car/[carId]`.
 
 ### Or run the installer directly on the vehicle
 
@@ -136,7 +136,6 @@ Hardware connections: PCA9685 PWM controller via I2C (SDA/SCL), plain GPIO outpu
 
 ```bash
 cd Onboard
-dotnet run -- setup   # interactive first-time configuration
 dotnet run             # normal start
 ```
 
@@ -161,7 +160,7 @@ dotnet run
 
 ### Interactive Selection
 
-If no config directory is specified, the setup tool will prompt for selection. The chosen path is persisted in `.configdir` file.
+If no config directory is specified, the Onboard app will prompt interactively for one on first run. The chosen path is persisted in `.configdir` file.
 
 ---
 

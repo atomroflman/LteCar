@@ -36,12 +36,9 @@ There used to be an `LTE_USE_NEW_CONNECTION_MODEL` flag toggling between an old 
 - `CarConnectionStore` (Server) maps `connectionId ↔ carId` via a `BiDictionary`.
 - `channelMap.server.json` caches the server-side ID assignment.
 
-## Setup Tool (raspi-config style, Spectre.Console)
-Start with `dotnet run -- setup`. 7 menus: System, Network/Server, Vehicle Config, Hardware Test, Templates, Feature Flags, Update/Recovery. Edits `appSettings.json`, `channelMap.json`, SSH/identity keys.
-
 ## Feature Flags
 
-Five flags are toggleable from the setup tool's Feature Flags menu, all persisted to `appSettings.json` — but only `bashTool` is actually read anywhere at runtime (`Onboard/Program.cs`, defaults to `false` when unset):
+Five flags can be set in `appSettings.json` — but only `bashTool` is actually read anywhere at runtime (`Onboard/Program.cs`, defaults to `false` when unset):
 
 | Flag | Actually wired up? |
 |------|--------------|
@@ -57,7 +54,6 @@ Five flags are toggleable from the setup tool's Feature Flags menu, all persiste
 - **VideoStreamService** – manages the MediaMTX process and its configuration from the ChannelMap.
 - **AudioChatService** – bidirectional audio connection, device management, echo cancellation (not currently reachable — see `CarAudioHub` above).
 - **BashToolService** – subscribes to `ExecuteCommand` on `CarBashHub`, runs local processes, streams output back via `CarConnectionHub`.
-- **ChannelTester** – console test tool for hardware channels.
 - **SshKeyService** – RSA-2048, challenge/verify, fingerprint logging; serves the private key over a LAN-only listener on ports 8080/8443.
 - **CarConfigurationService** – stores server-assigned config (Janus, video settings).
 - **MediaMtxConfigurator** – configures `mediamtx.yml` for the camera stream.
@@ -83,7 +79,7 @@ Entities: `User`, `Car`, `CarChannel`, `CarPinManager`, `CarTelemetry`, `CarVide
 
 There are **two independent template systems**:
 
-1. **Console/filesystem templates** (`Onboard/Setup/VehicleTemplateManager.cs`, `VehicleTemplates/`) — a folder per vehicle with `config.json` (ChannelMap) plus optional `scripts/`, `models/`, `docs/`, `README.md`. List/choose/apply/save/delete from the setup tool's Templates menu. Base path via `VEHICLE_TEMPLATES_PATH`, default `~/vehicleTemplates/`.
+1. **Filesystem templates** (`VehicleTemplates/`) — a folder per vehicle with `config.json` (ChannelMap) plus optional `scripts/`, `models/`, `docs/`, `README.md`. Managed by hand (there is no console tool for this anymore — see [VehicleTemplates/README.md](../VehicleTemplates/README.md)). Base path via `VEHICLE_TEMPLATES_PATH`, default `~/vehicleTemplates/`.
 2. **Server-side channel templates** (`Server/Controllers/TemplatesController.cs`, `ChannelTemplate` DB entity) — `GET/POST /api/templates`, applied to a live car via `POST /api/templates/cars/{carId}/apply/{templateId}`, managed from the web client's Templates panel.
 
 They don't currently interoperate — applying one does not affect the other.
@@ -105,7 +101,7 @@ They don't currently interoperate — applying one does not affect the other.
 - **DataProtection keys** live in `Server/DataProtectionKeys/`.
 
 ## Configuration
-- **Onboard `appSettings.json`**: `ServerName`, `ServerPort`, `UseHttps`, `CarName`, `CarSecret`, `CameraOptions`, plus the (mostly inert) feature flags. Note: the console setup tool's own internal model uses different, `camelCase` field names (`carId`, `serverUrl`, …) that don't fully line up with these — see [CONFIGURATION.md](CONFIGURATION.md).
+- **Onboard `appSettings.json`**: `ServerName`, `ServerPort`, `UseHttps`, `CarName`, `CarSecret`, `CameraOptions`, plus the (mostly inert) feature flags — see [CONFIGURATION.md](CONFIGURATION.md).
 - **Server `appSettings.json`**: `IdSalt`, `IdAlphabet`, `ConnectionStrings.DefaultConnection`, `JanusConfiguration` (`HostName`, `PortRangeStart`/`PortRangeEnd`), `FileTransfer`, `WebRtc` (TURN config). No `ServerName`/`Application`/`RunJanusServer` section exists.
 - **Onboard config directory**: via `CONFIG_DIR`, `--config-dir=`, or `.configdir`.
 - **ChannelMap**: separates `pinManagers`, `controlChannels`, `telemetryChannels`, `videoStreams`.

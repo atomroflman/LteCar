@@ -5,7 +5,6 @@
 ## Schnellzugriff (englische Detail-Dokumente)
 
 - [Installation Guide](INSTALLATION.md) – Server- und Onboard-Setup
-- [Setup Tool](SETUP.md) – menügeführte Konfiguration
 - [Features](FEATURES.md) – Feature-Übersicht
 - [Configuration Reference](CONFIGURATION.md) – vollständige Konfigurationsreferenz
 - [Concepts](CONCEPTS.md) – kompakte Architektur-/Implementierungsreferenz
@@ -64,12 +63,12 @@ LteCar ist ein System zum Bau und Betrieb ferngesteuerter Fahrzeuge über LTE/In
 
 1. [Server installieren](INSTALLATION.md#server-installation) – Ein-Zeilen-Installer, oder über die Web-UI sobald ein Server existiert
 2. [Onboard-Software installieren](INSTALLATION.md#onboard-vehicle-installation) – über den Install-Button der Server-Web-UI, oder direkt per Installer
-3. [Über das Setup-Tool konfigurieren](SETUP.md)
+3. Fahrzeug (Kanäle, Name, Hardware) über den Web-Client unter `/car/[carId]` konfigurieren und testen
 4. [Gewünschte Features aktivieren](FEATURES.md#feature-flags-summary)
 
 ## Feature Flags
 
-Das Feature-Flags-Menü des Onboard-Setup-Tools kann fünf Flags umschalten – aktuell wirkt sich aber nur eines davon tatsächlich auf das Laufzeitverhalten aus:
+`appSettings.json` kennt fünf Feature Flags – aktuell wirkt sich aber nur eines davon tatsächlich auf das Laufzeitverhalten aus:
 
 | Feature | Tatsächlich wirksam? |
 |---------|-------------|

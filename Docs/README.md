@@ -5,7 +5,6 @@
 ## Quick Links
 
 - [Installation Guide](INSTALLATION.md) - Server and Onboard setup
-- [Setup Tool](SETUP.md) - Menu-driven configuration
 - [Features](FEATURES.md) - Feature overview and usage
 - [Configuration Reference](CONFIGURATION.md) - Complete configuration reference
 - [Concepts](CONCEPTS.md) - Condensed architecture/implementation reference
@@ -72,14 +71,14 @@ LteCar is a system for building and operating remotely controlled cars over LTE/
 
 1. [Install the server](INSTALLATION.md#server-installation) — one-line installer
 2. [Install the onboard software](INSTALLATION.md#onboard-vehicle-installation) — via the server's web UI install button, or the installer directly
-3. [Configure using the setup tool](SETUP.md)
+3. Configure the vehicle (channels, name, hardware) and test it from the web client at `/car/[carId]`
 4. [Enable desired features](FEATURES.md#feature-flags-summary)
 
 ---
 
 ## Feature Flags
 
-The onboard setup tool's **Feature Flags** menu can toggle five flags, but only one of them currently gates real behavior:
+`appSettings.json` supports five feature flags, but only one of them currently gates real behavior:
 
 | Feature | Actually wired up? |
 |---------|-------------|
