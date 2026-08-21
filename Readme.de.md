@@ -11,7 +11,7 @@
 Auf der Maschine ausführen, die den Stack hosten soll (VM, Homeserver, …). Das Skript klont das Repo und führt interaktiv durch die Wahl der Container-Engine und des Compose-Stacks:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/atomroflman/LteCar/master/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/atomroflman/SignalRC/master/install.sh | sudo bash
 # → "1) Server" wählen
 ```
 
@@ -30,7 +30,7 @@ Diesen Befehl auf dem Raspberry Pi einfügen. Er führt dasselbe `install.sh` au
 Lieber manuell? Installer direkt auf dem Fahrzeug starten und Option 2 wählen:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/atomroflman/LteCar/master/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/atomroflman/SignalRC/master/install.sh | sudo bash
 # → "2) Onboard" wählen
 ```
 
@@ -81,14 +81,14 @@ docker compose down
 ### Server
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/atomroflman/LteCar/master/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/atomroflman/SignalRC/master/install.sh | sudo bash
 ```
 
 Oder manuell:
 
 ```bash
-git clone https://github.com/atomroflman/LteCar.git
-cd LteCar && sudo bash install.sh
+git clone https://github.com/atomroflman/SignalRC.git
+cd SignalRC && sudo bash install.sh
 ```
 
 ### Onboard (Raspberry Pi)
@@ -96,8 +96,8 @@ cd LteCar && sudo bash install.sh
 Am einfachsten über den **Install-Button in der Web-UI des Servers** (siehe Quick Start oben), alternativ den Installer direkt auf dem Fahrzeug starten:
 
 ```bash
-git clone https://github.com/atomroflman/LteCar.git
-cd LteCar && sudo bash install.sh
+git clone https://github.com/atomroflman/SignalRC.git
+cd SignalRC && sudo bash install.sh
 # → "2) Onboard" wählen
 ```
 

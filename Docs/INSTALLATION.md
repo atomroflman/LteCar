@@ -11,7 +11,7 @@
 ### Quick install (recommended)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/atomroflman/LteCar/master/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/atomroflman/SignalRC/master/install.sh | sudo bash
 # → choose "1) Server"
 ```
 
@@ -20,8 +20,8 @@ curl -fsSL https://raw.githubusercontent.com/atomroflman/LteCar/master/install.s
 Run it directly instead of piping from GitHub if you already have the repo checked out:
 
 ```bash
-git clone https://github.com/atomroflman/LteCar.git
-cd LteCar
+git clone https://github.com/atomroflman/SignalRC.git
+cd SignalRC
 sudo bash install.sh
 ```
 
@@ -54,8 +54,8 @@ If you install the server with `install.sh`, you can opt into automatic HTTPS vi
 ### 1. Clone Repository
 
 ```bash
-git clone https://github.com/atomroflman/LteCar.git
-cd LteCar
+git clone https://github.com/atomroflman/SignalRC.git
+cd SignalRC
 ```
 
 ### 2. Configure Server
@@ -115,8 +115,8 @@ This is `install.sh` itself with `DEPLOY_MODE=onboard` and the server settings p
 ### Or run the installer directly on the vehicle
 
 ```bash
-git clone https://github.com/atomroflman/LteCar.git
-cd LteCar
+git clone https://github.com/atomroflman/SignalRC.git
+cd SignalRC
 sudo bash install.sh
 # → choose "2) Onboard"
 ```

@@ -15,7 +15,7 @@ fi
 
 RUN_USER="$SUDO_USER"
 RUN_USER_HOME=$(eval echo "~$RUN_USER")
-REPO_URL="https://github.com/atomroflman/LteCar.git"
+REPO_URL="https://github.com/atomroflman/SignalRC.git"
 
 # ── Package manager detection ────────────────────────────────────────
 # PM is one of: apt-get, apt, pacman. Anything else aborts the installer.

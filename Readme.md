@@ -9,7 +9,7 @@
 Run this on the machine (VM, home server, …) that will host the stack. It clones the repo and walks you through choosing a container engine and the Compose stack to deploy:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/atomroflman/LteCar/master/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/atomroflman/SignalRC/master/install.sh | sudo bash
 # → choose "1) Server"
 ```
 
@@ -28,7 +28,7 @@ Paste that on the Raspberry Pi. It runs the same `install.sh`, pre-filled for `o
 Prefer to do it by hand instead? Run the installer directly on the vehicle and choose option 2:
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/atomroflman/LteCar/master/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/atomroflman/SignalRC/master/install.sh | sudo bash
 # → choose "2) Onboard"
 ```
 
@@ -81,14 +81,14 @@ docker compose down
 ### Server
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/atomroflman/LteCar/master/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/atomroflman/SignalRC/master/install.sh | sudo bash
 ```
 
 Or manually:
 
 ```bash
-git clone https://github.com/atomroflman/LteCar.git
-cd LteCar && sudo bash install.sh
+git clone https://github.com/atomroflman/SignalRC.git
+cd SignalRC && sudo bash install.sh
 ```
 
 ### Onboard (Raspberry Pi)
@@ -96,8 +96,8 @@ cd LteCar && sudo bash install.sh
 Use the **install button in the server's web UI** (see Quick Start above) to get a preconfigured command, or run the installer directly on the vehicle:
 
 ```bash
-git clone https://github.com/atomroflman/LteCar.git
-cd LteCar && sudo bash install.sh
+git clone https://github.com/atomroflman/SignalRC.git
+cd SignalRC && sudo bash install.sh
 # → choose "2) Onboard"
 ```
 
