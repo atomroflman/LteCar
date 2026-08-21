@@ -1,13 +1,13 @@
-# LteCar Video-Stack – Architektur & Schritt-für-Schritt-Testanleitung
+# LteCar Video Stack – Architecture & Step-by-Step Test Guide
 
-Dieses Dokument beschreibt den kompletten Datenfluss eines Video-Streams vom Raspberry-Pi-Kamerasensor bis zum Browser, definiert Testpunkte an jedem Glied der Kette und gibt Kommandos an, mit denen geprüft werden kann, ob der Stream bis zu diesem Punkt funktioniert.
+This document describes the complete data flow of a video stream from the Raspberry Pi camera sensor to the browser, defines test points at each link in the chain, and gives commands to check whether the stream is working up to that point.
 
-> Stand: 2026-08-10  
-> Betroffene Systeme: `lte-truck` (Onboard / Raspberry Pi), `lte-rc-server` (Server + Janus), Browser-Client.
+> As of: 2026-08-10  
+> Affected systems: `lte-truck` (Onboard / Raspberry Pi), `lte-rc-server` (Server + Janus), browser client.
 
 ---
 
-## 1. Überblick
+## 1. Overview
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -18,7 +18,7 @@ Dieses Dokument beschreibt den kompletten Datenfluss eines Video-Streams vom Ras
 │                                        │  - RTP mountpoint (UDP ingest)   │  │
 └────────────────────────────────────────┴──────────────────────────────────┘  │
                                            ▲                                    │
-                                           │ UDP/RTP (Port 10000–10200)        │
+                                           │ UDP/RTP (port 10000–10200)         │
                                            │                                    │
 ┌──────────────────────────────────────────┴──────────────────────────────────┐
 │  lte-rc-server                                                                │
@@ -38,7 +38,7 @@ Dieses Dokument beschreibt den kompletten Datenfluss eines Video-Streams vom Ras
                                            │ RTSP
                                            │
                             ┌──────────────▼──────────────┐
-                            │ MediaMTX (auf lte-truck)    │
+                            │ MediaMTX (on lte-truck)      │
                             │  - source: rpiCamera        │
                             │  - runOnInit: ffmpeg        │
                             └──────────────┬──────────────┘
@@ -50,27 +50,27 @@ Dieses Dokument beschreibt den kompletten Datenfluss eines Video-Streams vom Ras
                             └─────────────────────────────┘
 ```
 
-### Kurzbeschreibung der Schritte
+### Brief description of the steps
 
-1. **Kamera / libcamera** – MediaMTX öffnet die Raspberry-Pi-Kamera über `libcamera`.
-2. **MediaMTX / RTSP** – MediaMTX stellt den Stream intern als `rtsp://localhost:8554/<streamId>` bereit.
-3. **Onboard ffmpeg** – MediaMTX startet `runOnInit: ffmpeg`, der RTSP liest und RTP zum Server sendet.
-4. **Netzwerk lt-rc-server** – RTP-Pakete kommen am Server an (UDP-Port-Bereich 10000–10200).
-5. **Janus ingest** – Der Server erzeugt über die Janus-HTTP-API einen RTP-Mountpoint und Janus empfängt das RTP.
-6. **SignalR Steuerung** – Client und Server koordinieren über SignalR, wann ein Stream aktiv sein soll.
-7. **WebRTC Auslieferung** – Der Browser holt den Stream per WebRTC von Janus ab.
+1. **Camera / libcamera** – MediaMTX opens the Raspberry Pi camera via `libcamera`.
+2. **MediaMTX / RTSP** – MediaMTX exposes the stream internally as `rtsp://localhost:8554/<streamId>`.
+3. **Onboard ffmpeg** – MediaMTX starts `runOnInit: ffmpeg`, which reads the RTSP stream and sends RTP to the server.
+4. **Network lte-rc-server** – RTP packets arrive at the server (UDP port range 10000–10200).
+5. **Janus ingest** – The server creates an RTP mountpoint via the Janus HTTP API, and Janus receives the RTP.
+6. **SignalR control** – Client and server coordinate over SignalR when a stream should be active.
+7. **WebRTC delivery** – The browser fetches the stream from Janus via WebRTC.
 
 ---
 
-## 2. Schritt-für-Schritt-Testanleitung
+## 2. Step-by-step test guide
 
-### Schritt 0: Onboard-Prozess läuft
+### Step 0: Onboard process is running
 
-Der gesamte Video-Stack beginnt auf dem Truck. Wenn `LteCar.Onboard` nicht läuft, gibt es keinen Stream.
+The entire video stack starts on the truck. If `LteCar.Onboard` is not running, there is no stream.
 
-**Was passiert:**
-- `LteCar.Onboard` registriert sich am Server (`CarConnectionHub.OpenCarConnection`).
-- Empfängt es `StartVideoStream(streamId, settings)`, startet es MediaMTX neu und konfiguriert ffmpeg mit `settings.TargetPort`.
+**What happens:**
+- `LteCar.Onboard` registers itself with the server (`CarConnectionHub.OpenCarConnection`).
+- When it receives `StartVideoStream(streamId, settings)`, it restarts MediaMTX and configures ffmpeg with `settings.TargetPort`.
 
 **Test:**
 
@@ -78,25 +78,25 @@ Der gesamte Video-Stack beginnt auf dem Truck. Wenn `LteCar.Onboard` nicht läuf
 ssh lte-truck "ps aux | grep -E 'LteCar.Onboard|mediamtx|mtxrpicam' | grep -v grep"
 ```
 
-**Erwartetes Ergebnis:**
+**Expected result:**
 ```text
 greg-e  <pid>  …  ./LteCar.Onboard
 greg-e  <pid>  …  /…/Extern/mediamtx /…/Extern/mediamtx.yml
 greg-e  <pid>  …  /dev/shm/mediamtx-rpicamera-…/mtxrpicam
 ```
 
-**Wenn nicht:**
-- Service `ltecar-onboard.service` ist `failed` (siehe `systemctl status ltecar-onboard`).
-- Oder der manuell gestartete Prozess wurde beendet (Reboot, Crash, Terminal-Session beendet).
-- Lösung: `LteCar.Onboard` neu starten (siehe Abschnitt 3).
+**If not:**
+- The `ltecar-onboard.service` service is in a `failed` state (see `systemctl status ltecar-onboard`).
+- Or the manually started process was terminated (reboot, crash, terminal session ended).
+- Fix: restart `LteCar.Onboard` (see section 3).
 
 ---
 
-### Schritt 1: Kamera wird von MediaMTX geöffnet
+### Step 1: Camera is opened by MediaMTX
 
-**Was passiert:**
-- MediaMTX startet für jeden `source: rpiCamera`-Pfad den Helfer `mtxrpicam`.
-- `mtxrpicam` spricht über libcamera mit `/dev/media0` und `/dev/media3`.
+**What happens:**
+- MediaMTX starts the `mtxrpicam` helper for each `source: rpiCamera` path.
+- `mtxrpicam` talks to `/dev/media0` and `/dev/media3` via libcamera.
 
 **Test:**
 
@@ -104,7 +104,7 @@ greg-e  <pid>  …  /dev/shm/mediamtx-rpicamera-…/mtxrpicam
 ssh lte-truck "sudo lsof /dev/media0 /dev/media3 2>/dev/null"
 ```
 
-**Erwartetes Ergebnis:**
+**Expected result:**
 ```text
 COMMAND    PID   USER FD   TYPE DEVICE NAME
 mtxrpicam <pid> greg-e 6uW  CHR  511,0 /dev/media0
@@ -117,22 +117,22 @@ mtxrpicam <pid> greg-e 7uW  CHR  511,3 /dev/media3
 ssh lte-truck "grep -E 'Camera.acquire|stream is available' /tmp/ltecar_onboard_restart.log | tail -10"
 ```
 
-**Erwartetes Ergebnis:**
+**Expected result:**
 ```text
 [path mainCamera] stream is available and online, 1 track (H264)
 ```
 
-**Wenn nicht:**
-- Fehler `Pipeline handler in use by another process` → alter `mtxrpicam`-Prozess blockiert die Kamera.
-- Lösung: alle `mtxrpicam`-Prozesse beenden, Onboard/MediaMTX neu starten.
+**If not:**
+- Error `Pipeline handler in use by another process` → an old `mtxrpicam` process is blocking the camera.
+- Fix: kill all `mtxrpicam` processes, restart Onboard/MediaMTX.
 
 ---
 
-### Schritt 2: RTSP-Stream auf localhost verfügbar
+### Step 2: RTSP stream available on localhost
 
-**Was passiert:**
-- MediaMTX publiziert den Kamera-Stream unter `rtsp://localhost:8554/<streamId>`.
-- `runOnInit: ffmpeg` liest diesen RTSP-Stream und sendet ihn als RTP zum Server.
+**What happens:**
+- MediaMTX publishes the camera stream at `rtsp://localhost:8554/<streamId>`.
+- `runOnInit: ffmpeg` reads this RTSP stream and sends it to the server as RTP.
 
 **Test:**
 
@@ -140,62 +140,62 @@ ssh lte-truck "grep -E 'Camera.acquire|stream is available' /tmp/ltecar_onboard_
 ssh lte-truck "ffmpeg -rtsp_transport tcp -i rtsp://localhost:8554/mainCamera -c copy -f null - 2>&1 | tail -20"
 ```
 
-**Erwartetes Ergebnis:**
-- Kein `404 Not Found`.
-- Ausgabe enthält `Stream #0:0: Video: h264` und läuft weiter (mit `frame= … fps= …`).
+**Expected result:**
+- No `404 Not Found`.
+- Output contains `Stream #0:0: Video: h264` and keeps running (with `frame= … fps= …`).
 
-**Wenn nicht:**
-- MediaMTX hat den Pfad nicht korrekt erstellt.
-- Config prüfen: `cat /home/greg-e/SignalRC/Onboard/bin/Debug/net10.0/Extern/mediamtx.yml`.
+**If not:**
+- MediaMTX did not create the path correctly.
+- Check the config: `cat /home/greg-e/SignalRC/Onboard/bin/Debug/net10.0/Extern/mediamtx.yml`.
 
 ---
 
-### Schritt 3: ffmpeg sendet RTP zum Server
+### Step 3: ffmpeg sends RTP to the server
 
-**Was passiert:**
+**What happens:**
 - `ffmpeg -i rtsp://localhost:8554/mainCamera -c copy -f rtp rtp://<server>:<targetPort>?pkt_size=1300`
-- `<targetPort>` wird vom Server vergeben und per SignalR an Onboard übermittelt.
+- `<targetPort>` is assigned by the server and passed to Onboard via SignalR.
 
-**Test auf lte-truck:**
+**Test on lte-truck:**
 
 ```bash
 ssh lte-truck "ps aux | grep -E 'ffmpeg.*rtp' | grep -v grep"
 ```
 
-**Erwartetes Ergebnis:**
+**Expected result:**
 ```text
 greg-e  <pid>  …  ffmpeg -t 2147483647 -i rtsp://localhost:8554/mainCamera -c copy -f rtp rtp://lte-rc.northeurope.cloudapp.azure.com:<port>?pkt_size=1300
 ```
 
-**Test auf lte-rc-server (UDP-Pakete ankommend):**
+**Test on lte-rc-server (incoming UDP packets):**
 
 ```bash
 ssh lte-rc-server "ss -uanp | grep -E ':10000|:10001'"
 ```
 
-**Erwartetes Ergebnis:**
+**Expected result:**
 ```text
 UNCONN 0  0  *:<port>  *:*  users:(("rootlessport",pid=…,fd=…))
 ```
 
-**Genauerer Test (Pakete zählen, 30 Sekunden):**
+**More precise test (count packets, 30 seconds):**
 
 ```bash
 ssh lte-rc-server "sudo timeout 30 tcpdump -nni any udp port <targetPort> -c 100 2>&1 | tail -20"
 ```
 
-**Wenn nicht:**
-- Firewall / NAT blockiert ausgehenden RTP-Verkehr.
-- ffmpeg-Arguments falsch (Server-Hostname / Port).
-- Onboard hat keinen gültigen `TargetPort` vom Server erhalten.
+**If not:**
+- Firewall / NAT is blocking outgoing RTP traffic.
+- Incorrect ffmpeg arguments (server hostname / port).
+- Onboard did not receive a valid `TargetPort` from the server.
 
 ---
 
-### Schritt 4: Janus läuft und ist vom Server erreichbar
+### Step 4: Janus is running and reachable from the server
 
-**Was passiert:**
-- Der Server spricht Janus über dessen HTTP-API auf Port 8088 an.
-- Für jeden aktiven Stream wird ein RTP-Mountpoint im `janus.plugin.streaming` erzeugt.
+**What happens:**
+- The server talks to Janus via its HTTP API on port 8088.
+- An RTP mountpoint is created in `janus.plugin.streaming` for each active stream.
 
 **Test:**
 
@@ -203,7 +203,7 @@ ssh lte-rc-server "sudo timeout 30 tcpdump -nni any udp port <targetPort> -c 100
 ssh lte-rc-server "curl -s http://localhost:8088/janus/info | head -10"
 ```
 
-**Erwartetes Ergebnis:**
+**Expected result:**
 ```json
 {
   "janus": "server_info",
@@ -217,30 +217,30 @@ ssh lte-rc-server "curl -s http://localhost:8088/janus/info | head -10"
 
 ```bash
 ssh lte-rc-server "docker ps | grep janus"
-# bzw. podman
+# or podman
 ssh lte-rc-server "podman ps | grep janus"
 ```
 
-**Erwartetes Ergebnis:**
+**Expected result:**
 ```text
 <container-id>  docker.io/canyan/janus-gateway:latest  …  Up …  0.0.0.0:8088->8088, 0.0.0.0:8188->8188, 10000-10200/udp
 ```
 
-**Wenn nicht:**
-- Janus-Container nicht gestartet.
-- `janus.transport.http.jcfg` bindet nur IPv6; `ip = "0.0.0.0"` setzen.
+**If not:**
+- Janus container not started.
+- `janus.transport.http.jcfg` only binds IPv6; set `ip = "0.0.0.0"`.
 
 ---
 
-### Schritt 5: Janus-Mountpoint existiert für den Stream
+### Step 5: Janus mountpoint exists for the stream
 
-**Was passiert:**
-- `VideoStreamReceiverService.OpenJanusEndpointAsync` erzeugt:
-  1. Janus-Session
-  2. Handle für `janus.plugin.streaming`
-  3. RTP-Mountpoint mit der DB-Id des Streams und `VideoPort = stream.JanusPort`
+**What happens:**
+- `VideoStreamReceiverService.OpenJanusEndpointAsync` creates:
+  1. a Janus session
+  2. a handle for `janus.plugin.streaming`
+  3. an RTP mountpoint with the stream's DB id and `VideoPort = stream.JanusPort`
 
-**Test (manuelle Janus-API):**
+**Test (manual Janus API):**
 
 ```bash
 ssh lte-rc-server '
@@ -249,7 +249,7 @@ ssh lte-rc-server '
   curl -s -X POST http://localhost:8088/janus/$SESSION/$HANDLE -d "{\"janus\":\"message\",\"body\":{\"request\":\"list\"},\"transaction\":\"t3\"}" | jq .'
 ```
 
-**Erwartetes Ergebnis:**
+**Expected result:**
 ```json
 {
   "janus": "success",
@@ -269,21 +269,21 @@ ssh lte-rc-server '
 }
 ```
 
-**Wenn nicht:**
-- Server-Log prüfen: `VideoStreamReceiverService` konnte Janus-Endpoint nicht erstellen.
-- Mögliche Ursachen: Port-Bereich erschöpft, Janus nicht erreichbar, Mountpoint-Id-Kollision.
+**If not:**
+- Check the server log: `VideoStreamReceiverService` could not create the Janus endpoint.
+- Possible causes: port range exhausted, Janus unreachable, mountpoint id collision.
 
 ---
 
-### Schritt 6: SignalR-Steuerung funktioniert
+### Step 6: SignalR control works
 
-**Was passiert:**
-- Im Browser wird ein Stream ausgewählt (`car-video-panel.tsx`).
-- `ActivateStream(streamId)` wird über SignalR `CarConnectionHub` aufgerufen.
-- Der Server startet den Stream (`StartStreamForViewersAsync`) und sendet `StartVideoStream` an den Truck.
-- Der Truck startet daraufhin MediaMTX/ffmpeg (siehe Schritt 3).
+**What happens:**
+- A stream is selected in the browser (`car-video-panel.tsx`).
+- `ActivateStream(streamId)` is called over SignalR on the `CarConnectionHub`.
+- The server starts the stream (`StartStreamForViewersAsync`) and sends `StartVideoStream` to the truck.
+- The truck then starts MediaMTX/ffmpeg (see step 3).
 
-**Test aus dem Browser-DevTools-Konsolen-Tab (authentifiziert auf der UI):**
+**Test from the browser DevTools console tab (authenticated on the UI):**
 
 ```javascript
 const conn = new signalR.HubConnectionBuilder()
@@ -296,38 +296,38 @@ console.table(streams);
 await conn.invoke('ActivateStream', streams[0].id);
 ```
 
-**Erwartetes Ergebnis:**
-- `GetVideoStreamsForCar` liefert mindestens einen aktivierten Stream zurück.
-- `ActivateStream` kehrt ohne Fehler zurück.
-- Auf dem Truck erscheint ein ffmpeg-Prozess (siehe Schritt 3).
+**Expected result:**
+- `GetVideoStreamsForCar` returns at least one activated stream.
+- `ActivateStream` returns without error.
+- An ffmpeg process appears on the truck (see step 3).
 
-**Wenn nicht:**
-- SignalR-Verbindung prüfen (`/hubs/connection` muss durch nginx auf den Server proxied werden).
-- Server-Log auf Fehler bei `ActivateStream` prüfen.
+**If not:**
+- Check the SignalR connection (`/hubs/connection` must be proxied to the server through nginx).
+- Check the server log for errors in `ActivateStream`.
 
 ---
 
-### Schritt 7: Browser kann Janus erreichen
+### Step 7: Browser can reach Janus
 
-**Was passiert:**
-- `video-stream.tsx` lädt `/janus.js` und verbindet sich mit `/janus` (HTTP) und `/janus-ws` (WebSocket).
-- nginx leitet beides an den Janus-Container weiter.
+**What happens:**
+- `video-stream.tsx` loads `/janus.js` and connects to `/janus` (HTTP) and `/janus-ws` (WebSocket).
+- nginx forwards both to the Janus container.
 
 **Test:**
 
 ```bash
-# vom lokalen Rechner / Browser-Host
+# from the local machine / browser host
 curl -s https://<server-url>/janus/info | head -5
-# z. B.:
+# e.g.:
 curl -s https://lte-rc.northeurope.cloudapp.azure.com/janus/info | head -5
 ```
 
-**Erwartetes Ergebnis:**
+**Expected result:**
 ```json
 { "janus": "server_info", ... }
 ```
 
-**Test WebSocket:**
+**WebSocket test:**
 
 ```bash
 curl -i -N \
@@ -338,49 +338,49 @@ curl -i -N \
   https://<server-url>/janus-ws
 ```
 
-**Erwartetes Ergebnis:**
+**Expected result:**
 - HTTP/1.1 101 Switching Protocols.
 
-**Wenn nicht:**
-- nginx-Config prüfen (`nginx/nginx.conf`).
-- Firewall am Server prüfen.
-- WebSocket-Pfad muss exakt `/janus-ws` (ohne trailing slash) erreichbar sein.
+**If not:**
+- Check the nginx config (`nginx/nginx.conf`).
+- Check the firewall on the server.
+- The WebSocket path must be reachable at exactly `/janus-ws` (no trailing slash).
 
 ---
 
-### Schritt 8: WebRTC-ICE und Medienfluss im Browser
+### Step 8: WebRTC ICE and media flow in the browser
 
-**Was passiert:**
-- `video-stream.tsx` attached das `janus.plugin.streaming`-Plugin.
-- Es fordert `request: 'list'` an, sucht den passenden Mountpoint anhand `streamId` und sendet `request: 'watch'`.
-- Janus antwortet mit einem SDP-Offer; der Browser erzeugt einen SDP-Answer und sendet `request: 'start'`.
-- Janus liefert Video-Frames an den Browser.
+**What happens:**
+- `video-stream.tsx` fetches ICE server config from `GET /api/webrtc/ice-servers` (STUN always, TURN if configured) and passes it to Janus, then attaches the `janus.plugin.streaming` plugin.
+- It requests `request: 'list'`, finds the matching mountpoint by `streamId`, and sends `request: 'watch'`.
+- Janus responds with an SDP offer; the browser creates an SDP answer and sends `request: 'start'`.
+- Janus delivers video frames to the browser.
 
-**Test im Browser-DevTools:**
+**Test in the browser DevTools:**
 
-1. **Network-Tab:** `/janus` und `/janus-ws` müssen 200/101 zurückgeben.
-2. **Console:** Keine Fehler wie `Janus init error`, `plugin attach error`, `noStreamsAvailable`.
-3. **WebRTC-Internals:** `chrome://webrtc-internals` (Chrome) oder `about:webrtc` (Firefox).
-   - ICE state sollte `connected` oder `completed` werden.
-   - Inbound-RTP-Statistik sollte `packetsReceived` und `framesPerSecond` ansteigen.
+1. **Network tab:** `/janus` and `/janus-ws` must return 200/101.
+2. **Console:** no errors such as `Janus init error`, `plugin attach error`, `noStreamsAvailable`.
+3. **WebRTC internals:** `chrome://webrtc-internals` (Chrome) or `about:webrtc` (Firefox).
+   - ICE state should become `connected` or `completed`.
+   - Inbound RTP stats should show `packetsReceived` and `framesPerSecond` increasing.
 
-**Erwartetes Ergebnis:**
-- `<video>`-Element zeigt Bild.
-- Overlay zeigt fps und Bitrate.
+**Expected result:**
+- The `<video>` element shows an image.
+- The overlay shows fps and bitrate.
 
-**Wenn nicht:**
-- `chrome://webrtc-internals` öffnen und prüfen:
-  - Keine ICE-Candidates? → NAT/Firewall-Problem, `JANUS_NAT_1_1` in `docker-compose.yml` prüfen.
-  - ICE connected, aber keine Pakete? → RTP kommt nicht in Janus an (Schritte 3–5 prüfen).
-  - `noStreamsAvailable` → Mountpoint existiert nicht (Schritt 5).
+**If not:**
+- Open `chrome://webrtc-internals` and check:
+  - No ICE candidates? → NAT/firewall problem, check `JANUS_NAT_1_1` in `docker-compose.yml`.
+  - ICE connected but no packets? → RTP is not reaching Janus (check steps 3–5).
+  - `noStreamsAvailable` → the mountpoint does not exist (step 5).
 
 ---
 
-## 3. Wiederanlauf nach einem Ausfall
+## 3. Recovery after a failure
 
-### 3.1 Truck wurde neu gestartet
+### 3.1 Truck was rebooted
 
-Derzeit läuft Onboard auf `lte-truck` nicht automatisch, weil `ltecar-onboard.service` im Zustand `failed` ist. Nach einem Reboot muss manuell neu gestartet werden:
+Onboard on `lte-truck` currently does not start automatically after a reboot, because `ltecar-onboard.service` is in a `failed` state. After a reboot it must be restarted manually:
 
 ```bash
 ssh lte-truck
@@ -392,18 +392,18 @@ PATH=/home/greg-e/.dotnet:/home/greg-e/.dotnet/tools:/usr/local/sbin:/usr/local/
 nohup ./LteCar.Onboard > /tmp/ltecar_onboard_restart.log 2>&1 &
 ```
 
-Danach Schritt 0–2 prüfen.
+Then check steps 0–2.
 
-### 3.2 Kamera blockiert
+### 3.2 Camera blocked
 
 ```bash
 ssh lte-truck "ps aux | grep -E 'mtxrpicam|mediamtx' | grep -v grep"
-# Wenn mehrere Instanzen laufen:
+# If multiple instances are running:
 ssh lte-truck "sudo killall -9 mtxrpicam mediamtx"
-# Onboard neu starten (siehe 3.1)
+# Restart Onboard (see 3.1)
 ```
 
-### 3.3 Janus-Mountpoint stale / doppelt
+### 3.3 Janus mountpoint stale / duplicated
 
 ```bash
 ssh lte-rc-server '
@@ -412,7 +412,7 @@ ssh lte-rc-server '
   curl -s -X POST http://localhost:8088/janus/$SESSION/$HANDLE -d "{\"janus\":\"message\",\"body\":{\"request\":\"list\"},\"transaction\":\"t3\"}" | jq .'
 ```
 
-Bei Bedarf einzelne Mountpoints destroyen:
+If needed, destroy individual mountpoints:
 
 ```bash
 ssh lte-rc-server '
@@ -423,29 +423,29 @@ ssh lte-rc-server '
 
 ---
 
-## 4. Bekannte Schwachstellen & geplante Fixes
+## 4. Known issues & planned fixes
 
-| Problem | Ursache | Status |
+| Problem | Cause | Status |
 |---------|---------|--------|
-| Onboard startet nach Reboot nicht automatisch | `ltecar-onboard.service` ist `failed` | Muss untersucht / Service repariert werden |
-| Kamera bleibt von altem `mtxrpicam` blockiert | `MediaMtxConfigurator.StopAsync()` beendetet nur den Hauptprozess, nicht den Helfer | Fix in `Onboard/Services/MediaMtxConfigurator.cs` implementiert |
-| Server-pushte ChannelMap enthält keine `pinManagers` | `ChannelMap.PinManagers` hat `[IgnoreMember]` | Fix in `Shared/Channels/ChannelMap.cs` implementiert |
-| Server-Container-Neustart verliert Janus-Sessions | Janus hält Sessions im RAM | Kein Fix nötig; Server baut Mountpoints bei Bedarf neu |
+| Onboard does not start automatically after reboot | `ltecar-onboard.service` is `failed` | Needs investigation / the service needs to be fixed |
+| Camera stays blocked by an old `mtxrpicam` | `MediaMtxConfigurator.StopAsync()` only terminates the main process, not the helper | Fix implemented in `Onboard/Services/MediaMtxConfigurator.cs` |
+| Server-pushed ChannelMap does not include `pinManagers` | `ChannelMap.PinManagers` has `[IgnoreMember]` | Fix implemented in `Shared/Channels/ChannelMap.cs` |
+| Server container restart loses Janus sessions | Janus keeps sessions in RAM | No fix needed; the server recreates mountpoints on demand |
 
 ---
 
-## 5. Dateien im Projekt
+## 5. Files in the project
 
-| Datei | Zweck |
+| File | Purpose |
 |-------|-------|
-| `Onboard/Video/VideoStreamService.cs` | Startet/stoppt MediaMTX basierend auf aktiven Streams |
-| `Onboard/Services/MediaMtxConfigurator.cs` | Schreibt `mediamtx.yml`, startet/beendet MediaMTX |
-| `Server/Hubs/CarConnectionHub.cs` | SignalR-Hub für Stream-Aktivierung/-Deaktivierung |
-| `Server/Services/VideoStreamReceiverService.cs` | Weist Ports zu, erzeugt Janus-Mountpoints |
-| `Server/Services/ActiveVideoStreamViewerRegistry.cs` | Zählt Viewer pro Stream |
-| `Shared/Channels/ChannelMap.cs` | Datentyp für ChannelMap inkl. PinManagers |
-| `Client/src/components/car-video-panel.tsx` | UI für Stream-Auswahl und Aktivierung |
-| `Client/src/components/video-stream.tsx` | Janus/WebRTC-Player im Browser |
-| `nginx/nginx.conf` | Reverse-Proxy für Client, Server, Janus |
-| `docker-compose.yml` | Container-Orchestrierung |
-| `janus-config/janus.plugin.streaming.jcfg` | Deaktiviert Janus-Beispiel-Streams (`no_default_streams = true`) |
+| `Onboard/Video/VideoStreamService.cs` | Starts/stops MediaMTX based on active streams |
+| `Onboard/Services/MediaMtxConfigurator.cs` | Writes `mediamtx.yml`, starts/stops MediaMTX |
+| `Server/Hubs/CarConnectionHub.cs` | SignalR hub for stream activation/deactivation |
+| `Server/Services/VideoStreamReceiverService.cs` | Assigns ports, creates Janus mountpoints |
+| `Server/Services/ActiveVideoStreamViewerRegistry.cs` | Counts viewers per stream |
+| `Shared/Channels/ChannelMap.cs` | Data type for the ChannelMap, including PinManagers |
+| `Client/src/components/car-video-panel.tsx` | UI for stream selection and activation |
+| `Client/src/components/video-stream.tsx` | Janus/WebRTC player in the browser |
+| `nginx/nginx.conf` | Reverse proxy for client, server, Janus |
+| `docker-compose.yml` | Container orchestration |
+| `janus-config/janus.plugin.streaming.jcfg` | Disables Janus example streams (`no_default_streams = true`) |

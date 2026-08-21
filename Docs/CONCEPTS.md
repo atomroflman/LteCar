@@ -1,96 +1,112 @@
-# LteCar – Konzepte & Features
+# LteCar – Concepts & Implementation Reference
 
-## Architektur
-- **3-Schichten-Stack**: Browser (Next.js) ↔ Server (ASP.NET Core 8) ↔ Onboard (Raspberry Pi, .NET 8).
-- **Kommunikation**: SignalR (MessagePack/JSON) + WebRTC (Janus) für Video.
-- **LTE-Design**: Onboard öffnet ausschließlich ausgehende Verbindungen → NAT-/firewall-tauglich.
-- **Container**: `docker-compose.yml` startet `postgres`, `server`, `janus`, `client`, `nginx` (Port 8080).
-- **Nginx**: Reverse-Proxy mit WebSocket-Upgrade für `/hubs/`, `/api/`, `/janus/`, `/janus-ws/`.
+*A condensed, code-level reference. For the narrative version, see [Architecture.md](Architecture.md). For a German summary of the whole documentation set, see [README.de.md](README.de.md).*
 
-## SignalR-Hubs (`Shared/HubPaths.cs`)
-| Hub | Pfad | Zweck |
+## Architecture
+- **3-tier stack**: Browser (Next.js) ↔ Server (ASP.NET Core 8) ↔ Onboard (Raspberry Pi, .NET 8).
+- **Communication**: SignalR (MessagePack/JSON) + WebRTC (Janus) for video.
+- **LTE design**: Onboard only ever opens outbound connections → NAT-/firewall-friendly.
+- **Containers**: `docker-compose.yml` starts `postgres`, `server`, `janus`, `turn` (coturn), `client`, `nginx` (port 8080).
+- **Nginx**: reverse proxy with WebSocket upgrade for `/hubs/`, `/api/`, `/janus/`, `/janus-ws/`.
+
+## SignalR Hubs (`Shared/HubPaths.cs`)
+
+The vehicle-side hubs were consolidated onto a single connection; `CarControlHub`, `TelemetryHub`, and `CarVideoHub` no longer exist as separate classes. `CarUiHub` still has a path constant but no hub uses it — it's dead.
+
+| Hub | Path | Purpose |
 |-----|------|-------|
-| `CarConnectionHub` | `/hubs/connection` | Fahrzeugregistrierung, ChannelMap-Sync, FileTransfer |
-| `CarControlHub` | `/hubs/control` | SSH-Auth, Steuerbefehle, Ping |
-| `TelemetryHub` | `/hubs/telemetry` | Telemetrie-Streaming |
-| `CarUiHub` | `/hubs/carui` | Live-Status, Bash-Output-Broadcast |
-| `CarVideoHub` | `/hubs/video` | Video-Stream-Verwaltung |
-| `CarBashHub` | `/hubs/carbash` | Interaktive Bash-Sessions |
-| `UserChannelHub` | `/hubs/userchannel` | Gamepad-Sync zwischen Browsern |
+| `CarConnectionHub` | `/hubs/connection` | The one vehicle-side hub: registration, ChannelMap sync, control, telemetry, video signaling, file transfer |
+| `CarBashHub` | `/hubs/carbash` | Bash command dispatch (output streams back over `CarConnectionHub.SendBashOutput`, broadcast to all clients) |
+| `UserChannelHub` | `/hubs/userchannel` | Gamepad sync between browsers |
+| `CarAudioHub` *(exists, not mapped)* | — | Audio chat signaling — implemented but not registered in `Program.cs` yet |
 
-## Neues Verbindungsmodell (`LTE_USE_NEW_CONNECTION_MODEL`, default true)
-- Der Server ist SPOT für die Channel-Map.
-- `OpenCarConnection(carIdentityKey, hash)` vergleicht den Client-Hash mit dem Server-Hash.
-  - Bei Mismatch pusht der Server die aktuelle Map sofort per `ApplyChannelMap`.
-  - Hat der Server keine Konfiguration, bleibt er leer; die Erstkonfiguration erfolgt über UI/Template.
-- `SyncChannelMap` holt die aktuelle Server-Map inklusive Hash und IDs; der Client überschreibt damit seine lokale Konfiguration.
-- UI-Änderungen an Kanälen pushen den geänderten Einzelwert sofort an das verbundene Auto.
+## Connection Model
+- The server is the single source of truth for the channel map.
+- `OpenCarConnection(carIdentityKey, hash)` compares the client's hash against the server's.
+  - On a mismatch, the server immediately pushes the current map via `ApplyChannelMap`.
+  - If the server has no configuration yet, it stays empty; initial configuration happens via the web UI or a template.
+- `SyncChannelMap` fetches the current server map including hash and IDs; the client overwrites its local configuration with it.
+- UI changes to a channel push the changed single value to the connected vehicle immediately.
+
+There used to be an `LTE_USE_NEW_CONNECTION_MODEL` flag toggling between an old multi-hub model and this one; the flag no longer exists in the code — this single-hub model is now simply the only one.
 
 ## VehicleConnectionManager (Onboard)
-- Zentrale HubConnection mit Auto-Reconnect (exponentielles Backoff) zu `CarConnectionHub`.
-- Reflektiert alle `IVehicleService`-Implementierungen → ruft `OnConnected`/`OnReconnected`.
-- `CarConnectionStore` (Server) mappt `connectionId ↔ carId` via `BiDictionary`.
-- `channelMap.server.json` cached die Server-ID-Zuordnung.
+- Central `HubConnection` with auto-reconnect (exponential backoff) to `CarConnectionHub`.
+- Reflects over all `IVehicleService` implementations → calls `OnConnected`/`OnReconnected`.
+- `CarConnectionStore` (Server) maps `connectionId ↔ carId` via a `BiDictionary`.
+- `channelMap.server.json` caches the server-side ID assignment.
 
-## Setup-Tool (raspi-config-Style, Spectre.Console)
-Start: `dotnet run -- setup`. 7 Menüs: System, Network/Server, Vehicle Config, Hardware Test, Templates, Feature Flags, Update/Recovery. Bearbeitet `appSettings.json`, `channelMap.json`, SSH-/Identity-Keys.
+## Setup Tool (raspi-config style, Spectre.Console)
+Start with `dotnet run -- setup`. 7 menus: System, Network/Server, Vehicle Config, Hardware Test, Templates, Feature Flags, Update/Recovery. Edits `appSettings.json`, `channelMap.json`, SSH/identity keys.
 
 ## Feature Flags
-| Flag | Beschreibung |
-|------|--------------|
-| `webSetup` | Web-Setup-Interface |
-| `bashTool` | Remote-Bash-Befehlsausführung |
-| `channelTester` | Hardware-Kanal-Tests |
-| `audio` | Bidirektionaler Audio-Chat |
-| `video` | Video-Streaming |
 
-## Onboard-Services
-- **TelemetryService** – Tick-Schleife, liest `TelemetryReaderBase` (CpuTemp, JBD-BMS, Lifetime), pusht via TelemetryHub.
-- **ControlService** – Empfängt Steuerbefehle, SSH-Challenge-Auth, delegiert an Hardware (PCA9685/GPIO).
-- **VideoStreamService** – Verwaltet MediaMTX-Prozess + Konfiguration aus ChannelMap.
-- **AudioChatService** – Bidirektionale Audio-Verbindung, Geräteverwaltung, Echo-Cancellation.
-- **BashToolService** – Lokale Prozesse, Output via `CarUiHub` an Web-Client.
-- **ChannelTester** – Konsolen-Test für Hardware-Kanäle.
-- **SshKeyService** – RSA-2048, Challenge/Verify, Fingerprint-Log.
-- **CarConfigurationService** – Speichert Server-Konfig (Janus, VideoSettings).
-- **MediaMtxConfigurator** – Konfiguriert `mediamtx.yml` für Kamera-Stream.
+Five flags are toggleable from the setup tool's Feature Flags menu, all persisted to `appSettings.json` — but only `bashTool` is actually read anywhere at runtime (`Onboard/Program.cs`, defaults to `false` when unset):
+
+| Flag | Actually wired up? |
+|------|--------------|
+| `webSetup` | No — no web-based setup interface exists |
+| `bashTool` | **Yes** — gates the bash relay connection |
+| `channelTester` | No |
+| `audio` | No — and `CarAudioHub` isn't registered either |
+| `video` | No — video streaming isn't gated by this flag |
+
+## Onboard Services
+- **TelemetryService** – tick loop, reads `TelemetryReaderBase` implementations (CpuTemp, JBD BMS, lifetime), pushes over `CarConnectionHub`.
+- **ControlService** – receives control commands, SSH challenge auth, delegates to hardware (PCA9685/GPIO); also relays bash output via `SendBashOutput`.
+- **VideoStreamService** – manages the MediaMTX process and its configuration from the ChannelMap.
+- **AudioChatService** – bidirectional audio connection, device management, echo cancellation (not currently reachable — see `CarAudioHub` above).
+- **BashToolService** – subscribes to `ExecuteCommand` on `CarBashHub`, runs local processes, streams output back via `CarConnectionHub`.
+- **ChannelTester** – console test tool for hardware channels.
+- **SshKeyService** – RSA-2048, challenge/verify, fingerprint logging; serves the private key over a LAN-only listener on ports 8080/8443.
+- **CarConfigurationService** – stores server-assigned config (Janus, video settings).
+- **MediaMtxConfigurator** – configures `mediamtx.yml` for the camera stream.
 
 ## WebRTC / Janus
-- Pfad: Kamera → MediaMTX (RTSP) → ffmpeg/TCP-Relay → Janus (RTP → WebRTC) → Browser.
-- `VideoStreamReceiverService` allokiert UDP-Ports (10000–10200), legt Janus-Stream-Endpunkte an.
-- `ActiveVideoStreamViewerRegistry` startet/stoppt Stream nur bei aktivem Viewer.
+- Path: camera → MediaMTX (RTSP) → ffmpeg/TCP relay → Janus (RTP → WebRTC) → browser.
+- `VideoStreamReceiverService` allocates UDP ports (`10000`–`10200` in the Compose stack), sets up Janus stream endpoints.
+- `ActiveVideoStreamViewerRegistry` starts/stops the stream only while a viewer is actually watching.
+- A coturn TURN server (`turn` service in Compose) is available alongside plain STUN; the server hands out ICE server config (STUN always, TURN if configured) via `GET /api/webrtc/ice-servers`, and the client feeds it into the Janus session.
 
-## Datenbank (EF Core 9, PostgreSQL)
-Entities: `User`, `Car`, `CarChannel`, `CarTelemetry`, `CarVideoStream`, `UserCarSetup`, `UserSetupFlowNodeBase`, `UserSetupLink`, `FileTransfer`. Sqids-kodierte Session-IDs via `UserSessionSeq`.
+## Database (EF Core 9, PostgreSQL)
+Entities: `User`, `Car`, `CarChannel`, `CarPinManager`, `CarTelemetry`, `CarVideoStream`, `ChannelTemplate`, `UserCarSetup`, `UserSetupFlowNodeBase` (and subclasses), `UserSetupLink`, `FileTransfer`. Sqids-encoded session IDs via `UserSessionSeq`.
 
 ## Client (Next.js 15, React 19, Zustand, ReactFlow)
-- `/` – Hauptseite: Video, Auto-Auswahl, Steuerung, Telemetrie.
-- `/car/[carId]` – ReactFlow-Editor für Gamepad→Channel-Mapping.
-- `/car/[carId]/bash` – Bash-Terminal.
-- Komponenten: `car-control`, `car-video-panel`, `video-stream` (Janus-Client), `telemetry`, `ssh-key-manager`, `session-transfer`, `gamepad-viewer`, `audio-chat`, `update-control`, `config-guard`, `install-dialog`.
+- `/` – main page: video, car selection, control, telemetry.
+- `/car/[carId]` – ReactFlow editor for gamepad→channel mapping, plus the Templates panel.
+- `/car/[carId]/channels` – channel configuration.
+- `/car/[carId]/test` – channel tester.
+- `/car/[carId]/bash` – bash terminal.
+- Components: `car-control`, `car-video-panel`, `video-stream` (Janus client), `telemetry`, `ssh-key-manager`, `session-transfer`, `gamepad-viewer`, `audio-chat`, `update-control`, `config-guard`, `install-dialog`, `onboard-diagnostics`, `setup-template-panel`.
 
-## Templates (`VehicleTemplates/`)
-Pro Fahrzeug ein Ordner mit `config.json` (ChannelMap) + optional `scripts/`, `models/`, `docs/`, `README.md`. `VehicleTemplateManager`: List/Choose/Apply/Save/Delete. Pfad via `VEHICLE_TEMPLATES_PATH`.
+## Templates
 
-## Bash-Tool
-- Web → Server: `CarControlHub.ExecuteBashCommand` / `CarBashHub.ExecuteCommand`.
-- Server → Onboard: SignalR-Relay → `BashToolService`.
-- Onboard: startet `/bin/bash`, piped Output via `SendBashOutput` über `CarUiHub`.
+There are **two independent template systems**:
 
-## File-Transfer
-- **Upload**: `RequestFileUpload` → Token → `POST /api/filetransfer/{token}` (max 100 MB, SHA256-Check) → `FileReady`-Notification.
-- **Download**: `GET /api/filetransfer/{token}/download` mit Range-Support + Bandbreiten-Throttle (Default 20 KB/s).
-- `FileTransfer`-Entity trackt Status.
+1. **Console/filesystem templates** (`Onboard/Setup/VehicleTemplateManager.cs`, `VehicleTemplates/`) — a folder per vehicle with `config.json` (ChannelMap) plus optional `scripts/`, `models/`, `docs/`, `README.md`. List/choose/apply/save/delete from the setup tool's Templates menu. Base path via `VEHICLE_TEMPLATES_PATH`, default `~/vehicleTemplates/`.
+2. **Server-side channel templates** (`Server/Controllers/TemplatesController.cs`, `ChannelTemplate` DB entity) — `GET/POST /api/templates`, applied to a live car via `POST /api/templates/cars/{carId}/apply/{templateId}`, managed from the web client's Templates panel.
 
-## Authentifizierung
-- **Browser**: Cookie `LteCarAuth` (`HttpOnly`, `SameSite=Lax`), Sqids-Session-Token, Recovery-Key, 5-Min-`TransferCode` für Session-Transfer.
-- **Fahrzeug-Identität**: GUID (`carIdentityKey.txt`), SHA256-Verifikation.
-- **Steuerungs-Auth**: SSH-Key-Challenge-Response (RSA-2048, Web Crypto API). Private Key wird nach Download auf Onboard gelöscht.
-- **DataProtection-Keys** in `Server/DataProtectionKeys/`.
+They don't currently interoperate — applying one does not affect the other.
 
-## Konfiguration
-- **Onboard `appSettings.json`**: `ServerName`, `ServerPort`, `UseHttps`, `CarName`, `CarSecret`, `CameraOptions`, Feature Flags.
-- **Server `appSettings.json`**: `IdSalt`, `IdAlphabet`, `ConnectionStrings.DefaultConnection`, `JanusConfiguration`, `FileTransfer`.
-- **Onboard Config-Verzeichnis**: via `CONFIG_DIR` oder `--config-dir=` / `.configdir`.
-- **ChannelMap**: trennt `pinManagers`, `controlChannels`, `telemetryChannels`, `videoStreams`.
-- **Env-Variablen** (Server): `ConnectionStrings__DefaultConnection`, `JanusConfiguration__HostName`, `FileTransfer__StoragePath`, `ASPNETCORE_ENVIRONMENT`, `GIT_BRANCH`, `GIT_COMMIT`.
+## Bash Tool
+- Web → Server: `CarBashHub.ExecuteCommand`.
+- Server → Onboard: same hub relays `ExecuteCommand` to the vehicle's `BashToolService`.
+- Onboard → Server → Browsers: `BashToolService` starts `/bin/bash`, pipes output through `ControlService.SendBashOutput` over `CarConnectionHub`; the server broadcasts it to all connected clients.
+
+## File Transfer
+- **Upload**: `RequestFileUpload` → token → `POST /api/filetransfer/{token}` (max 100 MB, SHA-256 check) → `FileReady` notification.
+- **Download**: `GET /api/filetransfer/{token}/download` with range support and bandwidth throttling (default 20 KB/s).
+- The `FileTransfer` entity tracks status.
+
+## Authentication
+- **Browser**: `LteCarAuth` cookie (`HttpOnly`, `SameSite=Lax`), Sqids session token, recovery key, 5-minute `TransferCode` for session transfer.
+- **Vehicle identity**: GUID (`carIdentityKey.txt`), SHA-256 verification.
+- **Control auth**: SSH-key challenge-response (RSA-2048, Web Crypto API). The private key is deleted from the vehicle after download.
+- **DataProtection keys** live in `Server/DataProtectionKeys/`.
+
+## Configuration
+- **Onboard `appSettings.json`**: `ServerName`, `ServerPort`, `UseHttps`, `CarName`, `CarSecret`, `CameraOptions`, plus the (mostly inert) feature flags. Note: the console setup tool's own internal model uses different, `camelCase` field names (`carId`, `serverUrl`, …) that don't fully line up with these — see [CONFIGURATION.md](CONFIGURATION.md).
+- **Server `appSettings.json`**: `IdSalt`, `IdAlphabet`, `ConnectionStrings.DefaultConnection`, `JanusConfiguration` (`HostName`, `PortRangeStart`/`PortRangeEnd`), `FileTransfer`, `WebRtc` (TURN config). No `ServerName`/`Application`/`RunJanusServer` section exists.
+- **Onboard config directory**: via `CONFIG_DIR`, `--config-dir=`, or `.configdir`.
+- **ChannelMap**: separates `pinManagers`, `controlChannels`, `telemetryChannels`, `videoStreams`.
+- **Server env vars**: `ConnectionStrings__DefaultConnection`, `JanusConfiguration__HostName`, `JanusConfiguration__PortRangeStart`/`PortRangeEnd`, `FileTransfer__StoragePath`, `WebRtc__Username`/`WebRtc__Credential`, `COTURN_EXTERNAL_IP`/`COTURN_USERNAME`/`COTURN_CREDENTIAL`, `JANUS_NAT_1_1`, `ASPNETCORE_ENVIRONMENT`, `GIT_BRANCH`, `GIT_COMMIT`.

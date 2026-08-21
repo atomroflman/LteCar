@@ -125,17 +125,15 @@ Each template contains:
 
 ## 6. Feature Flags
 
-Enable or disable optional features:
+Toggles five flags, all persisted to `appSettings.json` — but only **F2. Bash Tool** currently changes what the running app does. The others are reserved for future use; toggling them has no observable effect yet (see [CONFIGURATION.md](CONFIGURATION.md#feature-flags) for the code-level detail):
 
-| Feature | Description |
+| Feature | Wired up? |
 |---------|-------------|
-| F1. Web Setup Interface | Enable web-based setup interface |
-| F2. Bash Tool | Enable remote bash command execution |
-| F3. Channel Tester | Enable channel testing interface |
-| F4. Audio | Enable audio chat functionality |
-| F5. Video | Enable video streaming |
-
-Features are disabled by default. Enable them as needed.
+| F1. Web Setup Interface | No web-based setup interface exists yet |
+| F2. Bash Tool | **Yes** — gates the bash relay to the server |
+| F3. Channel Tester | No effect (the web client's test page works regardless) |
+| F4. Audio | No effect (`CarAudioHub` isn't registered on the server) |
+| F5. Video | No effect (video streaming isn't gated by this flag) |
 
 ---
 
@@ -166,6 +164,8 @@ The setup tool manages these files in the config directory:
 
 ### Example appSettings.json
 
+The setup tool's internal model (`Onboard/Setup/VehicleSetupTool.cs`) uses these `camelCase` field names when it writes the file:
+
 ```json
 {
   "carId": "vehicle-001",
@@ -178,6 +178,8 @@ The setup tool manages these files in the config directory:
   "video": true
 }
 ```
+
+This doesn't fully match the `PascalCase` fields (`ServerName`, `ServerPort`, `UseHttps`, `CarName`, `CarSecret`, `CameraOptions`, …) that `Onboard/Program.cs` actually reads at startup — see [CONFIGURATION.md](CONFIGURATION.md#appsettingsjson-onboard) for the authoritative shipped shape. If you're editing `appSettings.json` by hand rather than through the setup tool, use the `PascalCase` fields.
 
 ---
 

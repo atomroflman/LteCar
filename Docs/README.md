@@ -1,13 +1,18 @@
 # LteCar Documentation
 
+*This documentation is maintained primarily in English. For a German-language overview, see [README.de.md](README.de.md).*
+
 ## Quick Links
 
 - [Installation Guide](INSTALLATION.md) - Server and Onboard setup
 - [Setup Tool](SETUP.md) - Menu-driven configuration
 - [Features](FEATURES.md) - Feature overview and usage
 - [Configuration Reference](CONFIGURATION.md) - Complete configuration reference
+- [Concepts](CONCEPTS.md) - Condensed architecture/implementation reference
+- [Architecture](Architecture.md) - Detailed architecture walkthrough
+- [Video Stack Troubleshooting](VideoStackTroubleshooting.md) - Step-by-step video pipeline diagnostics
 
-For the full container stack, see the installation guide. It covers the nginx + client + server + janus + postgres deployment and the reboot setup.
+For the full container stack, see the installation guide. It covers the nginx + client + server + janus + postgres + turn deployment and the reboot setup.
 
 ---
 
@@ -65,8 +70,8 @@ LteCar is a system for building and operating remotely controlled cars over LTE/
 
 ## Getting Started
 
-1. [Install the server](INSTALLATION.md#server-installation)
-2. [Install the onboard software](INSTALLATION.md#onboard-vehicle-installation)
+1. [Install the server](INSTALLATION.md#server-installation) — one-line installer
+2. [Install the onboard software](INSTALLATION.md#onboard-vehicle-installation) — via the server's web UI install button, or the installer directly
 3. [Configure using the setup tool](SETUP.md)
 4. [Enable desired features](FEATURES.md#feature-flags-summary)
 
@@ -74,17 +79,17 @@ LteCar is a system for building and operating remotely controlled cars over LTE/
 
 ## Feature Flags
 
-All optional features are **disabled by default**:
+The onboard setup tool's **Feature Flags** menu can toggle five flags, but only one of them currently gates real behavior:
 
-| Feature | Description |
+| Feature | Actually wired up? |
 |---------|-------------|
-| `webSetup` | Web-based setup interface |
-| `bashTool` | Remote bash command execution |
-| `channelTester` | Web-based channel testing |
-| `audio` | Audio chat functionality |
-| `video` | Video streaming |
+| `webSetup` | No — no web-based setup interface exists yet; toggle is inert |
+| `bashTool` | **Yes** — enables the bash relay to the server; defaults to off when unset |
+| `channelTester` | No — toggle is inert |
+| `audio` | No — `CarAudioHub` exists in code but is not registered/reachable yet |
+| `video` | No — video streaming itself always runs; not gated by this flag |
 
-Enable via setup tool or `appSettings.json`.
+See [Configuration Reference](CONFIGURATION.md#feature-flags) for the full picture, including where each flag is (and isn't) read.
 
 ---
 

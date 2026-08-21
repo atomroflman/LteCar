@@ -1,48 +1,78 @@
-# LteCar – Remote Control über LTE/Internet
+# LteCar – Remote Control over LTE/Internet
+
+*[Deutsche Version](Readme.de.md)*
 
 ## Quick Start
+
+### 1. Install the server
+
+Run this on the machine (VM, home server, …) that will host the stack. It clones the repo and walks you through choosing a container engine and the Compose stack to deploy:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/atomroflman/LteCar/master/install.sh | sudo bash
+# → choose "1) Server"
+```
+
+This installs the full container stack (`nginx` + `client` + `server` + `janus` + `postgres` + `turn`) via Docker or Podman Compose, and can optionally register a `ltecar.service` systemd unit so the stack survives reboots.
+
+### 2. Install onboard (the vehicle) — via the web UI
+
+Once the server is running, open it in a browser (`https://your-server/`). With no vehicle selected yet, the page shows an **install button** that generates a ready-to-paste command, preconfigured with your server's URL and branch:
+
+```bash
+curl -fsSL https://YOUR-SERVER/api/install/onboard.sh | sudo bash
+```
+
+Paste that on the Raspberry Pi. It runs the same `install.sh`, pre-filled for `onboard` mode, and can register `ltecar-onboard.service` (+ `ltecar-mediamtx.service`) for autostart. Vehicle-specific configuration (channels, name, hardware) happens afterwards from the web client at `/car/[carId]`.
+
+Prefer to do it by hand instead? Run the installer directly on the vehicle and choose option 2:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/atomroflman/LteCar/master/install.sh | sudo bash
+# → choose "2) Onboard"
+```
+
+### Local development
 
 ```bash
 # Server
 cd Server && dotnet run
 
-# Onboard (Fahrzeug)
-cd Onboard && dotnet run -- setup    # Erstes Setup
-cd Onboard && dotnet run            # Normaler Start
+# Onboard (vehicle)
+cd Onboard && dotnet run -- setup    # interactive first-time setup
+cd Onboard && dotnet run             # normal start
 
-# Full stack (client + server + nginx + janus + postgres)
+# Full stack (client + server + nginx + janus + postgres + turn)
 docker compose up --build
 
-# Stop stack
+# Stop the stack
 docker compose down
 ```
 
-For servers, install `deploy/ltecar-compose.service` so the stack comes back after reboot. The default deployment is `nginx` + `client` + `server` + `janus` + `postgres` via Compose.
-
-**Dokumentation:** Siehe [Docs/README.md](Docs/README.md) für vollständige Dokumentation.
+**Documentation:** see [Docs/README.md](Docs/README.md) for the full documentation (English, with a [German overview page](Docs/README.de.md)).
 
 ---
 
-## Wichtige Hinweise
+## Key Notes
 
-> **LTE-Konnektivität**: Das Onboard-Fahrzeug initiiert eine **ausgehende Verbindung** zum Server. Das Fahrzeug ist **nicht direkt aus dem Internet erreichbar** – alle Kommunikation wird vom Fahrzeug initiiert.
+> **LTE connectivity**: The onboard vehicle client initiates an **outbound-only connection** to the server. The vehicle is **not directly reachable from the internet** — all communication is initiated by the vehicle.
 
-> **Datenbank**: Niemals die Datenbank manuell ändern. Immer EF Core Migrations verwenden.
+> **Database**: Never modify the database manually. Always use EF Core migrations.
 
 ---
 
 ## Features
 
-| Feature | Beschreibung |
+| Feature | Description |
 |---------|--------------|
-| Remote Control | Steuerung über LTE/Internet mit niedriger Latenz |
-| Video-Streaming | Echtzeit-Video von Kamera |
-| Audio-Chat | Bidirektionale Audiokommunikation |
-| Bash Tool | Remote Bash-Befehle auf Fahrzeug ausführen |
-| Channel Tester | Hardware-Kanäle testen |
-| Templates | Fahrzeugkonfigurationen teilen |
+| Remote Control | Low-latency control over LTE/Internet |
+| Video Streaming | Real-time video from the vehicle's camera |
+| Audio Chat | Bidirectional audio communication |
+| Bash Tool | Run remote bash commands on the vehicle |
+| Channel Tester | Test hardware channels from the web UI |
+| Templates | Share and reuse vehicle channel configurations |
 
-**Feature Flags**: Alle optionalen Features sind **standardmäßig deaktiviert** (`webSetup`, `bashTool`, `channelTester`, `audio`, `video`). Aktivierung via Setup-Tool oder `appSettings.json`.
+**Feature flags**: The onboard setup tool (`dotnet run -- setup` → **Feature Flags**) can toggle `webSetup`, `bashTool`, `channelTester`, `audio`, `video`. Of these, only `bashTool` currently gates real runtime behavior (it enables/disables the bash relay to the server, and defaults to off when unset). The others are stored in `appSettings.json` for future use but don't gate anything yet — see [Docs/CONFIGURATION.md](Docs/CONFIGURATION.md#feature-flags) for details.
 
 ---
 
@@ -51,73 +81,81 @@ For servers, install `deploy/ltecar-compose.service` so the stack comes back aft
 ### Server
 
 ```bash
+curl -fsSL https://raw.githubusercontent.com/atomroflman/LteCar/master/install.sh | sudo bash
+```
+
+Or manually:
+
+```bash
 git clone https://github.com/atomroflman/LteCar.git
-cd LteCar/Server
-dotnet run
+cd LteCar && sudo bash install.sh
 ```
 
 ### Onboard (Raspberry Pi)
 
+Use the **install button in the server's web UI** (see Quick Start above) to get a preconfigured command, or run the installer directly on the vehicle:
+
 ```bash
 git clone https://github.com/atomroflman/LteCar.git
-cd LteCar/Onboard
-dotnet run -- setup   # Interaktives Setup
-dotnet run            # Start
+cd LteCar && sudo bash install.sh
+# → choose "2) Onboard"
 ```
 
 **Details:** [Docs/INSTALLATION.md](Docs/INSTALLATION.md)
 
 ---
 
-## Setup-Tool (raspi-config Style)
+## Setup Tool (raspi-config style)
 
 ```bash
 cd Onboard && dotnet run -- setup
 ```
 
-Menüstruktur:
-1. **System Options** – Hostname, SSH, Boot
-2. **Network / Server** – Server-URL konfigurieren
-3. **Vehicle Configuration** – Kanäle, Name
-4. **Hardware Test** – Outputs, Servos, Motoren testen
-5. **Templates** – Fahrzeugvorlagen verwalten
-6. **Feature Flags** – Features ein/aus
-7. **Update / Recovery** – Updates, Backup, Factory Reset
+Menu structure:
+1. **System Options** – Hostname, SSH, boot
+2. **Network / Server** – configure the server URL
+3. **Vehicle Configuration** – channels, name
+4. **Hardware Test** – test outputs, servos, motors
+5. **Templates** – manage vehicle templates
+6. **Feature Flags** – toggle features
+7. **Update / Recovery** – updates, backup, factory reset
 
 **Details:** [Docs/SETUP.md](Docs/SETUP.md)
 
 ---
 
-## Konfiguration
+## Configuration
 
 ### Onboard (appSettings.json)
 
 ```json
 {
-  "carId": "vehicle-001",
-  "carName": "My RC Car",
-  "serverUrl": "https://server.example.com:5000",
-  "bashTool": false,
-  "audio": false,
-  "video": true
+  "ServerName": "your-server.example.com",
+  "ServerPort": 443,
+  "UseHttps": true,
+  "CarName": "My RC Car",
+  "CarSecret": "change-me",
+  "CameraOptions": {
+    "CameraLib": "rpicam-vid"
+  }
 }
 ```
 
 ### Feature Flags
 
-| Flag | Standard | Beschreibung |
-|------|---------|--------------|
-| `webSetup` | false | Web-Setup Interface |
-| `bashTool` | false | Remote Bash-Tool |
-| `channelTester` | false | Kanal-Tester |
-| `audio` | false | Audio-Chat |
-| `video` | false | Video-Streaming |
+| Flag | Default | Actually wired up? |
+|------|---------|------|
+| `webSetup` | on in the flag model, but no such interface exists yet | No — toggle is inert |
+| `bashTool` | off (unset in appSettings.json falls back to `false`) | Yes — gates the bash relay |
+| `channelTester` | on in the flag model | No — toggle is inert |
+| `audio` | on in the flag model | No — `CarAudioHub` exists in code but isn't registered yet |
+| `video` | on in the flag model | Video streaming itself always runs; not gated by this flag |
 
 **Details:** [Docs/CONFIGURATION.md](Docs/CONFIGURATION.md)
 
 ---
 
-## Architektur
+## Architecture
 
 ```
 ┌──────────────┐     WebRTC      ┌──────────────┐
@@ -136,7 +174,8 @@ Menüstruktur:
 │  └────────────┘  └────────────┘  └─────────────┘   │
 │  ┌────────────┐  ┌────────────┐  ┌─────────────┐   │
 │  │  Telemetry │  │  Control   │  │  BashTool   │   │
-│  │  Service   │  │  Service   │  │  Service    │   │
+│  │  (via      │  │  Service   │  │  Service    │   │
+│  │  Connection)│ │            │  │             │   │
 │  └────────────┘  └────────────┘  └─────────────┘   │
 └────────────────────────────────────────────────────┘
 ```
@@ -145,37 +184,38 @@ Menüstruktur:
 
 ## SignalR Hubs
 
-| Hub | Pfad | Zweck |
+| Hub | Path | Purpose |
 |-----|------|-------|
-| CarConnectionHub | `/hubs/connection` | Fahrzeug-Verbindung |
-| CarControlHub | `/hubs/control` | Fernsteuerung |
-| TelemetryHub | `/hubs/telemetry` | Telemetrie |
-| CarUiHub | `/hubs/carui` | UI-Updates |
-| CarVideoHub | `/hubs/video` | Video-Streaming |
-| CarBashHub | `/hubs/carbash` | Bash-Proxy |
+| CarConnectionHub | `/hubs/connection` | The single vehicle-side hub: connection state, control, telemetry, video signaling, file transfer, channel sync |
+| UserChannelHub | `/hubs/userchannel` | Browser/gamepad-side channel value updates |
+| CarBashHub | `/hubs/carbash` | Bash command relay (dispatch only — output streams back over `CarConnectionHub`) |
+
+*(`CarAudioHub` exists in the codebase but is not yet registered/reachable.)*
 
 ---
 
-## Dokumentation
+## Documentation
 
-- [Docs/README.md](Docs/README.md) – Übersicht
-- [Docs/INSTALLATION.md](Docs/INSTALLATION.md) – Installationsanleitung
-- [Docs/SETUP.md](Docs/SETUP.md) – Setup-Tool
-- [Docs/FEATURES.md](Docs/FEATURES.md) – Feature-Dokumentation
-- [Docs/CONFIGURATION.md](Docs/CONFIGURATION.md) – Konfigurationsreferenz
+- [Docs/README.md](Docs/README.md) – Overview
+- [Docs/INSTALLATION.md](Docs/INSTALLATION.md) – Installation guide
+- [Docs/SETUP.md](Docs/SETUP.md) – Setup tool
+- [Docs/FEATURES.md](Docs/FEATURES.md) – Feature documentation
+- [Docs/CONFIGURATION.md](Docs/CONFIGURATION.md) – Configuration reference
+- [Docs/README.de.md](Docs/README.de.md) – Deutsche Übersicht
 
 ---
 
-## Environment-Variablen
+## Environment Variables
 
-| Variable | Beschreibung |
+| Variable | Description |
 |----------|--------------|
-| `CONFIG_DIR` | Konfigurationsverzeichnis (Onboard) |
-| `VEHICLE_TEMPLATES_PATH` | Template-Pfad |
-| `LTE_USE_NEW_CONNECTION_MODEL` | Neues Verbindungsmodell (default: true) |
+| `CONFIG_DIR` | Config directory (Onboard) |
+| `VEHICLE_TEMPLATES_PATH` | Template base path (used by the console setup tool) |
+| `COTURN_EXTERNAL_IP` / `COTURN_USERNAME` / `COTURN_CREDENTIAL` | TURN server public IP and credentials (Docker Compose) |
+| `JANUS_NAT_1_1` | Public IP for Janus WebRTC NAT traversal (Docker Compose); falls back to Azure IMDS if unset |
 
 ---
 
-## Kontakt & Support
+## Contact & Support
 
-Fragen, Feedback oder Beiträge bitte direkt im GitHub-Repository stellen.
+Questions, feedback, or contributions — please open an issue or discussion directly on the GitHub repository.
